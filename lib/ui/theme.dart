@@ -1,38 +1,38 @@
 import 'package:flutter/material.dart';
 
-/// Палитра «тёмный неон».
+/// Палитра: строгий тёмный интерфейс, один акцент, неон — только в состоянии «подключено».
 class NX {
-  static const bg = Color(0xFF07060D);
-  static const bg2 = Color(0xFF0C0A16);
-  static const surface = Color(0xFF12101F);
-  static const surface2 = Color(0xFF1A1730);
-  static const stroke = Color(0x1FFFFFFF);
-  static const strokeStrong = Color(0x33FFFFFF);
+  static const bg = Color(0xFF0B0B10);
+  static const bg2 = Color(0xFF0F0F15);
+  static const surface = Color(0xFF15151C);
+  static const surface2 = Color(0xFF1D1D26);
+  static const stroke = Color(0x12FFFFFF);
+  static const strokeStrong = Color(0x22FFFFFF);
 
-  static const violet = Color(0xFFA855F7);
-  static const indigo = Color(0xFF6366F1);
-  static const cyan = Color(0xFF22D3EE);
-  static const mint = Color(0xFF2EF2B5);
-  static const pink = Color(0xFFF472B6);
-  static const amber = Color(0xFFFBBF24);
-  static const red = Color(0xFFFF4D6D);
+  static const violet = Color(0xFF8B7CF6);
+  static const indigo = Color(0xFF6E68F0);
+  static const cyan = Color(0xFF4FC9E3);
+  static const mint = Color(0xFF3DDC97);
+  static const pink = Color(0xFFF07AAE);
+  static const amber = Color(0xFFF2B544);
+  static const red = Color(0xFFF0566E);
 
-  static const text = Color(0xFFF3F1FF);
-  static const text2 = Color(0xFFA9A4C7);
-  static const text3 = Color(0xFF6E6993);
+  static const text = Color(0xFFECECF1);
+  static const text2 = Color(0xFF9C9CAD);
+  static const text3 = Color(0xFF62626F);
 
   static const neon = LinearGradient(
-    colors: [violet, indigo, cyan],
+    colors: [violet, indigo],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
   static const live = LinearGradient(
-    colors: [cyan, mint],
+    colors: [mint, cyan],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const display = 'Unbounded';
+  static const display = 'Manrope';
   static const body = 'Manrope';
 
   static Color pingColor(int? ping) {
@@ -45,13 +45,9 @@ class NX {
 
   static List<BoxShadow> glow(Color c, {double strength = 1}) => [
         BoxShadow(
-            color: c.withValues(alpha: 0.45 * strength),
-            blurRadius: 28 * strength,
-            spreadRadius: -4),
-        BoxShadow(
-            color: c.withValues(alpha: 0.25 * strength),
-            blurRadius: 60 * strength,
-            spreadRadius: -8),
+            color: c.withValues(alpha: 0.28 * strength),
+            blurRadius: 40 * strength,
+            spreadRadius: -6),
       ];
 }
 

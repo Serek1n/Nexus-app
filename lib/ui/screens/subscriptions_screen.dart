@@ -17,7 +17,7 @@ class SubscriptionsScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           PageHeader(
             title: 'Подписки',
@@ -108,12 +108,11 @@ class _SubCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(13),
-                  gradient: NX.neon,
-                  boxShadow: NX.glow(NX.violet, strength: 0.35),
+                  borderRadius: BorderRadius.circular(12),
+                  color: NX.violet.withValues(alpha: 0.14),
                 ),
                 child: const Icon(Icons.workspace_premium_rounded,
-                    color: Colors.white, size: 21),
+                    color: NX.violet, size: 21),
               ),
               const SizedBox(width: 12),
               Expanded(

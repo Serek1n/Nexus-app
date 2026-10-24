@@ -1,31 +1,16 @@
-import 'dart:math' as math;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../models.dart';
 import 'theme.dart';
 
-/// Анимированный фон: тёмная сетка + плавающие неоновые пятна.
-class NeonBackground extends StatefulWidget {
+/// Фон: ровный тёмный цвет и едва заметный свет сверху.
+/// Когда соединение активно, свет становится зелёным.
+class NeonBackground extends StatelessWidget {
   const NeonBackground({super.key, required this.child, this.live = false});
   final Widget child;
   final bool live;
-
-  @override
-  State<NeonBackground> createState() => _NeonBackgroundState();
-}
-
-class _NeonBackgroundState extends State<NeonBackground>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 24))
-        ..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,78 +18,26 @@ class _NeonBackgroundState extends State<NeonBackground>
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: NX.bg),
-        RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: _c,
-            builder: (_, __) => CustomPaint(
-              painter: _OrbsPainter(_c.value, widget.live),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 700),
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(0, -1.1),
+              radius: 1.1,
+              colors: [
+                (live ? NX.mint : NX.violet).withValues(alpha: 0.07),
+                Colors.transparent,
+              ],
             ),
           ),
         ),
-        const RepaintBoundary(child: CustomPaint(painter: _GridPainter())),
-        widget.child,
+        child,
       ],
     );
   }
 }
 
-class _OrbsPainter extends CustomPainter {
-  _OrbsPainter(this.t, this.live);
-  final double t;
-  final bool live;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final a = t * 2 * math.pi;
-    void orb(Offset c, double r, Color col, double op) {
-      final p = Paint()
-        ..shader = RadialGradient(colors: [
-          col.withValues(alpha: op),
-          col.withValues(alpha: 0),
-        ]).createShader(Rect.fromCircle(center: c, radius: r));
-      canvas.drawCircle(c, r, p);
-    }
-
-    final w = size.width, h = size.height;
-    final r = math.max(w, h) * 0.55;
-    orb(Offset(w * (0.15 + 0.08 * math.sin(a)), h * (0.12 + 0.05 * math.cos(a))),
-        r, NX.violet, 0.22);
-    orb(
-        Offset(w * (0.9 + 0.06 * math.cos(a * 1.3)),
-            h * (0.55 + 0.08 * math.sin(a))),
-        r * 0.9,
-        live ? NX.mint : NX.cyan,
-        live ? 0.16 : 0.12);
-    orb(Offset(w * (0.3 + 0.1 * math.cos(a)), h * (1.0 + 0.04 * math.sin(a))),
-        r * 0.8, NX.indigo, 0.14);
-  }
-
-  @override
-  bool shouldRepaint(covariant _OrbsPainter old) =>
-      old.t != t || old.live != live;
-}
-
-class _GridPainter extends CustomPainter {
-  const _GridPainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = Colors.white.withValues(alpha: 0.025)
-      ..strokeWidth = 1;
-    const step = 36.0;
-    for (var x = 0.0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
-    }
-    for (var y = 0.0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-/// Полупрозрачная карточка с тонкой неоновой обводкой.
+/// Карточка: сплошная поверхность и тонкая граница.
 class NeonCard extends StatelessWidget {
   const NeonCard({
     super.key,
@@ -114,7 +47,7 @@ class NeonCard extends StatelessWidget {
     this.onLongPress,
     this.active = false,
     this.accent = NX.violet,
-    this.radius = 20,
+    this.radius = 16,
   });
 
   final Widget child;
@@ -128,47 +61,33 @@ class NeonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final br = BorderRadius.circular(radius);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      decoration: BoxDecoration(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: br,
-        boxShadow: active ? NX.glow(accent, strength: 0.6) : null,
-      ),
-      child: ClipRRect(
-        borderRadius: br,
-        child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              onLongPress: onLongPress,
-              borderRadius: br,
-              splashColor: accent.withValues(alpha: 0.12),
-              highlightColor: accent.withValues(alpha: 0.06),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                padding: padding,
-                decoration: BoxDecoration(
-                  borderRadius: br,
-                  color: active
-                      ? accent.withValues(alpha: 0.10)
-                      : NX.surface.withValues(alpha: 0.78),
-                  border: Border.all(
-                    color: active
-                        ? accent.withValues(alpha: 0.7)
-                        : NX.stroke,
-                    width: active ? 1.3 : 1,
-                  ),
-                ),
-                child: child,
-              ),
+        splashColor: accent.withValues(alpha: 0.08),
+        highlightColor: Colors.white.withValues(alpha: 0.03),
+        hoverColor: Colors.white.withValues(alpha: 0.02),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: br,
+            color: active ? Color.alphaBlend(accent.withValues(alpha: 0.07), NX.surface) : NX.surface,
+            border: Border.all(
+              color: active ? accent.withValues(alpha: 0.55) : NX.stroke,
             ),
           ),
+          child: child,
+        ),
       ),
     );
   }
 }
 
-/// Текст с градиентной заливкой.
+/// Текст с градиентной заливкой (используется точечно).
 class GradientText extends StatelessWidget {
   const GradientText(this.text,
       {super.key, required this.style, this.gradient = NX.neon});
@@ -184,9 +103,9 @@ class GradientText extends StatelessWidget {
       );
 }
 
-/// Логотип Nexus: шестиугольник + надпись.
+/// Логотип: знак + спокойная надпись.
 class NexusLogo extends StatelessWidget {
-  const NexusLogo({super.key, this.size = 30, this.showText = true});
+  const NexusLogo({super.key, this.size = 28, this.showText = true});
   final double size;
   final bool showText;
 
@@ -197,20 +116,20 @@ class NexusLogo extends StatelessWidget {
           Image.asset('assets/icon/logo_mark.png',
               width: size, height: size, filterQuality: FilterQuality.medium),
           if (showText) ...[
-            const SizedBox(width: 10),
-            GradientText('NEXUS',
+            const SizedBox(width: 8),
+            Text('Nexus',
                 style: TextStyle(
-                  fontFamily: NX.display,
-                  fontWeight: FontWeight.w700,
-                  fontSize: size * 0.62,
-                  letterSpacing: 3,
+                  fontWeight: FontWeight.w800,
+                  fontSize: size * 0.68,
+                  letterSpacing: -0.2,
+                  color: NX.text,
                 )),
           ],
         ],
       );
 }
 
-/// Бейдж задержки.
+/// Задержка: цветная точка и число.
 class PingBadge extends StatelessWidget {
   const PingBadge({super.key, required this.ping, this.loading = false});
   final int? ping;
@@ -227,60 +146,65 @@ class PingBadge extends StatelessWidget {
     }
     final c = NX.pingColor(ping);
     final txt = ping == null ? '— мс' : (ping! < 0 ? 'нет связи' : '$ping мс');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: c.withValues(alpha: 0.35)),
-      ),
-      child: Text(txt,
-          style: TextStyle(
-              color: c,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              fontFeatures: const [FontFeature.tabularFigures()])),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(txt,
+            style: TextStyle(
+                color: ping == null ? NX.text3 : NX.text2,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()])),
+      ],
     );
   }
 }
 
-/// Аватар сервера: флаг или первая буква на неоновом фоне.
+/// Аватар сервера: флаг или первая буква.
 class ServerAvatar extends StatelessWidget {
-  const ServerAvatar({super.key, required this.server, this.size = 42});
+  const ServerAvatar({super.key, required this.server, this.size = 40});
   final ServerProfile server;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final flag = server.flag;
+    var flag = server.flag;
+    // В Windows нет цветных флагов-эмодзи: показываем код страны («FI») аккуратным текстом.
+    String? code;
+    if (flag != null && Platform.isWindows) {
+      code = String.fromCharCodes(flag.runes.map((r) => r - 0x1F1E6 + 65));
+      flag = null;
+    }
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.32),
-        gradient: LinearGradient(colors: [
-          NX.violet.withValues(alpha: 0.25),
-          NX.cyan.withValues(alpha: 0.18),
-        ], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        border: Border.all(color: NX.strokeStrong),
+        borderRadius: BorderRadius.circular(size * 0.3),
+        color: NX.surface2,
       ),
       child: flag != null
           ? Text(flag, style: TextStyle(fontSize: size * 0.5))
           : Text(
-              server.cleanName.characters.first.toUpperCase(),
+              code ?? server.cleanName.characters.first.toUpperCase(),
               style: TextStyle(
-                fontFamily: NX.display,
-                fontWeight: FontWeight.w700,
-                fontSize: size * 0.4,
-                color: NX.text,
+                fontWeight: FontWeight.w800,
+                fontSize: code != null ? size * 0.32 : size * 0.4,
+                letterSpacing: code != null ? 0.5 : 0,
+                color: NX.text2,
               ),
             ),
     );
   }
 }
 
-/// Маленькая «таблетка» с текстом (протокол, метки).
+/// Небольшая метка (протокол, статус).
 class Tag extends StatelessWidget {
   const Tag(this.text, {super.key, this.color = NX.text2});
   final String text;
@@ -288,21 +212,21 @@ class Tag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
-          color: color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 0.12),
         ),
         child: Text(text,
             style: TextStyle(
                 color: color,
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 0.6)),
+                letterSpacing: 0.4)),
       );
 }
 
-/// Кнопка с неоновым градиентом.
+/// Основная кнопка: сплошной акцент, без свечения.
 class NeonButton extends StatelessWidget {
   const NeonButton({
     super.key,
@@ -323,45 +247,34 @@ class NeonButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final content = Row(
-      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (loading)
-          const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white))
-        else if (icon != null)
-          Icon(icon, size: 18, color: Colors.white),
-        if (loading || icon != null) const SizedBox(width: 8),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 14.5)),
-      ],
-    );
+    final fg = secondary ? NX.text : Colors.white;
     return Opacity(
       opacity: enabled ? 1 : 0.5,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          gradient: secondary ? null : NX.neon,
-          color: secondary ? NX.surface2 : null,
-          border: secondary ? Border.all(color: NX.strokeStrong) : null,
-          boxShadow:
-              secondary || !enabled ? null : NX.glow(NX.violet, strength: 0.5),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: enabled ? onPressed : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-              child: content,
+      child: Material(
+        color: secondary ? NX.surface2 : NX.violet,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: enabled ? onPressed : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (loading)
+                  SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: fg))
+                else if (icon != null)
+                  Icon(icon, size: 18, color: fg),
+                if (loading || icon != null) const SizedBox(width: 8),
+                Text(label,
+                    style: TextStyle(
+                        color: fg, fontWeight: FontWeight.w700, fontSize: 14)),
+              ],
             ),
           ),
         ),
@@ -370,7 +283,7 @@ class NeonButton extends StatelessWidget {
   }
 }
 
-/// Заголовок раздела.
+/// Подпись раздела.
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.text, {super.key, this.trailing});
   final String text;
@@ -378,15 +291,14 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 18, 4, 10),
+        padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
         child: Row(
           children: [
-            Text(text.toUpperCase(),
+            Text(text,
                 style: const TextStyle(
-                  color: NX.text3,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.6,
+                  color: NX.text2,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 )),
             const Spacer(),
             if (trailing != null) trailing!,
@@ -405,9 +317,9 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+        padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
@@ -415,25 +327,28 @@ class PageHeader extends StatelessWidget {
                 children: [
                   Text(title,
                       style: const TextStyle(
-                          fontFamily: NX.display,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 24,
-                          height: 1.1)),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 26,
+                          letterSpacing: -0.4,
+                          height: 1.15)),
                   if (subtitle != null) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(subtitle!,
                         style: const TextStyle(color: NX.text2, fontSize: 13.5)),
                   ],
                 ],
               ),
             ),
-            ...actions,
+            for (var i = 0; i < actions.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              actions[i],
+            ],
           ],
         ),
       );
 }
 
-/// Круглая иконка-кнопка в стиле Nexus.
+/// Кнопка-иконка.
 class NxIconButton extends StatelessWidget {
   const NxIconButton(
       {super.key,
@@ -449,22 +364,26 @@ class NxIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final btn = Material(
-      color: NX.surface.withValues(alpha: 0.7),
-      shape: const CircleBorder(side: BorderSide(color: NX.stroke)),
+      color: NX.surface,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        customBorder: const CircleBorder(),
+        borderRadius: BorderRadius.circular(12),
         onTap: spinning ? null : onPressed,
-        child: SizedBox(
+        child: Container(
           width: 40,
           height: 40,
-          child: Center(
-            child: spinning
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : Icon(icon, size: 19, color: NX.text),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: NX.stroke),
           ),
+          alignment: Alignment.center,
+          child: spinning
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : Icon(icon,
+                  size: 19, color: onPressed == null ? NX.text3 : NX.text),
         ),
       ),
     );
@@ -493,24 +412,20 @@ class EmptyState extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 72,
-                height: 72,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: NX.violet.withValues(alpha: 0.1),
-                  border: Border.all(color: NX.violet.withValues(alpha: 0.4)),
-                  boxShadow: NX.glow(NX.violet, strength: 0.4),
+                  borderRadius: BorderRadius.circular(18),
+                  color: NX.surface2,
                 ),
-                child: Icon(icon, color: NX.violet, size: 30),
+                child: Icon(icon, color: NX.text2, size: 26),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Text(title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontFamily: NX.display,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17)),
-              const SizedBox(height: 8),
+                      fontWeight: FontWeight.w800, fontSize: 17)),
+              const SizedBox(height: 6),
               Text(text,
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: NX.text2, height: 1.45)),

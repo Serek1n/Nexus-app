@@ -84,6 +84,12 @@ if (keystorePropertiesFile.exists()) {
     ])
     shutil.copy(ROOT / "tool/proguard-rules.pro", ROOT / "android/app/proguard-rules.pro")
 
+    # Плагин ядра (flutter_v2ray_client) собран под AGP 8.13 — выравниваем версию.
+    patch("android/settings.gradle.kts", [
+        (re.compile(r'id\("com\.android\.application"\) version "[^"]+"'),
+         'id("com.android.application") version "8.13.0"'),
+    ])
+
     props = ROOT / "android/gradle.properties"
     s = props.read_text(encoding="utf-8")
     if "enableUncompressedNativeLibs" not in s:

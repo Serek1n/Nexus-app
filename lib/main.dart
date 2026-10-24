@@ -140,7 +140,21 @@ class _ShellState extends State<Shell> with WindowListener {
           child: child,
         ),
       ),
-      child: KeyedSubtree(key: ValueKey(_tab), child: _page(wide)),
+      child: KeyedSubtree(
+        key: ValueKey(_tab),
+        child: wide && _tab != 0
+            ? Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _page(wide),
+                  ),
+                ),
+              )
+            : _page(wide),
+      ),
     );
 
     final body = wide
@@ -154,23 +168,14 @@ class _ShellState extends State<Shell> with WindowListener {
               Expanded(child: page),
             ],
           )
-        : Stack(
+        : Column(
             children: [
-              Positioned.fill(child: page),
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 0,
-                child: SafeArea(
-                  top: false,
-                  minimum: const EdgeInsets.only(bottom: 14),
-                  child: _BottomBar(
-                    current: _tab,
-                    items: _items,
-                    live: live,
-                    onTap: (i) => setState(() => _tab = i),
-                  ),
-                ),
+              Expanded(child: page),
+              _BottomBar(
+                current: _tab,
+                items: _items,
+                live: live,
+                onTap: (i) => setState(() => _tab = i),
               ),
             ],
           );
@@ -205,77 +210,56 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 68,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      decoration: BoxDecoration(
-        color: NX.surface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: NX.strokeStrong),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
-              blurRadius: 30,
-              offset: const Offset(0, 10)),
-        ],
+      decoration: const BoxDecoration(
+        color: NX.bg2,
+        border: Border(top: BorderSide(color: NX.stroke)),
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < items.length; i++)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onTap(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 3, vertical: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: current == i
-                        ? LinearGradient(colors: [
-                            NX.violet.withValues(alpha: 0.3),
-                            NX.cyan.withValues(alpha: 0.15),
-                          ])
-                        : null,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Icon(items[i].$1,
-                              size: 22,
-                              color: current == i ? NX.text : NX.text3),
-                          if (i == 0 && live)
-                            Positioned(
-                              right: -3,
-                              top: -2,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: NX.mint,
-                                  shape: BoxShape.circle,
-                                  boxShadow: NX.glow(NX.mint, strength: 0.4),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 62,
+          child: Row(
+            children: [
+              for (var i = 0; i < items.length; i++)
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onTap(i),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(items[i].$1,
+                                size: 22,
+                                color: current == i ? NX.text : NX.text3),
+                            if (i == 0 && live)
+                              Positioned(
+                                right: -3,
+                                top: -1,
+                                child: Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: const BoxDecoration(
+                                      color: NX.mint, shape: BoxShape.circle),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(items[i].$2,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: current == i ? NX.text : NX.text3,
-                          )),
-                    ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(items[i].$2,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: current == i ? NX.text : NX.text3,
+                            )),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -293,25 +277,21 @@ class _Sidebar extends StatelessWidget {
     final app = AppScope.of(context);
     final live = app.state == ConnState.connected;
     return Container(
-      width: 236,
-      margin: const EdgeInsets.fromLTRB(14, 6, 0, 14),
-      padding: const EdgeInsets.fromLTRB(14, 20, 14, 14),
-      decoration: BoxDecoration(
-        color: NX.surface.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: NX.stroke),
+      width: 220,
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+      decoration: const BoxDecoration(
+        border: Border(right: BorderSide(color: NX.stroke)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Padding(
-            padding: EdgeInsets.only(left: 6),
-            child: NexusLogo(size: 32),
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 24),
+            child: NexusLogo(size: 28),
           ),
-          const SizedBox(height: 30),
           for (var i = 0; i < items.length; i++)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 2),
               child: _SideItem(
                 icon: items[i].$1,
                 label: items[i].$2,
@@ -320,21 +300,19 @@ class _Sidebar extends StatelessWidget {
               ),
             ),
           const Spacer(),
-          NeonCard(
-            padding: const EdgeInsets.all(12),
-            active: live,
-            accent: NX.mint,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
             child: Row(
               children: [
                 Container(
-                  width: 9,
-                  height: 9,
+                  width: 7,
+                  height: 7,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: live ? NX.mint : NX.text3,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     live
@@ -342,14 +320,15 @@ class _Sidebar extends StatelessWidget {
                         : 'Не подключено',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 13),
+                    style: TextStyle(
+                        color: live ? NX.text : NX.text2,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
           NeonButton(
             label: 'Добавить',
             icon: Icons.add_rounded,
@@ -376,33 +355,20 @@ class _SideItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
+        color: active ? NX.surface2 : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: active
-                  ? LinearGradient(colors: [
-                      NX.violet.withValues(alpha: 0.32),
-                      NX.cyan.withValues(alpha: 0.08),
-                    ])
-                  : null,
-              border: Border.all(
-                  color: active
-                      ? NX.violet.withValues(alpha: 0.5)
-                      : Colors.transparent),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(icon, size: 20, color: active ? NX.text : NX.text3),
+                Icon(icon, size: 19, color: active ? NX.text : NX.text3),
                 const SizedBox(width: 12),
                 Text(label,
                     style: TextStyle(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       fontSize: 14,
                       color: active ? NX.text : NX.text2,
                     )),

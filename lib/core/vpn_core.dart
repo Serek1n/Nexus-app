@@ -37,6 +37,13 @@ abstract class VpnCore {
 
   Future<List<String>> fetchLogs() async => logs;
 
+  /// Можно ли обновлять ядро отдельно от приложения (только Windows).
+  bool get canUpdateCore => false;
+
+  /// Проверяет и ставит новую версию ядра. Возвращает текст результата.
+  Future<String> updateCore({bool force = false}) async =>
+      'Ядро обновляется вместе с приложением';
+
   Future<void> dispose() async {}
 }
 

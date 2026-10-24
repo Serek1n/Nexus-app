@@ -7,7 +7,7 @@ import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-const appVersion = '1.0.0';
+const appVersion = '1.1.0';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -90,7 +90,7 @@ class SettingsScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           const PageHeader(title: 'Настройки'),
           const SectionTitle('Маршрутизация'),
@@ -180,12 +180,65 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SectionTitle('Ядро Xray'),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.memory_rounded,
+                        color: NX.violet, size: 21),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(app.coreVersion,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5)),
+                          const SizedBox(height: 2),
+                          Text(
+                            app.core.canUpdateCore
+                                ? (app.coreUpdateStatus ??
+                                    'Новые версии берутся с GitHub XTLS/Xray-core')
+                                : 'Обновляется вместе с приложением',
+                            style: const TextStyle(
+                                color: NX.text2, fontSize: 12.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (app.core.canUpdateCore)
+                      NeonButton(
+                        label: 'Проверить',
+                        secondary: true,
+                        loading: app.coreUpdating,
+                        onPressed: () => app.updateCore(),
+                      ),
+                  ],
+                ),
+                if (app.core.canUpdateCore) ...[
+                  const Divider(height: 22),
+                  switchRow(
+                    Icons.update_rounded,
+                    'Автообновление ядра',
+                    'Раз в сутки проверять и ставить новую версию',
+                    st.autoUpdateCore,
+                    (v) => app.updateSettings((s) => s.autoUpdateCore = v),
+                  ),
+                ],
+              ],
+            ),
+          ),
           const SectionTitle('О приложении'),
           NeonCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const NexusLogo(size: 34),
+                const NexusLogo(size: 30),
                 const SizedBox(height: 14),
                 _InfoRow('Версия', appVersion),
                 _InfoRow('Ядро', app.coreVersion),

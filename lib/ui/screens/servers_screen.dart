@@ -38,7 +38,7 @@ class _ServersScreenState extends State<ServersScreen> {
       child: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             sliver: SliverToBoxAdapter(
               child: PageHeader(
                 title: 'Серверы',
@@ -64,7 +64,7 @@ class _ServersScreenState extends State<ServersScreen> {
           ),
           if (app.servers.length > 6)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               sliver: SliverToBoxAdapter(
                 child: TextField(
                   onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
@@ -92,11 +92,11 @@ class _ServersScreenState extends State<ServersScreen> {
           else
             for (final (title, list) in groups) ...[
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverToBoxAdapter(child: SectionTitle(title)),
               ),
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverList.separated(
                   itemCount: list.where(match).length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -110,7 +110,7 @@ class _ServersScreenState extends State<ServersScreen> {
                 ),
               ),
             ],
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
       ),
     );

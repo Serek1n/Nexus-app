@@ -29,6 +29,8 @@ class AppState extends ChangeNotifier {
   bool pingingAll = false;
   final Set<String> refreshing = {};
   String coreVersion = '…';
+  bool coreUpdating = false;
+  String? coreUpdateStatus;
 
   StreamSubscription? _stSub, _statsSub;
 
@@ -89,6 +91,34 @@ class AppState extends ChangeNotifier {
     }
     if (settings.autoConnectOnStart && selected != null) {
       unawaited(connect());
+    }
+
+    // Раз в сутки тихо проверяем обновление ядра Xray.
+    final day = const Duration(hours: 20).inMilliseconds;
+    if (core.canUpdateCore &&
+        settings.autoUpdateCore &&
+        DateTime.now().millisecondsSinceEpoch - settings.lastCoreCheck > day) {
+      unawaited(updateCore(silent: true));
+    }
+  }
+
+  /// Проверка и установка новой версии ядра Xray (Windows).
+  Future<void> updateCore({bool silent = false}) async {
+    if (coreUpdating) return;
+    coreUpdating = true;
+    if (!silent) coreUpdateStatus = 'Проверяю…';
+    notifyListeners();
+    try {
+      final msg = await core.updateCore();
+      coreUpdateStatus = msg;
+      settings.lastCoreCheck = DateTime.now().millisecondsSinceEpoch;
+      _save();
+      coreVersion = await core.coreVersion();
+    } catch (e) {
+      if (!silent) coreUpdateStatus = _msg(e);
+    } finally {
+      coreUpdating = false;
+      notifyListeners();
     }
   }
 

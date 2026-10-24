@@ -4,7 +4,9 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:archive/archive.dart';
 import 'package:ffi/ffi.dart';
+import 'package:http/http.dart' as http;
 
 import '../models.dart';
 import '../services/config_builder.dart';
@@ -25,7 +27,16 @@ class WindowsCore extends VpnCore {
   int _failedChecks = 0;
 
   String get _exeDir => File(Platform.resolvedExecutable).parent.path;
-  String get _corePath => '$_exeDir\\$kCoreExe';
+
+  /// Папка обновляемого ядра (%APPDATA%\\Nexus\\core).
+  String get _updDir => '$_dataDir\\core';
+
+  /// Если ядро уже обновлялось — берём обновлённое, иначе встроенное.
+  String get _coreDir =>
+      File('$_updDir\\$kCoreExe').existsSync() ? _updDir : _exeDir;
+  String get _corePath => '$_coreDir\\$kCoreExe';
+  String get _assetDir =>
+      File('$_coreDir\\geoip.dat').existsSync() ? _coreDir : _exeDir;
 
   String get _dataDir {
     final base = Platform.environment['APPDATA'] ?? _exeDir;
@@ -98,6 +109,7 @@ class WindowsCore extends VpnCore {
     }
     _states.add(ConnState.connecting);
     await _stopProcess();
+    await _applyPendingUpdate();
 
     final cfgFile = File('$_dataDir\\config.json');
     await cfgFile.writeAsString(_withStats(config));
@@ -108,8 +120,8 @@ class WindowsCore extends VpnCore {
       _proc = await Process.start(
         _corePath,
         ['run', '-c', cfgFile.path],
-        workingDirectory: _exeDir,
-        environment: {'XRAY_LOCATION_ASSET': _exeDir},
+        workingDirectory: _coreDir,
+        environment: {'XRAY_LOCATION_ASSET': _assetDir},
         mode: ProcessStartMode.detachedWithStdio,
       );
     } catch (e) {
@@ -186,7 +198,7 @@ class WindowsCore extends VpnCore {
       final p = await Process.start(
         _corePath,
         ['api', 'statsquery', '--server=127.0.0.1:$kApiPort'],
-        workingDirectory: _exeDir,
+        workingDirectory: _coreDir,
         mode: ProcessStartMode.detachedWithStdio,
       );
       final out = await p.stdout
@@ -248,10 +260,12 @@ class WindowsCore extends VpnCore {
       tcpPing(server.host, server.port);
 
   @override
-  Future<String> coreVersion() async {
+  Future<String> coreVersion() => _versionOf(_corePath);
+
+  Future<String> _versionOf(String exe) async {
     try {
-      if (!File(_corePath).existsSync()) return 'не найдено';
-      final p = await Process.start(_corePath, ['version'],
+      if (!File(exe).existsSync()) return 'не найдено';
+      final p = await Process.start(exe, ['version'],
           mode: ProcessStartMode.detachedWithStdio);
       final out = await p.stdout
           .transform(const Utf8Decoder(allowMalformed: true))
@@ -261,6 +275,129 @@ class WindowsCore extends VpnCore {
       return m != null ? 'Xray ${m.group(1)}' : out.split('\n').first.trim();
     } catch (_) {
       return '—';
+    }
+  }
+
+  // ───────────────────── автообновление ядра Xray ─────────────────────
+
+  static const _releaseApi =
+      'https://api.github.com/repos/XTLS/Xray-core/releases/latest';
+  static const _geoBase =
+      'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download';
+  static const _newExe = 'nexus-core-new.exe';
+
+  @override
+  bool get canUpdateCore => true;
+
+  bool get _running => _proc != null;
+
+  /// Сравнение версий вида 26.10.21 / v26.10.21.
+  static List<int> _ver(String s) => RegExp(r'\d+')
+      .allMatches(s)
+      .take(4)
+      .map((m) => int.parse(m.group(0)!))
+      .toList();
+
+  static bool _newer(String a, String b) {
+    final x = _ver(a), y = _ver(b);
+    for (var i = 0; i < math.max(x.length, y.length); i++) {
+      final p = i < x.length ? x[i] : 0, q = i < y.length ? y[i] : 0;
+      if (p != q) return p > q;
+    }
+    return false;
+  }
+
+  Future<List<int>> _download(String url) async {
+    final r = await http.get(Uri.parse(url), headers: {
+      'User-Agent': 'Nexus',
+    }).timeout(const Duration(minutes: 3));
+    if (r.statusCode != 200) {
+      throw Exception('GitHub ответил ${r.statusCode} на $url');
+    }
+    return r.bodyBytes;
+  }
+
+  @override
+  Future<String> updateCore({bool force = false}) async {
+    final res = await http.get(Uri.parse(_releaseApi), headers: {
+      'User-Agent': 'Nexus',
+      'Accept': 'application/vnd.github+json',
+    }).timeout(const Duration(seconds: 20));
+    if (res.statusCode != 200) {
+      throw Exception('Не удалось узнать последнюю версию (код ${res.statusCode})');
+    }
+    final j = jsonDecode(res.body) as Map<String, dynamic>;
+    final tag = (j['tag_name'] ?? '').toString();
+    final current = await coreVersion();
+    if (!force && !_newer(tag, current)) {
+      return 'Установлена последняя версия ($current)';
+    }
+
+    String? url;
+    for (final a in (j['assets'] as List? ?? [])) {
+      if (a['name'] == 'Xray-windows-64.zip') {
+        url = a['browser_download_url']?.toString();
+      }
+    }
+    if (url == null) throw Exception('В релизе $tag нет сборки для Windows');
+
+    final dir = Directory(_updDir);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+
+    final zip = ZipDecoder().decodeBytes(await _download(url));
+    ArchiveFile? exe;
+    for (final f in zip.files) {
+      if (f.isFile && f.name.toLowerCase() == 'xray.exe') exe = f;
+    }
+    if (exe == null) throw Exception('В архиве нет xray.exe');
+    final staged = File('$_updDir\\$_newExe');
+    await staged.writeAsBytes(exe.content as List<int>, flush: true);
+
+    // Проверяем, что скачанное ядро вообще запускается.
+    final v = await _versionOf(staged.path);
+    if (!v.startsWith('Xray')) {
+      await staged.delete();
+      throw Exception('Скачанное ядро не запускается');
+    }
+
+    // Свежие гео-базы для умного режима.
+    for (final g in ['geoip.dat', 'geosite.dat']) {
+      try {
+        await File('$_updDir\\$g.new')
+            .writeAsBytes(await _download('$_geoBase/$g'), flush: true);
+      } catch (_) {}
+    }
+
+    if (_running) {
+      return 'Загружено $v — применится при следующем подключении';
+    }
+    await _applyPendingUpdate();
+    return 'Ядро обновлено до $v';
+  }
+
+  /// Подменяет ядро и гео-базы скачанными файлами (только когда ядро не запущено).
+  Future<void> _applyPendingUpdate() async {
+    try {
+      final staged = File('$_updDir\\$_newExe');
+      if (staged.existsSync()) {
+        final target = File('$_updDir\\$kCoreExe');
+        if (target.existsSync()) target.deleteSync();
+        staged.renameSync(target.path);
+      }
+      for (final g in ['geoip.dat', 'geosite.dat']) {
+        final n = File('$_updDir\\$g.new');
+        if (n.existsSync()) {
+          final t = File('$_updDir\\$g');
+          if (t.existsSync()) t.deleteSync();
+          n.renameSync(t.path);
+        } else if (!File('$_updDir\\$g').existsSync() &&
+            File('$_exeDir\\$g').existsSync() &&
+            File('$_updDir\\$kCoreExe').existsSync()) {
+          File('$_exeDir\\$g').copySync('$_updDir\\$g');
+        }
+      }
+    } catch (e) {
+      _log('Не удалось применить обновление ядра: $e');
     }
   }
 

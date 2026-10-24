@@ -143,6 +143,8 @@ class AppSettings {
     this.windowsSystemProxy = true,
     this.autoUpdateOnStart = true,
     this.autoConnectOnStart = false,
+    this.autoUpdateCore = true,
+    this.lastCoreCheck = 0,
   });
 
   RoutingMode routing;
@@ -155,12 +157,20 @@ class AppSettings {
   bool autoUpdateOnStart;
   bool autoConnectOnStart;
 
+  /// Windows: автоматически обновлять ядро Xray.
+  bool autoUpdateCore;
+
+  /// Время последней проверки обновлений ядра (мс).
+  int lastCoreCheck;
+
   String toJsonString() => jsonEncode({
         'routing': routing.name,
         'androidVpnMode': androidVpnMode,
         'windowsSystemProxy': windowsSystemProxy,
         'autoUpdateOnStart': autoUpdateOnStart,
         'autoConnectOnStart': autoConnectOnStart,
+        'autoUpdateCore': autoUpdateCore,
+        'lastCoreCheck': lastCoreCheck,
       });
 
   factory AppSettings.fromJsonString(String? s) {
@@ -174,6 +184,8 @@ class AppSettings {
         windowsSystemProxy: j['windowsSystemProxy'] as bool? ?? true,
         autoUpdateOnStart: j['autoUpdateOnStart'] as bool? ?? true,
         autoConnectOnStart: j['autoConnectOnStart'] as bool? ?? false,
+        autoUpdateCore: j['autoUpdateCore'] as bool? ?? true,
+        lastCoreCheck: (j['lastCoreCheck'] as num?)?.toInt() ?? 0,
       );
     } catch (_) {
       return AppSettings();

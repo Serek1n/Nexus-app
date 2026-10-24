@@ -16,23 +16,20 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final sel = app.selected;
+    final sub = sel == null ? null : app.subscriptionOf(sel);
 
     final hero = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        _StatusPill(state: app.state),
+        const SizedBox(height: 28),
         ConnectButton(
           state: app.state,
-          size: wide ? 270 : 240,
-          onTap: () {
-            if (sel == null) {
-              showAddSheet(context);
-            } else {
-              app.toggle();
-            }
-          },
+          size: wide ? 220 : 196,
+          onTap: () => sel == null ? showAddSheet(context) : app.toggle(),
         ),
-        const SizedBox(height: 8),
-        _StatusLabel(state: app.state, since: app.connectedAt),
+        const SizedBox(height: 22),
+        _TimerLine(state: app.state, since: app.connectedAt),
       ],
     );
 
@@ -42,24 +39,13 @@ class HomeScreen extends StatelessWidget {
       children: [
         if (app.lastError != null) ...[
           _ErrorBanner(text: app.lastError!, onClose: app.clearError),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
         ],
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          child: app.state == ConnState.connected
-              ? Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _StatsRow(stats: app.stats),
-                )
-              : const SizedBox(width: double.infinity),
-        ),
         if (sel != null)
-          _SelectedServerCard(onTap: onOpenServers)
+          _ServerRow(onTap: onOpenServers)
         else
           NeonCard(
             onTap: () => showAddSheet(context),
-            active: true,
             child: const Row(
               children: [
                 Icon(Icons.add_link_rounded, color: NX.violet),
@@ -81,32 +67,35 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
           ),
-        const SizedBox(height: 12),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          child: app.state == ConnState.connected
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _StatsRow(stats: app.stats),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+        const SizedBox(height: 10),
         const _RoutingSwitch(),
-        if (sel != null && app.subscriptionOf(sel) != null) ...[
-          const SizedBox(height: 12),
-          _SubscriptionMini(sub: app.subscriptionOf(sel)!),
+        if (sub != null) ...[
+          const SizedBox(height: 10),
+          _SubscriptionStrip(sub: sub),
         ],
       ],
     );
 
     if (wide) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(32, 12, 32, 24),
+        padding: const EdgeInsets.fromLTRB(32, 8, 32, 24),
         child: Row(
           children: [
-            Expanded(flex: 5, child: Center(child: hero)),
-            const SizedBox(width: 32),
-            Expanded(
-              flex: 4,
-              child: Center(
-                child: SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: details,
-                  ),
-                ),
-              ),
+            Expanded(child: Center(child: hero)),
+            const SizedBox(width: 24),
+            SizedBox(
+              width: 380,
+              child: Center(child: SingleChildScrollView(child: details)),
             ),
           ],
         ),
@@ -116,11 +105,11 @@ class HomeScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         children: [
           Row(
             children: [
-              const NexusLogo(size: 30),
+              const NexusLogo(size: 28),
               const Spacer(),
               NxIconButton(
                 icon: Icons.add_rounded,
@@ -129,9 +118,9 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 36),
           Center(child: hero),
-          const SizedBox(height: 26),
+          const SizedBox(height: 36),
           details,
         ],
       ),
@@ -139,71 +128,74 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _StatusLabel extends StatelessWidget {
-  const _StatusLabel({required this.state, required this.since});
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.state});
+  final ConnState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final (text, color) = switch (state) {
+      ConnState.connected => ('Подключено', NX.mint),
+      ConnState.connecting => ('Подключение…', NX.violet),
+      ConnState.disconnecting => ('Отключение…', NX.text2),
+      ConnState.disconnected => ('Не подключено', NX.text3),
+    };
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+          ),
+          const SizedBox(width: 8),
+          Text(text,
+              style: TextStyle(
+                  color: state == ConnState.disconnected ? NX.text2 : color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimerLine extends StatelessWidget {
+  const _TimerLine({required this.state, required this.since});
   final ConnState state;
   final DateTime? since;
 
   @override
   Widget build(BuildContext context) {
-    final (text, color) = switch (state) {
-      ConnState.connected => ('Защищено', NX.mint),
-      ConnState.connecting => ('Подключение…', NX.cyan),
-      ConnState.disconnecting => ('Отключение…', NX.text2),
-      ConnState.disconnected => ('Не подключено', NX.text2),
-    };
-    return Column(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color,
-                boxShadow: state == ConnState.connected
-                    ? NX.glow(NX.mint, strength: 0.5)
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(text,
-                style: TextStyle(
-                  fontFamily: NX.display,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 19,
-                  color: state == ConnState.connected ? NX.text : NX.text2,
-                )),
-          ],
+    if (state == ConnState.connected && since != null) {
+      return StreamBuilder(
+        stream: Stream.periodic(const Duration(seconds: 1)),
+        builder: (_, __) => Text(
+          fmtDuration(DateTime.now().difference(since!)),
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
         ),
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 22,
-          child: state == ConnState.connected && since != null
-              ? StreamBuilder(
-                  stream: Stream.periodic(const Duration(seconds: 1)),
-                  builder: (_, __) => Text(
-                    fmtDuration(DateTime.now().difference(since!)),
-                    style: const TextStyle(
-                      color: NX.text2,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.5,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                )
-              : Text(
-                  state == ConnState.disconnected
-                      ? 'Нажмите, чтобы подключиться'
-                      : '',
-                  style: const TextStyle(color: NX.text3, fontSize: 13),
-                ),
+      );
+    }
+    return SizedBox(
+      height: 38,
+      child: Center(
+        child: Text(
+          state == ConnState.disconnected ? 'Нажмите, чтобы подключиться' : '',
+          style: const TextStyle(color: NX.text3, fontSize: 13.5),
         ),
-      ],
+      ),
     );
   }
 }
@@ -214,56 +206,48 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget cell(IconData icon, Color c, String label, String value) =>
-        Expanded(
-          child: NeonCard(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                Icon(icon, color: c, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label,
-                          style: const TextStyle(
-                              color: NX.text3,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8)),
-                      const SizedBox(height: 2),
-                      Text(value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14.5,
-                              fontFeatures: [FontFeature.tabularFigures()])),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    Widget cell(IconData icon, String label, String value) => Expanded(
+          child: Column(
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 14, color: NX.text3),
+                  const SizedBox(width: 4),
+                  Text(label,
+                      style: const TextStyle(color: NX.text3, fontSize: 12)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFeatures: [FontFeature.tabularFigures()])),
+            ],
           ),
         );
-    return Row(
-      children: [
-        cell(Icons.south_rounded, NX.cyan, 'ЗАГРУЗКА',
-            fmtSpeed(stats.downloadSpeed)),
-        const SizedBox(width: 10),
-        cell(Icons.north_rounded, NX.violet, 'ОТДАЧА',
-            fmtSpeed(stats.uploadSpeed)),
-        const SizedBox(width: 10),
-        cell(Icons.data_usage_rounded, NX.mint, 'ВСЕГО',
-            fmtBytes(stats.upload + stats.download)),
-      ],
+    Widget sep() => Container(width: 1, height: 30, color: NX.stroke);
+    return NeonCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      child: Row(
+        children: [
+          cell(Icons.south_rounded, 'Загрузка', fmtSpeed(stats.downloadSpeed)),
+          sep(),
+          cell(Icons.north_rounded, 'Отдача', fmtSpeed(stats.uploadSpeed)),
+          sep(),
+          cell(Icons.swap_vert_rounded, 'Всего',
+              fmtBytes(stats.upload + stats.download)),
+        ],
+      ),
     );
   }
 }
 
-class _SelectedServerCard extends StatelessWidget {
-  const _SelectedServerCard({required this.onTap});
+class _ServerRow extends StatelessWidget {
+  const _ServerRow({required this.onTap});
   final VoidCallback onTap;
 
   @override
@@ -272,47 +256,48 @@ class _SelectedServerCard extends StatelessWidget {
     final s = app.selected!;
     return NeonCard(
       onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
       child: Row(
         children: [
           ServerAvatar(server: s),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('СЕРВЕР',
-                    style: TextStyle(
-                        color: NX.text3,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2)),
-                const SizedBox(height: 3),
                 Text(s.cleanName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15.5)),
-                const SizedBox(height: 6),
+                        fontWeight: FontWeight.w700, fontSize: 15)),
+                const SizedBox(height: 4),
                 Row(children: [
-                  Tag(s.protocol, color: NX.cyan),
-                  const SizedBox(width: 8),
+                  Text(s.protocol,
+                      style: const TextStyle(color: NX.text3, fontSize: 12.5)),
+                  const SizedBox(width: 10),
                   PingBadge(ping: s.ping),
                 ]),
               ],
             ),
           ),
-          NxIconButton(
-            icon: Icons.bolt_rounded,
+          IconButton(
             tooltip: 'Самый быстрый',
-            spinning: app.pingingAll,
-            onPressed: () async {
-              await app.selectFastest();
-              if (context.mounted) {
-                toast(context, 'Выбран: ${app.selected?.cleanName ?? '—'}');
-              }
-            },
+            onPressed: app.pingingAll
+                ? null
+                : () async {
+                    await app.selectFastest();
+                    if (context.mounted) {
+                      toast(context,
+                          'Выбран: ${app.selected?.cleanName ?? '—'}');
+                    }
+                  },
+            icon: app.pingingAll
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.bolt_rounded, color: NX.text2, size: 20),
           ),
-          const SizedBox(width: 4),
           const Icon(Icons.chevron_right_rounded, color: NX.text3),
         ],
       ),
@@ -326,7 +311,7 @@ class _RoutingSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    Widget seg(RoutingMode m, IconData icon, String title, String sub) {
+    Widget seg(RoutingMode m, String title) {
       final on = app.settings.routing == m;
       return Expanded(
         child: GestureDetector(
@@ -335,112 +320,98 @@ class _RoutingSwitch extends StatelessWidget {
             app.updateSettings((s) => s.routing = m);
             await app.reconnectIfActive();
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: on
-                  ? LinearGradient(colors: [
-                      NX.violet.withValues(alpha: 0.35),
-                      NX.indigo.withValues(alpha: 0.25),
-                    ])
-                  : null,
-              border: Border.all(
-                  color: on
-                      ? NX.violet.withValues(alpha: 0.8)
-                      : Colors.transparent),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: on ? NX.text : NX.text3),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
-                              color: on ? NX.text : NX.text2)),
-                      Text(sub,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: NX.text3, fontSize: 11.5)),
-                    ],
-                  ),
-                ),
-              ],
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(9),
+                color: on ? NX.surface2 : Colors.transparent,
+                border: Border.all(
+                    color: on ? NX.strokeStrong : Colors.transparent),
+              ),
+              child: Text(title,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      color: on ? NX.text : NX.text3)),
             ),
           ),
         ),
       );
     }
 
-    return NeonCard(
-      padding: const EdgeInsets.all(5),
-      radius: 18,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: NX.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: NX.stroke),
+      ),
       child: Row(
         children: [
-          seg(RoutingMode.smart, Icons.alt_route_rounded, 'Умный',
-              'РФ — напрямую'),
+          seg(RoutingMode.smart, 'Умный режим'),
           const SizedBox(width: 4),
-          seg(RoutingMode.global, Icons.public_rounded, 'Весь трафик',
-              'Всё через Nexus'),
+          seg(RoutingMode.global, 'Весь трафик'),
         ],
       ),
     );
   }
 }
 
-class _SubscriptionMini extends StatelessWidget {
-  const _SubscriptionMini({required this.sub});
+class _SubscriptionStrip extends StatelessWidget {
+  const _SubscriptionStrip({required this.sub});
   final Subscription sub;
 
   @override
   Widget build(BuildContext context) {
     final unlimited = sub.total <= 0;
-    final frac = unlimited ? 0.0 : (sub.used / sub.total).clamp(0.0, 1.0);
+    final frac = unlimited ? null : (sub.used / sub.total).clamp(0.0, 1.0);
     final days = sub.expire?.difference(DateTime.now()).inDays;
     return NeonCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.workspace_premium_rounded,
-                  size: 18, color: NX.violet),
-              const SizedBox(width: 8),
               Expanded(
                 child: Text(sub.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 13.5)),
               ),
               if (days != null)
-                Tag(
+                Text(
                   days < 0
-                      ? 'истекла'
-                      : '$days ${plural(days, 'день', 'дня', 'дней')}',
-                  color: days < 0
-                      ? NX.red
-                      : days <= 3
-                          ? NX.amber
-                          : NX.mint,
+                      ? 'Истекла'
+                      : 'ещё $days ${plural(days, 'день', 'дня', 'дней')}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: days < 0
+                        ? NX.red
+                        : days <= 3
+                            ? NX.amber
+                            : NX.text2,
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          TrafficBar(fraction: unlimited ? null : frac),
+          const SizedBox(height: 10),
+          TrafficBar(fraction: frac),
           const SizedBox(height: 8),
           Text(
             unlimited
-                ? 'Использовано ${fmtBytes(sub.used)} · безлимит'
-                : 'Использовано ${fmtBytes(sub.used)} из ${fmtBytes(sub.total)}',
-            style: const TextStyle(color: NX.text2, fontSize: 12.5),
+                ? '${fmtBytes(sub.used)} · без лимита'
+                : '${fmtBytes(sub.used)} из ${fmtBytes(sub.total)}',
+            style: const TextStyle(
+                color: NX.text3,
+                fontSize: 12,
+                fontFeatures: [FontFeature.tabularFigures()]),
           ),
         ],
       ),
@@ -448,7 +419,7 @@ class _SubscriptionMini extends StatelessWidget {
   }
 }
 
-/// Полоска трафика (null — безлимит, бегущий градиент).
+/// Полоска трафика (null — без лимита).
 class TrafficBar extends StatelessWidget {
   const TrafficBar({super.key, required this.fraction});
   final double? fraction;
@@ -456,28 +427,23 @@ class TrafficBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final f = fraction;
-    final danger = f != null && f > 0.9;
+    final color = f == null
+        ? NX.text3.withValues(alpha: 0.4)
+        : f > 0.9
+            ? NX.red
+            : f > 0.75
+                ? NX.amber
+                : NX.violet;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(4),
       child: SizedBox(
-        height: 7,
+        height: 5,
         child: Stack(
           children: [
-            Container(color: Colors.white.withValues(alpha: 0.06)),
+            Container(color: NX.surface2),
             FractionallySizedBox(
               widthFactor: f ?? 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: danger
-                      ? const LinearGradient(colors: [NX.amber, NX.red])
-                      : f == null
-                          ? LinearGradient(colors: [
-                              NX.violet.withValues(alpha: 0.5),
-                              NX.cyan.withValues(alpha: 0.5),
-                            ])
-                          : NX.neon,
-                ),
-              ),
+              child: Container(color: color),
             ),
           ],
         ),
@@ -493,15 +459,15 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
         decoration: BoxDecoration(
-          color: NX.red.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: NX.red.withValues(alpha: 0.45)),
+          color: NX.red.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: NX.red.withValues(alpha: 0.35)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.error_outline_rounded, color: NX.red, size: 20),
+            const Icon(Icons.error_outline_rounded, color: NX.red, size: 19),
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,
