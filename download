@@ -1,0 +1,32 @@
+# Папки платформ генерируются в GitHub Actions (flutter create) — не коммитим
+/android/
+/windows/
+/ios/
+/linux/
+/macos/
+/web/
+/test/
+
+# Сборка и инструменты Flutter
+/build/
+/dist/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+pubspec.lock
+.metadata
+
+# Ключи подписи — никогда в репозиторий
+*.jks
+*.keystore
+key.properties
+github-secrets.txt
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
