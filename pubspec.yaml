@@ -1,72 +1,56 @@
-import 'dart:async';
-import 'dart:io';
+name: nexus
+description: "Nexus — клиент для подписок Xray/V2Ray (VLESS, VMess, Trojan, Shadowsocks)."
+publish_to: 'none'
+version: 1.8.3+13
 
-import '../models.dart';
-import 'android_core.dart';
-import 'windows_core.dart';
+environment:
+  sdk: ">=3.5.0 <4.0.0"
 
-/// Общий интерфейс ядра для Android и Windows.
-abstract class VpnCore {
-  static VpnCore create() =>
-      Platform.isWindows ? WindowsCore() : AndroidCore();
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_v2ray_client: ^3.5.0
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  window_manager: ^0.5.1
+  tray_manager: ^0.5.2
+  ffi: ^2.1.3
+  archive: ^3.6.1
+  crypto: ^3.0.6
+  cryptography: ^2.7.0
 
-  /// Поток изменений состояния.
-  Stream<ConnState> get states;
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.1
 
-  /// Поток статистики (скорости, трафик).
-  Stream<ConnStats> get stats;
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/logo_mark.png
+    - assets/icon/tray_on.ico
+    - assets/icon/tray_off.ico
+  fonts:
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-400.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope-500.ttf
+          weight: 500
+        - asset: assets/fonts/Manrope-600.ttf
+          weight: 600
+        - asset: assets/fonts/Manrope-700.ttf
+          weight: 700
+        - asset: assets/fonts/Manrope-800.ttf
+          weight: 800
 
-  Future<void> init();
-
-  /// Запускает подключение. Бросает исключение с понятным текстом при ошибке.
-  Future<void> connect({
-    required String remark,
-    required String config,
-    required AppSettings settings,
-  });
-
-  Future<void> disconnect();
-
-  /// Задержка до сервера в мс (-1 — недоступен).
-  Future<int> ping(ServerProfile server, String config);
-
-  Future<String> coreVersion();
-
-  /// Последние строки журнала ядра.
-  List<String> get logs;
-
-  Future<List<String>> fetchLogs() async => logs;
-
-  /// Можно ли обновлять ядро отдельно от приложения (только Windows).
-  bool get canUpdateCore => false;
-
-  /// Проверяет и ставит новую версию ядра. Возвращает текст результата.
-  Future<String> updateCore({bool force = false}) async =>
-      'Ядро обновляется вместе с приложением';
-
-  /// Задержка через активное соединение (мс, -1 — нет связи).
-  Future<int> connectedDelay(ServerProfile server) =>
-      tcpPing(server.host, server.port);
-
-  /// Kill switch сработал: VPN упал, интернет заблокирован до отключения.
-  bool get blocked => false;
-
-  /// Окно видно пользователю (на Windows без окна статистику не опрашиваем).
-  void setForeground(bool visible) {}
-
-  Future<void> dispose() async {}
-}
-
-/// TCP-пинг: время установки соединения до host:port.
-Future<int> tcpPing(String host, int port,
-    {Duration timeout = const Duration(seconds: 4)}) async {
-  final sw = Stopwatch()..start();
-  try {
-    final s = await Socket.connect(host, port, timeout: timeout);
-    sw.stop();
-    s.destroy();
-    return sw.elapsedMilliseconds.clamp(1, 9999);
-  } catch (_) {
-    return -1;
-  }
-}
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#090712"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  min_sdk_android: 21
+  windows:
