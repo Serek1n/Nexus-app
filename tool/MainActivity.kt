@@ -19,11 +19,31 @@ import io.flutter.plugin.common.MethodChannel
  * (постоянный VPN и блокировка соединений без VPN), защита экрана.
  */
 class MainActivity : FlutterActivity() {
+    private var channel: MethodChannel? = null
+    private var pendingLink: String? = null
+
+    private fun linkOf(intent: Intent?): String? {
+        val data = intent?.data ?: return null
+        return if (intent.action == Intent.ACTION_VIEW && data.scheme == "nexus") data.toString() else null
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        linkOf(intent)?.let { channel?.invokeMethod("link", it) }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/system")
+        pendingLink = linkOf(intent)
+        channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/system")
+        channel!!
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "initialLink" -> {
+                        result.success(pendingLink)
+                        pendingLink = null
+                    }
+
                     "requestNotifications" -> {
                         if (Build.VERSION.SDK_INT >= 33 &&
                             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=

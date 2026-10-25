@@ -43,6 +43,8 @@ Name: "{autodesktop}\Nexus"; Filename: "{app}\nexus.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\nexus.exe"; Description: "Запустить Nexus"; Flags: nowait postinstall skipifsilent
+; После тихого автообновления — запустить снова
+Filename: "{app}\nexus.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/F /IM nexus-core.exe"; Flags: runhidden; RunOnceId: "KillCore"

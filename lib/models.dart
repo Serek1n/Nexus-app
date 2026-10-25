@@ -149,6 +149,10 @@ class AppSettings {
     this.launchAtStartup = false,
     this.secureScreen = false,
     this.ruAppsDirect = true,
+    this.autoUpdateApp = true,
+    this.windowsKillSwitch = true,
+    this.clearClipboard = true,
+    this.lastAppCheck = 0,
     List<String>? bypassApps,
   }) : bypassApps = bypassApps ?? [];
 
@@ -177,6 +181,16 @@ class AppSettings {
   /// Android: запрет скриншотов и скрытие в списке недавних.
   bool secureScreen;
 
+  /// Windows: при падении VPN не выпускать трафик мимо него.
+  bool windowsKillSwitch;
+
+  /// Очищать буфер обмена после импорта ключа или подписки.
+  bool clearClipboard;
+
+  /// Проверять и скачивать обновления приложения автоматически.
+  bool autoUpdateApp;
+  int lastAppCheck;
+
   /// Android, умный режим: российские приложения работают мимо VPN.
   bool ruAppsDirect;
 
@@ -195,6 +209,10 @@ class AppSettings {
         'launchAtStartup': launchAtStartup,
         'secureScreen': secureScreen,
         'ruAppsDirect': ruAppsDirect,
+        'autoUpdateApp': autoUpdateApp,
+        'windowsKillSwitch': windowsKillSwitch,
+        'clearClipboard': clearClipboard,
+        'lastAppCheck': lastAppCheck,
         'bypassApps': bypassApps,
       });
 
@@ -215,6 +233,10 @@ class AppSettings {
         launchAtStartup: j['launchAtStartup'] as bool? ?? false,
         secureScreen: j['secureScreen'] as bool? ?? false,
         ruAppsDirect: j['ruAppsDirect'] as bool? ?? true,
+        autoUpdateApp: j['autoUpdateApp'] as bool? ?? true,
+        windowsKillSwitch: j['windowsKillSwitch'] as bool? ?? true,
+        clearClipboard: j['clearClipboard'] as bool? ?? true,
+        lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
         bypassApps: (j['bypassApps'] as List?)?.whereType<String>().toList(),
       );
     } catch (_) {

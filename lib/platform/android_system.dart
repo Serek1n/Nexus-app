@@ -15,6 +15,18 @@ class AndroidSystem {
     }
   }
 
+  /// Ссылки nexus://: первая (с которой открыли приложение) и последующие.
+  static Future<void> listenLinks(void Function(String) onLink) async {
+    if (!Platform.isAndroid) return;
+    _ch.setMethodCallHandler((call) async {
+      if (call.method == 'link' && call.arguments is String) {
+        onLink(call.arguments as String);
+      }
+    });
+    final first = await _call<String>('initialLink');
+    if (first != null) onLink(first);
+  }
+
   /// Android 13+: разрешение на уведомление о подключении.
   static Future<void> requestNotifications() => _call('requestNotifications');
 

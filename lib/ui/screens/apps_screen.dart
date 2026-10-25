@@ -45,7 +45,8 @@ class _AppsScreenState extends State<AppsScreen> {
             a.$1.toLowerCase().contains(_q))
         .toList();
     // Сначала российские, потом выбранные, потом остальные.
-    int rank((String, String) a) => ruBypassApps.containsKey(a.$1)
+    final ru = RuAppsUpdater.all;
+    int rank((String, String) a) => ru.contains(a.$1)
         ? 0
         : st.bypassApps.contains(a.$1)
             ? 1
@@ -86,7 +87,7 @@ class _AppsScreenState extends State<AppsScreen> {
                     children: [
                       const Icon(Icons.flag_rounded, color: NX.violet, size: 20),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -96,8 +97,8 @@ class _AppsScreenState extends State<AppsScreen> {
                                     fontSize: 14)),
                             SizedBox(height: 2),
                             Text(
-                                'Банки, Госуслуги, VK, Яндекс, маркетплейсы — '
-                                'в умном режиме не видят VPN',
+                                'Больше ${ruBypassApps.length} приложений: банки, Госуслуги, '
+                                'VK, Яндекс, маркетплейсы. Список обновляется сам',
                                 style:
                                     TextStyle(color: NX.text2, fontSize: 12)),
                           ],
@@ -146,7 +147,7 @@ class _AppsScreenState extends State<AppsScreen> {
                             itemCount: apps.length,
                             itemBuilder: (_, i) {
                               final (pkg, label) = apps[i];
-                              final isRu = ruBypassApps.containsKey(pkg);
+                              final isRu = ru.contains(pkg);
                               final auto = isRu && ruAuto;
                               final on = auto || st.bypassApps.contains(pkg);
                               return ListTile(

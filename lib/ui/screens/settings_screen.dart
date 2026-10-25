@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models.dart';
+import '../../services/app_updater.dart';
 import '../../platform/android_system.dart';
 import '../../platform/windows_host.dart';
 import '../../services/config_builder.dart';
@@ -10,7 +11,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'apps_screen.dart';
 
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.5.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.7.1');
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -223,6 +224,31 @@ class SettingsScreen extends StatelessWidget {
                   )
                 : const _AndroidBackground(),
           ),
+          if (app.isDesktop) ...[
+            const SectionTitle('Защита'),
+            NeonCard(
+              padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+              child: Column(
+                children: [
+                  switchRow(
+                    Icons.shield_rounded,
+                    'Kill switch',
+                    'Если VPN оборвётся, интернет блокируется, а не идёт напрямую',
+                    st.windowsKillSwitch,
+                    (v) => app.updateSettings((s) => s.windowsKillSwitch = v),
+                  ),
+                  const Divider(height: 14),
+                  switchRow(
+                    Icons.content_paste_off_rounded,
+                    'Очищать буфер обмена',
+                    'После добавления ключа или подписки',
+                    st.clearClipboard,
+                    (v) => app.updateSettings((s) => s.clearClipboard = v),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (!app.isDesktop) ...[
             const SectionTitle('Защита'),
             NeonCard(
@@ -238,6 +264,14 @@ class SettingsScreen extends StatelessWidget {
                       app.updateSettings((s) => s.secureScreen = v);
                       AndroidSystem.setSecureScreen(v);
                     },
+                  ),
+                  const Divider(height: 14),
+                  switchRow(
+                    Icons.content_paste_off_rounded,
+                    'Очищать буфер обмена',
+                    'После добавления ключа или подписки',
+                    st.clearClipboard,
+                    (v) => app.updateSettings((s) => s.clearClipboard = v),
                   ),
                   const Divider(height: 14),
                   InkWell(
@@ -342,7 +376,67 @@ class SettingsScreen extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (app.androidUpdate != null) ...[
+                if (app.core.canUpdateCore) ...[
+                  const Divider(height: 22),
+                  switchRow(
+                    Icons.update_rounded,
+                    'Автообновление ядра',
+                    app.isDesktop
+                        ? 'Раз в сутки проверять и ставить новую версию'
+                        : 'Раз в сутки проверять и предлагать обновление',
+                    st.autoUpdateCore,
+                    (v) => app.updateSettings((s) => s.autoUpdateCore = v),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SectionTitle('Обновления Nexus'),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.system_update_rounded,
+                        color: NX.violet, size: 21),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              app.appUpdate != null
+                                  ? 'Доступна ${app.appUpdate!.version}'
+                                  : 'Версия $appVersion',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5)),
+                          const SizedBox(height: 2),
+                          Text(
+                            !AppUpdater.configured
+                                ? 'Эта сборка без источника обновлений'
+                                : app.updateStatus ??
+                                    (app.updateFile != null
+                                        ? 'Скачано и проверено — можно установить'
+                                        : 'Новые версии приходят с GitHub'),
+                            style: const TextStyle(
+                                color: NX.text2, fontSize: 12.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (AppUpdater.configured && app.appUpdate == null)
+                      NeonButton(
+                        label: 'Проверить',
+                        secondary: true,
+                        loading: app.checkingUpdate,
+                        onPressed: () => app.checkAppUpdate(),
+                      ),
+                  ],
+                ),
+                if (app.appUpdate != null) ...[
                   const SizedBox(height: 12),
                   if (app.updateProgress != null) ...[
                     ClipRRect(
@@ -356,23 +450,23 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                   ],
                   NeonButton(
-                    label: 'Обновить до ${app.androidUpdate!.version}',
-                    icon: Icons.system_update_rounded,
+                    label: app.isDesktop
+                        ? 'Установить и перезапустить'
+                        : 'Установить обновление',
+                    icon: Icons.download_rounded,
                     expand: true,
                     loading: app.updateProgress != null,
-                    onPressed: app.installAndroidUpdate,
+                    onPressed: app.installAppUpdate,
                   ),
                 ],
-                if (app.core.canUpdateCore) ...[
+                if (AppUpdater.configured) ...[
                   const Divider(height: 22),
                   switchRow(
-                    Icons.update_rounded,
-                    'Автообновление ядра',
-                    app.isDesktop
-                        ? 'Раз в сутки проверять и ставить новую версию'
-                        : 'Раз в сутки проверять и предлагать обновление',
-                    st.autoUpdateCore,
-                    (v) => app.updateSettings((s) => s.autoUpdateCore = v),
+                    Icons.autorenew_rounded,
+                    'Автообновление',
+                    'Проверять и скачивать новые версии в фоне',
+                    st.autoUpdateApp,
+                    (v) => app.updateSettings((s) => s.autoUpdateApp = v),
                   ),
                 ],
               ],

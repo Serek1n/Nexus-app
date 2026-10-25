@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,10 +24,11 @@ class HomeScreen extends StatelessWidget {
     final hero = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _StatusPill(state: app.state),
+        _StatusPill(state: app.state, blocked: app.blocked),
         const SizedBox(height: 28),
         ConnectButton(
           state: app.state,
+          blocked: app.blocked,
           size: wide ? 220 : 196,
           onTap: () {
             if (sel == null) {
@@ -49,9 +52,47 @@ class HomeScreen extends StatelessWidget {
           _ErrorBanner(text: app.lastError!, onClose: app.clearError),
           const SizedBox(height: 10),
         ],
-        if (app.androidUpdate != null) ...[
+        if (app.blocked) ...[
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+            decoration: BoxDecoration(
+              color: NX.red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: NX.red.withValues(alpha: 0.4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.gpp_bad_rounded, color: NX.red, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'VPN оборвался — интернет заблокирован, чтобы ничего не ушло мимо',
+                        style: TextStyle(fontSize: 13, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 22),
+                  child: TextButton(
+                    onPressed: app.reconnect,
+                    child: const Text('Переподключить',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (app.appUpdate != null) ...[
           NeonCard(
-            onTap: app.updateProgress == null ? app.installAndroidUpdate : null,
+            active: app.updateFile != null,
+            onTap: app.updateProgress == null ? app.installAppUpdate : null,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: Row(
               children: [
@@ -61,14 +102,18 @@ class HomeScreen extends StatelessWidget {
                 Expanded(
                   child: Text(
                     app.updateProgress != null
-                        ? 'Загрузка ${(app.updateProgress! * 100).round()}%'
-                        : 'Доступно обновление'
-                            '${app.androidUpdate!.xray.isEmpty ? '' : ' · Xray ${app.androidUpdate!.xray.replaceFirst('v', '')}'}',
+                        ? 'Загрузка обновления ${(app.updateProgress! * 100).round()}%'
+                        : (app.updateFile != null
+                                ? 'Обновление готово'
+                                : 'Доступно обновление') +
+                            (app.appUpdate!.xray.isEmpty
+                                ? ''
+                                : ' · Xray ${app.appUpdate!.xray}'),
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
                 if (app.updateProgress == null)
-                  const Text('Обновить',
+                  const Text('Установить',
                       style: TextStyle(
                           color: NX.violet,
                           fontWeight: FontWeight.w700,
@@ -111,7 +156,7 @@ class HomeScreen extends StatelessWidget {
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
-          child: app.state == ConnState.connected
+          child: app.state == ConnState.connected && !app.blocked
               ? Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: ValueListenableBuilder<ConnStats>(
@@ -211,12 +256,15 @@ class _Notice extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.state});
+  const _StatusPill({required this.state, this.blocked = false});
   final ConnState state;
+  final bool blocked;
 
   @override
   Widget build(BuildContext context) {
-    final (text, color) = switch (state) {
+    final (text, color) = blocked
+        ? ('Нет соединения', NX.red)
+        : switch (state) {
       ConnState.connected => ('Подключено', NX.mint),
       ConnState.connecting => ('Подключение…', NX.violet),
       ConnState.disconnecting => ('Отключение…', NX.text2),
@@ -249,32 +297,95 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _TimerLine extends StatelessWidget {
+class _TimerLine extends StatefulWidget {
   const _TimerLine({required this.state, required this.since});
   final ConnState state;
   final DateTime? since;
 
   @override
+  State<_TimerLine> createState() => _TimerLineState();
+}
+
+/// Один таймер на всё время подключения (не пересоздаётся при перерисовке).
+class _TimerLineState extends State<_TimerLine> {
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TimerLine old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    final on = widget.state == ConnState.connected && widget.since != null;
+    if (on && _t == null) {
+      _t = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (!on) {
+      _t?.cancel();
+      _t = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (state == ConnState.connected && since != null) {
-      return StreamBuilder(
-        stream: Stream.periodic(const Duration(seconds: 1)),
-        builder: (_, __) => Text(
-          fmtDuration(DateTime.now().difference(since!)),
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            fontFeatures: [FontFeature.tabularFigures()],
+    if (widget.state == ConnState.connected && widget.since != null) {
+      final app = AppScope.of(context);
+      final lat = app.liveLatency;
+      return Column(
+        children: [
+          Text(
+            fmtDuration(DateTime.now().difference(widget.since!)),
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
-        ),
+          const SizedBox(height: 6),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: app.measureLatency,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              child: lat == null
+                  ? const Text('Проверяю задержку…',
+                      style: TextStyle(color: NX.text3, fontSize: 12.5))
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PingBadge(ping: lat),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.refresh_rounded,
+                            size: 14, color: NX.text3),
+                      ],
+                    ),
+            ),
+          ),
+        ],
       );
     }
     return SizedBox(
       height: 38,
       child: Center(
         child: Text(
-          state == ConnState.disconnected ? 'Нажмите, чтобы подключиться' : '',
+          widget.state == ConnState.disconnected
+              ? 'Нажмите, чтобы подключиться'
+              : '',
           style: const TextStyle(color: NX.text3, fontSize: 13.5),
         ),
       ),

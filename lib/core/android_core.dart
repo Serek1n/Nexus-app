@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
 import '../models.dart';
-import '../services/app_updater.dart';
 import '../services/ru_apps.dart';
 import 'vpn_core.dart';
 
@@ -72,7 +71,7 @@ class AndroidCore extends VpnCore {
     final bypass = <String>{
       ...settings.bypassApps,
       if (settings.routing == RoutingMode.smart && settings.ruAppsDirect)
-        ...ruBypassApps.keys,
+        ...RuAppsUpdater.all,
     }.toList();
     await _v2ray.startV2Ray(
       remark: remark,
@@ -99,6 +98,18 @@ class AndroidCore extends VpnCore {
   }
 
   @override
+  Future<int> connectedDelay(ServerProfile server) async {
+    try {
+      final d = await _v2ray
+          .getConnectedServerDelay()
+          .timeout(const Duration(seconds: 10));
+      return d <= 0 ? -1 : d;
+    } catch (_) {
+      return -1;
+    }
+  }
+
+  @override
   Future<List<String>> fetchLogs() async {
     try {
       final l = await _v2ray.getLogs();
@@ -106,23 +117,6 @@ class AndroidCore extends VpnCore {
     } catch (_) {
       return _logs;
     }
-  }
-
-  /// На Android ядро встроено в APK: свежий Xray приходит обновлением приложения,
-  /// которое GitHub Actions собирает автоматически при выходе новой версии Xray.
-  @override
-  bool get canUpdateCore => kUpdateRepo.isNotEmpty;
-
-  /// Найденное, но ещё не установленное обновление.
-  AppUpdate? pending;
-
-  @override
-  Future<String> updateCore({bool force = false}) async {
-    final u = await AppUpdater.check();
-    pending = u;
-    if (u == null) return 'Установлена последняя версия';
-    return 'Доступно обновление: ${u.version}'
-        '${u.xray.isEmpty ? '' : ' · Xray ${u.xray.replaceFirst('v', '')}'}';
   }
 
   @override

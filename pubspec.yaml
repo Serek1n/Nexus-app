@@ -1,7 +1,7 @@
 name: nexus
 description: "Nexus — клиент для подписок Xray/V2Ray (VLESS, VMess, Trojan, Shadowsocks)."
 publish_to: 'none'
-version: 1.5.0+6
+version: 1.7.1+9
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -19,6 +19,7 @@ dependencies:
   ffi: ^2.1.3
   archive: ^3.6.1
   crypto: ^3.0.6
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:

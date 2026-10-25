@@ -5,13 +5,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/android_core.dart';
 import '../core/vpn_core.dart';
 import '../services/app_updater.dart';
 import '../models.dart';
 import '../platform/android_system.dart';
 import '../platform/win_dpapi.dart';
 import '../services/config_builder.dart';
+import '../services/ru_apps.dart';
 import '../services/subscription_service.dart';
 
 /// Состояние приложения: подписки, серверы, подключение, настройки.
@@ -40,13 +40,18 @@ class AppState extends ChangeNotifier {
   bool coreUpdating = false;
   String? coreUpdateStatus;
 
-  /// Android: доступное обновление приложения со свежим ядром Xray.
-  AppUpdate? get androidUpdate =>
-      core is AndroidCore ? (core as AndroidCore).pending : null;
+  // ─── обновление приложения ───
+  AppUpdate? appUpdate;
+  File? updateFile;
   double? updateProgress;
+  bool checkingUpdate = false;
+  String? updateStatus;
+
+  /// Закрытие приложения (Windows задаёт его, чтобы установщик мог заменить файлы).
+  Future<void> Function()? quitApp;
 
   StreamSubscription? _stSub, _statsSub;
-  Timer? _subTimer;
+  Timer? _subTimer, _updTimer;
 
   bool get isDesktop => Platform.isWindows;
 
@@ -87,6 +92,10 @@ class AppState extends ChangeNotifier {
         _save();
       }
     } catch (_) {}
+    if (!isDesktop) {
+      await RuAppsUpdater.load();
+      unawaited(RuAppsUpdater.refresh());
+    }
     if (!isDesktop && settings.secureScreen) {
       unawaited(AndroidSystem.setSecureScreen(true));
     }
@@ -107,11 +116,12 @@ class AppState extends ChangeNotifier {
     });
     notifyListeners();
 
-    if (settings.autoUpdateOnStart && subscriptions.isNotEmpty) {
-      await refreshAll(silent: true);
-    }
+    // Сначала подключаемся, подписки обновляем параллельно — запуск быстрее.
     if (settings.autoConnectOnStart && selected != null) {
       unawaited(connect());
+    }
+    if (settings.autoUpdateOnStart && subscriptions.isNotEmpty) {
+      unawaited(refreshAll(silent: true));
     }
 
     // Пока приложение открыто — обновляем подписки раз в 6 часов.
@@ -123,6 +133,16 @@ class AppState extends ChangeNotifier {
         }
       }
     });
+
+    // Обновления приложения: при запуске (не чаще раза в 3 часа) и каждые 6 часов.
+    if (AppUpdater.configured && settings.autoUpdateApp) {
+      final since = DateTime.now().millisecondsSinceEpoch - settings.lastAppCheck;
+      if (since > const Duration(hours: 3).inMilliseconds) {
+        unawaited(checkAppUpdate(silent: true));
+      }
+      _updTimer = Timer.periodic(const Duration(hours: 6),
+          (_) => checkAppUpdate(silent: true));
+    }
 
     // Раз в сутки тихо проверяем обновление ядра Xray.
     final day = const Duration(hours: 20).inMilliseconds;
@@ -154,16 +174,45 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Android: скачать обновление, проверить SHA-256 и открыть установщик.
-  Future<void> installAndroidUpdate() async {
-    final u = androidUpdate;
-    if (u == null || updateProgress != null) return;
+  /// Проверяет обновление; если есть — сразу скачивает его в фоне.
+  Future<void> checkAppUpdate({bool silent = false}) async {
+    if (!AppUpdater.configured || checkingUpdate || updateProgress != null) {
+      return;
+    }
+    checkingUpdate = true;
+    if (!silent) updateStatus = 'Проверяю…';
+    notifyListeners();
+    try {
+      final u = await AppUpdater.check();
+      settings.lastAppCheck = DateTime.now().millisecondsSinceEpoch;
+      _save();
+      if (u == null) {
+        appUpdate = null;
+        updateFile = null;
+        updateStatus = 'Установлена последняя версия';
+        return;
+      }
+      if (appUpdate?.build != u.build) updateFile = null;
+      appUpdate = u;
+      updateStatus = null;
+      checkingUpdate = false;
+      if (settings.autoUpdateApp) await _downloadUpdate();
+    } catch (e) {
+      if (!silent) updateStatus = _msg(e);
+    } finally {
+      checkingUpdate = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _downloadUpdate() async {
+    final u = appUpdate;
+    if (u == null || updateFile != null || updateProgress != null) return;
     updateProgress = 0;
-    coreUpdateStatus = 'Загрузка обновления…';
     notifyListeners();
     var lastPct = -1;
     try {
-      await AppUpdater.downloadAndInstall(u, onProgress: (p) {
+      updateFile = await AppUpdater.download(u, onProgress: (p) {
         final pct = (p * 100).floor();
         if (pct != lastPct) {
           lastPct = pct;
@@ -171,13 +220,36 @@ class AppState extends ChangeNotifier {
           notifyListeners();
         }
       });
-      coreUpdateStatus = 'Подтвердите установку в системном окне';
     } catch (e) {
-      coreUpdateStatus = _msg(e);
+      updateStatus = _msg(e);
     } finally {
       updateProgress = null;
       notifyListeners();
     }
+  }
+
+  /// Ставит обновление (при необходимости сначала скачивает).
+  Future<void> installAppUpdate() async {
+    if (appUpdate == null) return;
+    if (updateFile == null) await _downloadUpdate();
+    final f = updateFile;
+    if (f == null) return;
+    try {
+      if (isDesktop) {
+        updateStatus = 'Устанавливаю, Nexus перезапустится…';
+        notifyListeners();
+        if (state != ConnState.disconnected) await core.disconnect();
+        await AppUpdater.install(f);
+        await Future.delayed(const Duration(milliseconds: 500));
+        await quitApp?.call();
+      } else {
+        await AppUpdater.install(f);
+        updateStatus = 'Подтвердите установку в системном окне';
+      }
+    } catch (e) {
+      updateStatus = _msg(e);
+    }
+    notifyListeners();
   }
 
   /// Ссылки подписок и ключи серверов на Windows хранятся зашифрованными (DPAPI).
@@ -207,10 +279,31 @@ class AppState extends ChangeNotifier {
 
   // ───────────────────────────── подключение ─────────────────────────────
 
+  /// Kill switch сработал (Windows): VPN упал, интернет заблокирован.
+  bool get blocked => core.blocked;
+
+  /// Реальная задержка через туннель после подключения.
+  int? liveLatency;
+
+  Future<void> measureLatency() async {
+    final s = selected;
+    if (s == null || state != ConnState.connected) return;
+    liveLatency = null;
+    notifyListeners();
+    try {
+      liveLatency = await core.connectedDelay(s);
+    } catch (_) {
+      liveLatency = -1;
+    }
+    notifyListeners();
+  }
+
   void _onCoreState(ConnState s) {
     if (s == ConnState.connected && state != ConnState.connected) {
       connectedAt = DateTime.now();
+      Future.delayed(const Duration(seconds: 1), measureLatency);
     }
+    if (s != ConnState.connected) liveLatency = null;
     if (s == ConnState.disconnected) {
       connectedAt = null;
       statsNotifier.value = const ConnStats();
@@ -287,6 +380,13 @@ class AppState extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 400));
       await connect();
     }
+  }
+
+  /// Полное переподключение (в том числе после срабатывания kill switch).
+  Future<void> reconnect() async {
+    await core.disconnect();
+    await Future.delayed(const Duration(milliseconds: 300));
+    await connect();
   }
 
   /// Перезапуск соединения после смены настроек маршрутизации.
@@ -487,6 +587,7 @@ class AppState extends ChangeNotifier {
     _stSub?.cancel();
     _statsSub?.cancel();
     _subTimer?.cancel();
+    _updTimer?.cancel();
     core.dispose();
     super.dispose();
   }

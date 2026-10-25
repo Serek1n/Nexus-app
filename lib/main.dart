@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,7 +7,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'models.dart';
+import 'platform/android_system.dart';
 import 'platform/windows_host.dart';
+import 'services/deep_links.dart';
 import 'state/app_state.dart';
 import 'ui/add_sheet.dart';
 import 'ui/app_scope.dart';
@@ -20,10 +23,12 @@ import 'ui/widgets.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final startHidden = args.contains('--minimized');
+  final link = args.where((a) => a.toLowerCase().startsWith('nexus:')).firstOrNull;
 
   if (Platform.isWindows) {
-    // Второй запуск просто показывает уже открытое окно.
-    if (!await WindowsHost.claimSingleInstance()) exit(0);
+    // Второй запуск просто показывает уже открытое окно (и передаёт ссылку).
+    if (!await WindowsHost.claimSingleInstance(link)) exit(0);
+    if (link != null) DeepLinks.handle(link);
     await windowManager.ensureInitialized();
     const options = WindowOptions(
       size: Size(1120, 720),
@@ -52,6 +57,7 @@ Future<void> main(List<String> args) async {
   final state = AppState();
   runApp(NexusApp(state: state));
   await state.init();
+  unawaited(AndroidSystem.listenLinks(DeepLinks.handle));
   if (Platform.isWindows) {
     state.setWindowVisible(!startHidden);
     await WindowsHost(state).init();
@@ -77,11 +83,14 @@ class NexusApp extends StatelessWidget {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
+        navigatorKey: navigatorKey,
         home: const Shell(),
       ),
     );
   }
 }
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -92,6 +101,65 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0;
+  StreamSubscription<String>? _links;
+
+  @override
+  void initState() {
+    super.initState();
+    _links = DeepLinks.stream.listen(_onLink);
+    final p = DeepLinks.takePending();
+    if (p != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onLink(p));
+    }
+  }
+
+  @override
+  void dispose() {
+    _links?.cancel();
+    super.dispose();
+  }
+
+  /// Ссылка nexus:// — добавляем только после явного подтверждения,
+  /// чтобы сайт не мог незаметно подсунуть чужую подписку.
+  Future<void> _onLink(String payload) async {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    final isSub = payload.startsWith('http');
+    final what = isSub
+        ? (Uri.tryParse(payload)?.host ?? 'подписку')
+        : payload.split('://').first.toUpperCase();
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (c) => AlertDialog(
+        title: Text(isSub ? 'Добавить подписку?' : 'Добавить сервер?'),
+        content: Text(
+          isSub
+              ? 'Подписка с сайта $what будет добавлена в Nexus.'
+              : 'Будет добавлен сервер $what.',
+          style: const TextStyle(color: NX.text2),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Добавить')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final msg = await AppScope.read(context).importText(payload);
+      if (mounted) toast(context, msg);
+    } catch (e) {
+      final s = e.toString();
+      if (mounted) {
+        toast(context, s.startsWith('Exception: ') ? s.substring(11) : s,
+            error: true);
+      }
+    }
+  }
 
   static const _items = [
     (Icons.power_settings_new_rounded, 'Главная'),

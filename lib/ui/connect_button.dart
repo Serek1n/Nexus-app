@@ -9,8 +9,15 @@ import 'theme.dart';
 /// и мягкое свечение, во время подключения — бегущая дуга.
 class ConnectButton extends StatefulWidget {
   const ConnectButton(
-      {super.key, required this.state, required this.onTap, this.size = 200});
+      {super.key,
+      required this.state,
+      required this.onTap,
+      this.size = 200,
+      this.blocked = false});
   final ConnState state;
+
+  /// Kill switch сработал — кнопка красная.
+  final bool blocked;
   final VoidCallback onTap;
   final double size;
 
@@ -27,7 +34,7 @@ class _ConnectButtonState extends State<ConnectButton>
   bool get _busy =>
       widget.state == ConnState.connecting ||
       widget.state == ConnState.disconnecting;
-  bool get _on => widget.state == ConnState.connected;
+  bool get _on => widget.state == ConnState.connected && !widget.blocked;
 
   @override
   void initState() {
@@ -56,7 +63,11 @@ class _ConnectButtonState extends State<ConnectButton>
   Widget build(BuildContext context) {
     final s = widget.size;
     final fill = _on ? NX.mint : NX.surface2;
-    final iconColor = _on ? const Color(0xFF06261A) : (_busy ? NX.text : NX.text2);
+    final iconColor = widget.blocked
+        ? NX.red
+        : _on
+            ? const Color(0xFF06261A)
+            : (_busy ? NX.text : NX.text2);
 
     return Semantics(
       button: true,
@@ -84,9 +95,11 @@ class _ConnectButtonState extends State<ConnectButton>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: _on
-                            ? NX.mint.withValues(alpha: 0.25)
-                            : NX.stroke,
+                        color: widget.blocked
+                            ? NX.red.withValues(alpha: 0.3)
+                            : _on
+                                ? NX.mint.withValues(alpha: 0.25)
+                                : NX.stroke,
                         width: 1,
                       ),
                     ),
@@ -109,7 +122,11 @@ class _ConnectButtonState extends State<ConnectButton>
                       shape: BoxShape.circle,
                       color: fill,
                       border: Border.all(
-                        color: _on ? Colors.transparent : NX.strokeStrong,
+                        color: widget.blocked
+                            ? NX.red.withValues(alpha: 0.6)
+                            : _on
+                                ? Colors.transparent
+                                : NX.strokeStrong,
                       ),
                       boxShadow: _on ? NX.glow(NX.mint, strength: 1.2) : null,
                     ),

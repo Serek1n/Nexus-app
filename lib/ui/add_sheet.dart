@@ -73,7 +73,15 @@ class _AddFormState extends State<_AddForm> {
       _error = null;
     });
     try {
-      final msg = await AppScope.read(context).importText(_ctrl.text);
+      final app = AppScope.read(context);
+      final msg = await app.importText(_ctrl.text);
+      // Ключи и ссылки подписок не оставляем в буфере обмена.
+      if (app.settings.clearClipboard) {
+        final clip = await Clipboard.getData(Clipboard.kTextPlain);
+        if (clip?.text?.trim() == _ctrl.text.trim()) {
+          await Clipboard.setData(const ClipboardData(text: ''));
+        }
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
       toast(context, msg);

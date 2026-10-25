@@ -44,6 +44,13 @@ abstract class VpnCore {
   Future<String> updateCore({bool force = false}) async =>
       'Ядро обновляется вместе с приложением';
 
+  /// Задержка через активное соединение (мс, -1 — нет связи).
+  Future<int> connectedDelay(ServerProfile server) =>
+      tcpPing(server.host, server.port);
+
+  /// Kill switch сработал: VPN упал, интернет заблокирован до отключения.
+  bool get blocked => false;
+
   /// Окно видно пользователю (на Windows без окна статистику не опрашиваем).
   void setForeground(bool visible) {}
 

@@ -99,10 +99,10 @@ class WindowsCore extends VpnCore {
   String _withStats(String config) {
     final cfg = jsonDecode(config) as Map<String, dynamic>;
     cfg['stats'] = <String, dynamic>{};
-    cfg['api'] = {
-      'tag': 'api',
+    // Статистика по HTTP (/debug/vars) — без запуска отдельного процесса.
+    cfg['metrics'] = {
+      'tag': 'metrics',
       'listen': '127.0.0.1:$_apiPort',
-      'services': ['StatsService'],
     };
     cfg['policy'] = {
       'system': {
@@ -132,23 +132,33 @@ class WindowsCore extends VpnCore {
     if (!_restarting) _restarts = 0;
 
     _apiPort = await _freePort();
-    final cfgFile = File('$_dataDir\\config.json');
-    await cfgFile.writeAsString(_withStats(config));
 
     _logs.clear();
     _log('Запуск ядра: $remark');
     try {
+      // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
       _proc = await Process.start(
         _corePath,
-        ['run', '-c', cfgFile.path],
+        ['run', '-format', 'json', '-c', 'stdin:'],
         workingDirectory: _coreDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
-        mode: ProcessStartMode.detachedWithStdio,
       );
+      _proc!.stdin.add(utf8.encode(_withStats(config)));
+      await _proc!.stdin.flush();
+      await _proc!.stdin.close();
     } catch (e) {
       _states.add(ConnState.disconnected);
       throw Exception('Не удалось запустить ядро: $e');
     }
+    final proc = _proc!;
+    // Ядро завершилось само — сразу реагируем, не дожидаясь проверки порта.
+    proc.exitCode.then((code) {
+      if (identical(_proc, proc) && _watchdog != null) {
+        _log('Ядро завершилось (код $code)');
+        _exited = true;
+        _tick();
+      }
+    });
     _proc!.stdout
         .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
@@ -164,9 +174,10 @@ class WindowsCore extends VpnCore {
       await Future.delayed(const Duration(milliseconds: 200));
       up = await _portOpen(kHttpPort);
     }
-    // Конфиг с ключами больше не нужен на диске — ядро уже его прочитало.
+    // Старый файл конфига от прошлых версий — удаляем.
     try {
-      if (cfgFile.existsSync()) cfgFile.deleteSync();
+      final old = File('$_dataDir\\config.json');
+      if (old.existsSync()) old.deleteSync();
     } catch (_) {}
     if (!up) {
       await _stopProcess();
@@ -186,43 +197,33 @@ class WindowsCore extends VpnCore {
     _lastDown = 0;
     _lastStatsAt = null;
     _failedChecks = 0;
+    _tickN = 0;
+    _blocked = false;
+    _exited = false;
     _watchdog?.cancel();
     _watchdog =
         Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _states.add(ConnState.connected);
   }
 
+  bool _exited = false;
+
   Future<void> _tick() async {
-    // Сторож: если ядро упало — отключаемся.
-    if (!await _portOpen(kHttpPort)) {
-      _failedChecks++;
-      if (_failedChecks >= 3) {
-        _watchdog?.cancel();
-        if (_restarts < 3 && _lastConfig != null && _lastSettings != null) {
-          _restarts++;
-          _log('Ядро перестало отвечать — перезапуск ($_restarts из 3)');
-          _restarting = true;
-          try {
-            await connect(
-                remark: _lastRemark ?? '',
-                config: _lastConfig!,
-                settings: _lastSettings!);
-          } catch (e) {
-            _log('Перезапуск не удался: $e');
-            await disconnect();
-          } finally {
-            _restarting = false;
-          }
-        } else {
-          _log('Ядро перестало отвечать — отключение');
-          await disconnect();
-        }
-      }
-      return;
-    }
-    _failedChecks = 0;
-    // Статистику запрашиваем раз в 2 секунды и только когда окно открыто.
     _tickN++;
+    if (_blocked || _recovering) return;
+    // Падение ядра ловит exitCode; порт дополнительно проверяем раз в 5 секунд.
+    final portDead =
+        !_exited && _tickN % 5 == 0 && !await _portOpen(kHttpPort);
+    if (_exited || portDead) {
+      _failedChecks++;
+      if (_exited || _failedChecks >= 2) {
+        await _recover();
+        return;
+      }
+    } else if (_tickN % 5 == 0) {
+      _failedChecks = 0;
+    }
+    // Статистику запрашиваем раз в 2 секунды и только когда окно открыто.
     if (!_foreground || _tickN.isOdd) return;
     final s = await _queryStats();
     if (s != null) {
@@ -247,27 +248,63 @@ class WindowsCore extends VpnCore {
     }
   }
 
-  Future<(int, int)?> _queryStats() async {
+  bool _recovering = false;
+
+  /// Ядро упало: перезапуск (до 3 раз), затем kill switch или отключение.
+  Future<void> _recover() async {
+    _recovering = true;
+    _watchdog?.cancel();
     try {
-      final p = await Process.start(
-        _corePath,
-        ['api', 'statsquery', '--server=127.0.0.1:$_apiPort'],
-        workingDirectory: _coreDir,
-        mode: ProcessStartMode.detachedWithStdio,
-      );
-      final out = await p.stdout
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .join()
-          .timeout(const Duration(seconds: 2));
-      final j = jsonDecode(out) as Map<String, dynamic>;
-      var up = 0, down = 0;
-      for (final e in (j['stat'] as List? ?? [])) {
-        final name = e['name']?.toString() ?? '';
-        final v = int.tryParse(e['value']?.toString() ?? '0') ?? 0;
-        if (!name.startsWith('outbound>>>proxy>>>')) continue;
-        if (name.endsWith('uplink')) up += v;
-        if (name.endsWith('downlink')) down += v;
+      if (_restarts < 3 && _lastConfig != null && _lastSettings != null) {
+        _restarts++;
+        _log('Ядро перестало работать — перезапуск ($_restarts из 3)');
+        _restarting = true;
+        try {
+          await connect(
+              remark: _lastRemark ?? '',
+              config: _lastConfig!,
+              settings: _lastSettings!);
+          return;
+        } catch (e) {
+          _log('Перезапуск не удался: $e');
+        } finally {
+          _restarting = false;
+        }
       }
+      if (_lastSettings?.windowsKillSwitch == true && _proxySet) {
+        // Kill switch: системный прокси остаётся на мёртвом порту —
+        // трафик не пойдёт мимо VPN, пока пользователь не отключится сам.
+        _log('Ядро не работает — интернет заблокирован (kill switch)');
+        final p = _proc;
+        _proc = null;
+        if (p != null) Process.killPid(p.pid);
+        _blocked = true;
+        _stats.add(const ConnStats());
+        _states.add(ConnState.connected);
+      } else {
+        _log('Ядро не работает — отключение');
+        await disconnect();
+      }
+    } finally {
+      _recovering = false;
+    }
+  }
+
+  final _http = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 1)
+    ..findProxy = (_) => 'DIRECT';
+
+  Future<(int, int)?> _queryStats() async {
+    if (_blocked) return null;
+    try {
+      final req = await _http
+          .getUrl(Uri.parse('http://127.0.0.1:$_apiPort/debug/vars'));
+      final res = await req.close().timeout(const Duration(seconds: 2));
+      final body = await res.transform(utf8.decoder).join();
+      final j = jsonDecode(body) as Map<String, dynamic>;
+      final proxy = (j['stats']?['outbound']?['proxy'] as Map?) ?? const {};
+      final up = (proxy['uplink'] as num?)?.toInt() ?? 0;
+      final down = (proxy['downlink'] as num?)?.toInt() ?? 0;
       return (up, down);
     } catch (_) {
       return null;
@@ -305,10 +342,17 @@ class WindowsCore extends VpnCore {
     await _killStrayCore();
   }
 
+  /// Kill switch сработал: ядро остановлено, прокси указывает в никуда.
+  bool _blocked = false;
+
+  @override
+  bool get blocked => _blocked;
+
   @override
   Future<void> disconnect() async {
     _watchdog?.cancel();
     _watchdog = null;
+    _blocked = false;
     if (!_restarting) {
       _lastConfig = null;
       _lastSettings = null;
@@ -327,6 +371,27 @@ class WindowsCore extends VpnCore {
   @override
   Future<int> ping(ServerProfile server, String config) =>
       tcpPing(server.host, server.port);
+
+  /// Реальная задержка через туннель: HTTP-запрос через локальный прокси.
+  @override
+  Future<int> connectedDelay(ServerProfile server) async {
+    final c = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8)
+      ..findProxy = (_) => 'PROXY 127.0.0.1:$kHttpPort';
+    final sw = Stopwatch()..start();
+    try {
+      final req = await c
+          .getUrl(Uri.parse('https://www.google.com/generate_204'))
+          .timeout(const Duration(seconds: 8));
+      final res = await req.close().timeout(const Duration(seconds: 8));
+      await res.drain<void>();
+      return sw.elapsedMilliseconds.clamp(1, 99999);
+    } catch (_) {
+      return -1;
+    } finally {
+      c.close(force: true);
+    }
+  }
 
   @override
   Future<String> coreVersion() => _versionOf(_corePath);

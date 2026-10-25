@@ -45,6 +45,14 @@ def android():
          '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
          '    xmlns:tools="http://schemas.android.com/tools"'),
         (re.compile(r'android:label="[^"]*"'), 'android:label="Nexus"'),
+        # Ссылки nexus://add/... из Discord-бота открывают Nexus.
+        (re.compile(r"(<category android:name=\"android.intent.category.LAUNCHER\"\s*/>\s*</intent-filter>)"),
+         r'\1\n            <intent-filter>\n'
+         r'                <action android:name="android.intent.action.VIEW" />\n'
+         r'                <category android:name="android.intent.category.DEFAULT" />\n'
+         r'                <category android:name="android.intent.category.BROWSABLE" />\n'
+         r'                <data android:scheme="nexus" />\n'
+         r'            </intent-filter>'),
         # FileProvider для установки скачанных обновлений.
         (re.compile(r"(\s*)</application>"),
          r'\1    <provider\n'

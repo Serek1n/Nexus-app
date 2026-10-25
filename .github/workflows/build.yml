@@ -1,9 +1,12 @@
 name: Сборка Nexus
 
 on:
+  # Каждая сборка публикуется в релиз.
   push:
     branches: [main, master]
     tags: ['v*']
+  pull_request:
+    branches: [main, master]
   # Каждый день проверяем, не вышел ли новый Xray. Если вышел —
   # собираем Nexus со свежим ядром и публикуем релиз (приложения обновятся сами).
   schedule:
@@ -29,6 +32,7 @@ jobs:
       xray: ${{ steps.c.outputs.xray }}
       build: ${{ steps.c.outputs.build }}
       release: ${{ steps.c.outputs.release }}
+      prerelease: ${{ steps.c.outputs.prerelease }}
       run: ${{ steps.c.outputs.run }}
     steps:
       - id: c
@@ -41,19 +45,23 @@ jobs:
           echo "xray=$XRAY" >> $GITHUB_OUTPUT
           echo "build=$(( ${{ github.run_number }} + 100 ))" >> $GITHUB_OUTPUT
 
-          RELEASE=false; RUN=true
+          RELEASE=true; PRE=false; RUN=true
           case "${{ github.event_name }}" in
             schedule)
+              # По расписанию собираем, только если вышел новый Xray.
               if gh release list -R "$UPDATE_REPO" --limit 30 --json name -q '.[].name' 2>/dev/null \
                    | grep -q "Xray ${XRAY#v}\$"; then
-                echo "Релиз с Xray ${XRAY#v} уже есть — пропускаем"; RUN=false
-              else
-                RELEASE=true
+                echo "Релиз с Xray ${XRAY#v} уже есть — пропускаем"; RUN=false; RELEASE=false
               fi ;;
-            workflow_dispatch) RELEASE=true ;;
-            push) [[ "${{ github.ref }}" == refs/tags/v* ]] && RELEASE=true ;;
+            pull_request)
+              # Сборка из pull request — пробный релиз: приложения его не ставят.
+              PRE=true
+              if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+                RELEASE=false   # из чужих форков не публикуем
+              fi ;;
           esac
           echo "release=$RELEASE" >> $GITHUB_OUTPUT
+          echo "prerelease=$PRE" >> $GITHUB_OUTPUT
           echo "run=$RUN" >> $GITHUB_OUTPUT
 
   android:
@@ -183,11 +191,26 @@ jobs:
             echo "### ⚠️ Android: свежий Xray не собран, использовано встроенное ядро" >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Ключ проверки обновлений
+        shell: bash
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            echo "$UPDATE_SIGNING_KEY" | base64 -d > upd.pem
+            PUB=$(openssl pkey -in upd.pem -pubout -outform DER | tail -c 32 | base64 -w0)
+            rm upd.pem
+            echo "UPDATE_PUBKEY=$PUB" >> $GITHUB_ENV
+            echo "Обновления будут проверяться подписью"
+          else
+            echo "::warning::Секрет UPDATE_SIGNING_KEY не задан — подпись обновлений отключена"
+          fi
+
       - name: Сборка APK
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           echo "VER=$VER" >> $GITHUB_ENV
-          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER"
+          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY"
           flutter build apk $COMMON --split-per-abi 2>&1 | tee -a ci.log
           flutter build apk $COMMON 2>&1 | tee -a ci.log
           mkdir -p dist
@@ -246,13 +269,28 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
+      - name: Ключ проверки обновлений
+        shell: bash
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            echo "$UPDATE_SIGNING_KEY" | base64 -d > upd.pem
+            PUB=$(openssl pkey -in upd.pem -pubout -outform DER | tail -c 32 | base64 -w0)
+            rm upd.pem
+            echo "UPDATE_PUBKEY=$PUB" >> $GITHUB_ENV
+            echo "Обновления будут проверяться подписью"
+          else
+            echo "::warning::Секрет UPDATE_SIGNING_KEY не задан — подпись обновлений отключена"
+          fi
+
       - name: Сборка
         shell: bash
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           flutter build windows --release --obfuscate --split-debug-info=build/symbols \
             --build-name=$VER --build-number=$BUILD \
-            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY
 
       - name: Ядро Xray и гео-базы
         shell: pwsh
@@ -319,11 +357,14 @@ jobs:
           XRAY=${{ needs.check.outputs.xray }}
           cd out
           rm -f xray-android.txt
-          sha256sum * | grep -v SHA256SUMS > SHA256SUMS.txt
           rm -f SHA256SUMS-android.txt
+          sha256sum * > SHA256SUMS.txt
           cd ..
           NAME="Nexus $VER (сборка $BUILD)"
           if [ "$CORE" = "${XRAY#v}" ]; then NAME="$NAME · Xray ${XRAY#v}"; else CORE=""; fi
+          if [ "${{ needs.check.outputs.prerelease }}" = "true" ]; then
+            NAME="$NAME · PR #${{ github.event.pull_request.number }}"
+          fi
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "tag=v$VER-b$BUILD" >> $GITHUB_OUTPUT
           {
@@ -336,6 +377,17 @@ jobs:
             echo "-->"
           } > notes.md
 
+      - name: Подпись релиза
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            echo "$UPDATE_SIGNING_KEY" | base64 -d > upd.pem
+            openssl pkeyutl -sign -inkey upd.pem -rawin -in out/SHA256SUMS.txt -out out/SHA256SUMS.txt.sig
+            rm upd.pem
+            echo "Релиз подписан"
+          fi
+
       - uses: softprops/action-gh-release@v2
         with:
           repository: ${{ env.UPDATE_REPO }}
@@ -345,4 +397,5 @@ jobs:
           name: ${{ steps.meta.outputs.name }}
           body_path: notes.md
           files: out/*
-          make_latest: true
+          prerelease: ${{ needs.check.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.check.outputs.prerelease == 'true' && 'false' || 'true' }}

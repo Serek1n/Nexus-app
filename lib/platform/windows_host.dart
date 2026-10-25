@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models.dart';
+import '../services/deep_links.dart';
 import '../state/app_state.dart';
 
 /// Windows: трей, сворачивание вместо закрытия, автозапуск, один экземпляр.
@@ -24,14 +26,18 @@ class WindowsHost with TrayListener, WindowListener {
 
   /// Гарантирует один запущенный экземпляр. Если Nexus уже открыт —
   /// просит его показать окно и возвращает false.
-  static Future<bool> claimSingleInstance() async {
+  static Future<bool> claimSingleInstance([String? link]) async {
     try {
       _instanceServer =
           await ServerSocket.bind(InternetAddress.loopbackIPv4, _instancePort);
       _instanceServer!.listen((client) {
         client.listen((data) {
-          if (String.fromCharCodes(data).trim() == 'nexus:show') {
+          final msg = utf8.decode(data, allowMalformed: true).trim();
+          if (msg == 'nexus:show') {
             _showRequests.add(null);
+          } else if (msg.startsWith('nexus:link:')) {
+            _showRequests.add(null);
+            DeepLinks.handle(msg.substring('nexus:link:'.length));
           }
         }, onError: (_) {}, cancelOnError: true);
         Future.delayed(const Duration(seconds: 2), client.destroy);
@@ -42,7 +48,7 @@ class WindowsHost with TrayListener, WindowListener {
         final s = await Socket.connect(InternetAddress.loopbackIPv4,
             _instancePort,
             timeout: const Duration(seconds: 2));
-        s.write('nexus:show');
+        s.add(utf8.encode(link != null ? 'nexus:link:$link' : 'nexus:show'));
         await s.flush();
         await s.close();
       } catch (_) {}
@@ -51,6 +57,7 @@ class WindowsHost with TrayListener, WindowListener {
   }
 
   Future<void> init() async {
+    app.quitApp = quit;
     windowManager.addListener(this);
     trayManager.addListener(this);
     _showRequests.stream.listen((_) => show());
@@ -58,6 +65,8 @@ class WindowsHost with TrayListener, WindowListener {
     app.addListener(_updateTray);
     // Автозапуск: синхронизируем запись в реестре с настройкой.
     Autostart.apply(app.settings.launchAtStartup);
+    // Ссылки nexus:// открывают Nexus.
+    Autostart.registerProtocol();
   }
 
   Future<void> show() async {
@@ -104,8 +113,9 @@ class WindowsHost with TrayListener, WindowListener {
         ConnState.disconnecting => 'отключение…',
         ConnState.disconnected => 'не подключено',
       };
-      await trayManager.setToolTip(
-          'Nexus — $status${server != null && on ? ' · $server' : ''}');
+      var tip = 'Nexus — $status${server != null && on ? ' · $server' : ''}';
+      if (tip.length > 120) tip = '${tip.substring(0, 117)}…';
+      await trayManager.setToolTip(tip);
       await trayManager.setContextMenu(Menu(items: [
         MenuItem(key: 'show', label: 'Открыть Nexus'),
         MenuItem.separator(),
@@ -176,6 +186,31 @@ class Autostart {
   static final _regDelete = _advapi.lookupFunction<
       Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>),
       int Function(int, Pointer<Utf16>, Pointer<Utf16>)>('RegDeleteKeyValueW');
+
+  /// HKCU\Software\Classes\nexus — обработчик ссылок nexus://
+  static void registerProtocol() {
+    final exe = Platform.resolvedExecutable;
+    void set(String key, String name, String value) {
+      final k = key.toNativeUtf16();
+      final n = name.toNativeUtf16();
+      final d = value.toNativeUtf16();
+      try {
+        _regSet(_hkcu, k, name.isEmpty ? nullptr : n, _regSz, d.cast(),
+            (value.length + 1) * 2);
+      } catch (_) {
+      } finally {
+        calloc.free(k);
+        calloc.free(n);
+        calloc.free(d);
+      }
+    }
+
+    const base = r'Software\Classes\nexus';
+    set(base, '', 'URL:Nexus');
+    set(base, 'URL Protocol', '');
+    set('$base\\DefaultIcon', '', '"$exe",0');
+    set('$base\\shell\\open\\command', '', '"$exe" "%1"');
+  }
 
   static void apply(bool enabled) {
     final sub = _runKey.toNativeUtf16();
