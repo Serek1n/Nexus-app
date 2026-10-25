@@ -352,7 +352,76 @@ class AppState extends ChangeNotifier {
     await connect(keepFailover: true);
   }
 
+  // ───────────── стабильность: автопереподключение и проверка канала ─────────────
+
+  /// Пользователь хочет быть подключённым (нажал «Подключить» и не нажимал «Отключить»).
+  bool _wantConnected = false;
+  int _retry = 0;
+  Timer? _retryTimer, _healthTimer;
+  int _healthFails = 0;
+  String? reconnectNote;
+
+  /// Соединение оборвалось само (система закрыла VPN, упало ядро, пропала сеть) —
+  /// переподключаемся с нарастающей паузой: 2, 5, 10, 20, 30 с, дальше каждые 30 с.
+  void _scheduleReconnect() {
+    if (!_wantConnected || !settings.autoReconnect || core.blocked) return;
+    _retryTimer?.cancel();
+    const steps = [2, 5, 10, 20, 30];
+    final sec = steps[_retry.clamp(0, steps.length - 1)];
+    _retry++;
+    reconnectNote = 'Связь пропала — переподключаюсь (попытка $_retry)…';
+    notifyListeners();
+    _retryTimer = Timer(Duration(seconds: sec), () async {
+      if (!_wantConnected || state != ConnState.disconnected) return;
+      await connect(keepFailover: true, auto: true);
+    });
+  }
+
+  /// Каждые 45 с проверяем, что через туннель реально идёт трафик.
+  /// Два провала подряд — переподключение; если не помогло — следующий сервер.
+  void _startHealth() {
+    _healthTimer?.cancel();
+    _healthFails = 0;
+    if (!settings.autoReconnect) return;
+    _healthTimer = Timer.periodic(const Duration(seconds: 45), (_) async {
+      final s = selected;
+      if (s == null || state != ConnState.connected || core.blocked) return;
+      final d = await core.connectedDelay(s);
+      if (state != ConnState.connected) return;
+      if (d > 0) {
+        _healthFails = 0;
+        liveLatency = d;
+        if (reconnectNote != null) reconnectNote = null;
+        notifyListeners();
+        return;
+      }
+      _healthFails++;
+      if (_healthFails == 2) {
+        reconnectNote = 'Канал не отвечает — переподключаюсь…';
+        notifyListeners();
+        await reconnect();
+      } else if (_healthFails >= 4) {
+        _healthFails = 0;
+        await _failover(s);
+      }
+    });
+  }
+
   void _onCoreState(ConnState s) {
+    if (s == ConnState.connected && state != ConnState.connected) {
+      _retry = 0;
+      reconnectNote = null;
+      _startHealth();
+    }
+    if (s == ConnState.disconnected) {
+      _healthTimer?.cancel();
+      if (_wantConnected && state != ConnState.disconnecting) {
+        // Обрыв не по команде пользователя.
+        Future.delayed(const Duration(seconds: 2), () {
+          if (state == ConnState.disconnected) _scheduleReconnect();
+        });
+      }
+    }
     if (s == ConnState.connected && state != ConnState.connected) {
       connectedAt = DateTime.now();
       Future.delayed(const Duration(seconds: 1),
@@ -384,7 +453,12 @@ class AppState extends ChangeNotifier {
 
   bool _askedNotifications = false;
 
-  Future<void> connect({bool keepFailover = false}) async {
+  Future<void> connect({bool keepFailover = false, bool auto = false}) async {
+    _wantConnected = true;
+    if (!auto) {
+      _retry = 0;
+      _retryTimer?.cancel();
+    }
     if (!keepFailover) {
       _failoverTried.clear();
       failoverNote = null;
@@ -409,13 +483,21 @@ class AppState extends ChangeNotifier {
         settings: settings,
       );
     } catch (e) {
-      lastError = _msg(e);
       state = ConnState.disconnected;
+      if (auto) {
+        _scheduleReconnect();
+      } else {
+        lastError = _msg(e);
+      }
       notifyListeners();
     }
   }
 
   Future<void> disconnect() async {
+    _wantConnected = false;
+    _retryTimer?.cancel();
+    _healthTimer?.cancel();
+    reconnectNote = null;
     state = ConnState.disconnecting;
     notifyListeners();
     try {
@@ -498,7 +580,8 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    await Future.wait(List.generate(isDesktop ? 8 : 3, (_) => worker()));
+    // На ПК каждая проверка запускает отдельное ядро — не больше 4 разом.
+    await Future.wait(List.generate(isDesktop ? 4 : 3, (_) => worker()));
     pingingAll = false;
     notifyListeners();
   }
@@ -655,6 +738,8 @@ class AppState extends ChangeNotifier {
     _statsSub?.cancel();
     _subTimer?.cancel();
     _updTimer?.cancel();
+    _retryTimer?.cancel();
+    _healthTimer?.cancel();
     core.dispose();
     super.dispose();
   }

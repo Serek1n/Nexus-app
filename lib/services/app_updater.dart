@@ -98,7 +98,12 @@ class AppUpdater {
         0;
     if (build <= current) return null;
     final xray = RegExp(r'xray:[ \t]*([\d.]+)').firstMatch(body)?.group(1) ?? '';
-    final version = (j['name'] ?? j['tag_name'] ?? '').toString();
+    // Из названия релиза оставляем только «Nexus 1.7.1» — без версии Xray.
+    final version = (j['name'] ?? j['tag_name'] ?? '')
+        .toString()
+        .split(' · ')
+        .first
+        .trim();
 
     final assets = <String, String>{};
     for (final a in (j['assets'] as List? ?? [])) {

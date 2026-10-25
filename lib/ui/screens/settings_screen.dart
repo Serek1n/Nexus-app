@@ -11,7 +11,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'apps_screen.dart';
 
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.1');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.2');
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -316,6 +316,14 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
               children: [
+                switchRow(
+                  Icons.autorenew_rounded,
+                  'Держать соединение',
+                  'Переподключаться при обрыве и раз в 45 секунд проверять, что трафик идёт',
+                  st.autoReconnect,
+                  (v) => app.updateSettings((s) => s.autoReconnect = v),
+                ),
+                const Divider(height: 14),
                 switchRow(
                   Icons.alt_route_rounded,
                   'Автовыбор при сбое',

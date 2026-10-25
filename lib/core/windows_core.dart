@@ -368,9 +368,79 @@ class WindowsCore extends VpnCore {
     _states.add(ConnState.disconnected);
   }
 
+  /// Реальная задержка: временный экземпляр ядра с этим сервером и
+  /// HTTP-запрос через него. Работает для любых протоколов, в том числе
+  /// Hysteria2 (UDP), где простой TCP-пинг показывает ерунду.
   @override
-  Future<int> ping(ServerProfile server, String config) =>
-      tcpPing(server.host, server.port);
+  Future<int> ping(ServerProfile server, String config) async {
+    if (!File(_corePath).existsSync()) return tcpPing(server.host, server.port);
+    Process? p;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final port = await _freePort();
+      final cfg = jsonDecode(config) as Map<String, dynamic>;
+      cfg['log'] = {'loglevel': 'none'};
+      cfg['inbounds'] = [
+        {
+          'tag': 'probe',
+          'listen': '127.0.0.1',
+          'port': port,
+          'protocol': 'http',
+          'settings': <String, dynamic>{},
+        }
+      ];
+      // Весь трафик проверки — только через сервер.
+      cfg['routing'] = {'domainStrategy': 'AsIs', 'rules': <dynamic>[]};
+      cfg.remove('metrics');
+      cfg.remove('stats');
+      cfg.remove('api');
+
+      p = await Process.start(
+        _corePath,
+        ['run', '-format', 'json', '-c', 'stdin:'],
+        workingDirectory: _coreDir,
+        environment: {'XRAY_LOCATION_ASSET': _assetDir},
+      );
+      p.stdout.drain<void>();
+      p.stderr.drain<void>();
+      p.stdin.add(utf8.encode(jsonEncode(cfg)));
+      await p.stdin.close();
+
+      var up = false;
+      for (var i = 0; i < 20 && !up; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        up = await _portOpen(port);
+      }
+      if (!up) return -1;
+
+      client.findProxy = (_) => 'PROXY 127.0.0.1:$port';
+      Future<int> once() async {
+        final sw = Stopwatch()..start();
+        final req = await client
+            .getUrl(Uri.parse('http://cp.cloudflare.com/generate_204'))
+            .timeout(const Duration(seconds: 6));
+        final res = await req.close().timeout(const Duration(seconds: 6));
+        await res.drain<void>();
+        if (res.statusCode >= 400) throw Exception('HTTP ${res.statusCode}');
+        return sw.elapsedMilliseconds;
+      }
+
+      // Первый запрос включает установку соединения и рукопожатие,
+      // второй показывает реальную задержку уже открытого канала.
+      final first = await once();
+      int? second;
+      try {
+        second = await once();
+      } catch (_) {}
+      final best = second == null ? first : math.min(first, second);
+      return best.clamp(1, 9999);
+    } catch (_) {
+      return -1;
+    } finally {
+      client.close(force: true);
+      if (p != null) Process.killPid(p.pid);
+    }
+  }
 
   /// Реальная задержка через туннель: HTTP-запрос через локальный прокси.
   @override
@@ -464,7 +534,7 @@ class WindowsCore extends VpnCore {
     final tag = (j['tag_name'] ?? '').toString();
     final current = await coreVersion();
     if (!force && !_newer(tag, current)) {
-      return 'Установлена последняя версия ($current)';
+      return 'Установлена последняя версия';
     }
 
     String? url, dgstUrl;

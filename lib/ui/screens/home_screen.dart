@@ -52,6 +52,10 @@ class HomeScreen extends StatelessWidget {
           _ErrorBanner(text: app.lastError!, onClose: app.clearError),
           const SizedBox(height: 10),
         ],
+        if (app.reconnectNote != null) ...[
+          _Notice(text: app.reconnectNote!, icon: Icons.autorenew_rounded),
+          const SizedBox(height: 10),
+        ],
         if (app.failoverNote != null) ...[
           _Notice(text: app.failoverNote!, icon: Icons.alt_route_rounded),
           const SizedBox(height: 10),
@@ -110,7 +114,7 @@ class HomeScreen extends StatelessWidget {
                         : (app.updateFile != null
                                 ? 'Обновление готово'
                                 : 'Доступно обновление') +
-                            (app.appUpdate!.xray.isEmpty
+                            (app.appUpdate!.xray.isEmpty || app.isDesktop
                                 ? ''
                                 : ' · Xray ${app.appUpdate!.xray}'),
                     style: const TextStyle(fontSize: 13),

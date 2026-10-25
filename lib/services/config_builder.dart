@@ -90,6 +90,23 @@ String buildXrayConfig(
     }
   }
 
+  // Стабильность на мобильной сети: TCP keep-alive не даёт оператору
+  // молча закрыть простаивающее соединение (NAT), а IPv4 исключает
+  // зависания на сломанном IPv6.
+  for (final ob in (cfg['outbounds'] as List? ?? [])) {
+    if (ob is Map<String, dynamic> && ob['tag'] == 'proxy') {
+      final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final so = (ss['sockopt'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      so['tcpKeepAliveIdle'] = 30;
+      so['tcpKeepAliveInterval'] = 15;
+      so['domainStrategy'] = 'UseIPv4';
+      ss['sockopt'] = so;
+      ob['streamSettings'] = ss;
+    }
+  }
+
   cfg['dns'] = {
     'servers': ['1.1.1.1', '8.8.8.8'],
     'queryStrategy': 'UseIPv4',

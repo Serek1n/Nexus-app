@@ -156,6 +156,7 @@ class AppSettings {
     this.windowsKillSwitch = true,
     this.clearClipboard = true,
     this.autoFailover = true,
+    this.autoReconnect = true,
     List<String>? favorites,
     this.lastAppCheck = 0,
     List<String>? bypassApps,
@@ -193,6 +194,9 @@ class AppSettings {
   /// Избранные серверы (ключ — название и адрес, переживает обновление подписки).
   List<String> favorites;
 
+  /// Держать соединение: переподключаться при обрыве и проверять канал.
+  bool autoReconnect;
+
   /// Если сервер не пропускает трафик — переключаться на следующий.
   bool autoFailover;
 
@@ -225,6 +229,7 @@ class AppSettings {
         'windowsKillSwitch': windowsKillSwitch,
         'clearClipboard': clearClipboard,
         'autoFailover': autoFailover,
+        'autoReconnect': autoReconnect,
         'favorites': favorites,
         'lastAppCheck': lastAppCheck,
         'bypassApps': bypassApps,
@@ -251,6 +256,7 @@ class AppSettings {
         windowsKillSwitch: j['windowsKillSwitch'] as bool? ?? true,
         clearClipboard: j['clearClipboard'] as bool? ?? true,
         autoFailover: j['autoFailover'] as bool? ?? true,
+        autoReconnect: j['autoReconnect'] as bool? ?? true,
         favorites: (j['favorites'] as List?)?.whereType<String>().toList(),
         lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
         bypassApps: (j['bypassApps'] as List?)?.whereType<String>().toList(),
