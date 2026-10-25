@@ -360,13 +360,18 @@ jobs:
           rm -f SHA256SUMS-android.txt
           sha256sum * > SHA256SUMS.txt
           cd ..
-          NAME="Nexus $VER (сборка $BUILD)"
+          NAME="Nexus $VER"
           if [ "$CORE" = "${XRAY#v}" ]; then NAME="$NAME · Xray ${XRAY#v}"; else CORE=""; fi
           if [ "${{ needs.check.outputs.prerelease }}" = "true" ]; then
             NAME="$NAME · PR #${{ github.event.pull_request.number }}"
           fi
           echo "name=$NAME" >> $GITHUB_OUTPUT
-          echo "tag=v$VER-b$BUILD" >> $GITHUB_OUTPUT
+          # Тег — просто версия. Для пробных сборок из PR — с номером PR.
+          if [ "${{ needs.check.outputs.prerelease }}" = "true" ]; then
+            echo "tag=v$VER-pr${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=v$VER" >> $GITHUB_OUTPUT
+          fi
           {
             echo "**Android:** Nexus-arm64.apk — большинство телефонов, Nexus-armv7.apk — старые, Nexus-universal.apk — любой."
             echo "**Windows:** Nexus-Setup-$VER.exe — установщик, Nexus-Windows-x64.zip — портативная версия."
@@ -376,6 +381,17 @@ jobs:
             echo "xray: ${CORE}"
             echo "-->"
           } > notes.md
+
+      # Повторная сборка той же версии заменяет прежний релиз, а не плодит новые.
+      - name: Убрать прежний релиз этой версии
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          if gh release view "$TAG" -R "$UPDATE_REPO" >/dev/null 2>&1; then
+            gh release delete "$TAG" -R "$UPDATE_REPO" --cleanup-tag -y
+            echo "Прежний релиз $TAG заменён"
+          fi
 
       - name: Подпись релиза
         env:
