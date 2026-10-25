@@ -4,11 +4,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.4');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.5');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.8.5', [
+    'Hysteria2: obfs, alpn и смена портов из 3x-ui',
+    'Причина «нет связи» видна в журнале',
+  ]),
   ('1.8.4', [
     'Новый логотип и иконка',
     'Новый значок в трее',

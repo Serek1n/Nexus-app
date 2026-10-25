@@ -375,11 +375,13 @@ class WindowsCore extends VpnCore {
   Future<int> ping(ServerProfile server, String config) async {
     if (!File(_corePath).existsSync()) return tcpPing(server.host, server.port);
     Process? p;
+    String? failReason;
+    var probeOut = <String>[];
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
       final port = await _freePort();
       final cfg = jsonDecode(config) as Map<String, dynamic>;
-      cfg['log'] = {'loglevel': 'none'};
+      cfg['log'] = {'loglevel': 'warning'};
       cfg['inbounds'] = [
         {
           'tag': 'probe',
@@ -401,8 +403,17 @@ class WindowsCore extends VpnCore {
         workingDirectory: _coreDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
       );
-      p.stdout.drain<void>();
-      p.stderr.drain<void>();
+      // Вывод ядра проверки сохраняем: при неудаче причина попадёт в журнал.
+      final out = <String>[];
+      void collect(Stream<List<int>> st) => st
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((l) {
+            if (out.length < 40) out.add(l);
+          });
+      collect(p.stdout);
+      collect(p.stderr);
+      probeOut = out;
       p.stdin.add(utf8.encode(jsonEncode(cfg)));
       await p.stdin.close();
 
@@ -411,7 +422,10 @@ class WindowsCore extends VpnCore {
         await Future.delayed(const Duration(milliseconds: 100));
         up = await _portOpen(port);
       }
-      if (!up) return -1;
+      if (!up) {
+        failReason = 'ядро не запустилось';
+        return -1;
+      }
 
       client.findProxy = (_) => 'PROXY 127.0.0.1:$port';
       Future<int> once() async {
@@ -420,7 +434,7 @@ class WindowsCore extends VpnCore {
             .getUrl(Uri.parse('http://cp.cloudflare.com/generate_204'))
             .timeout(const Duration(seconds: 6));
         final res = await req.close().timeout(const Duration(seconds: 6));
-        await res.drain<void>();
+        await res.drain<void>().timeout(const Duration(seconds: 4));
         if (res.statusCode >= 400) throw Exception('HTTP ${res.statusCode}');
         return sw.elapsedMilliseconds;
       }
@@ -434,11 +448,27 @@ class WindowsCore extends VpnCore {
       } catch (_) {}
       final best = second == null ? first : math.min(first, second);
       return best.clamp(1, 9999);
-    } catch (_) {
+    } catch (e) {
+      failReason = e is TimeoutException ? 'сервер не ответил за 6 с' : '$e';
       return -1;
     } finally {
       client.close(force: true);
       if (p != null) Process.killPid(p.pid);
+      if (failReason != null) {
+        final why = probeOut
+            .where((l) =>
+                l.contains('[Warning]') ||
+                l.contains('[Error]') ||
+                l.contains('Failed') ||
+                l.contains('failed'))
+            .map((l) => l.replaceFirst(
+                RegExp(r'^\d{4}/\d\d/\d\d [\d:.]+ '), ''))
+            .where((l) => !l.contains('core: Xray'))
+            .take(3)
+            .join(' | ');
+        _log('Проверка «${server.cleanName}» (${server.protocol}): '
+            '$failReason${why.isEmpty ? '' : ' — $why'}');
+      }
     }
   }
 

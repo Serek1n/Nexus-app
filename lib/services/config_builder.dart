@@ -109,6 +109,8 @@ String buildXrayConfig(
     }
   }
 
+  _patchHysteria2(cfg, server.link);
+
   cfg['dns'] = {
     'servers': ['1.1.1.1', '8.8.8.8'],
     'queryStrategy': 'UseIPv4',
@@ -158,6 +160,100 @@ String buildXrayConfig(
   };
 
   return jsonEncode(cfg);
+}
+
+/// Hysteria2: плагин понимает не все параметры ссылки 3x-ui (alpn, obfs
+/// salamander/gecko, mport, ech) — без них сервер не отвечает. Собираем
+/// настройки так же, как это делает сама панель 3x-ui для Xray 26.
+void _patchHysteria2(Map<String, dynamic> cfg, String link) {
+  final scheme = link.split('://').first.toLowerCase();
+  if (scheme != 'hysteria2' && scheme != 'hy2') return;
+  final uri = Uri.tryParse(link.trim());
+  if (uri == null) return;
+  final q = uri.queryParameters;
+  String? p(List<String> keys) {
+    for (final k in keys) {
+      final v = q[k]?.trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  for (final ob in (cfg['outbounds'] as List? ?? [])) {
+    if (ob is! Map<String, dynamic> || ob['tag'] != 'proxy') continue;
+    final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    final tls = (ss['tlsSettings'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    tls['alpn'] = (p(['alpn']) ?? 'h3')
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final sni = p(['sni', 'peer']);
+    if (sni != null) tls['serverName'] = sni;
+    final fp = p(['fp']);
+    if (fp != null) tls['fingerprint'] = fp;
+    final ech = p(['ech']);
+    if (ech != null) tls['echConfigList'] = ech;
+    final vcn = p(['vcn']);
+    if (vcn != null) tls['verifyPeerCertByName'] = vcn;
+    final pin = p(['pinSHA256', 'pcs']);
+    if (pin != null) tls['pinnedPeerCertSha256'] = pin;
+    tls.removeWhere((_, v) => v == null);
+    ss['security'] = 'tls';
+    ss['tlsSettings'] = tls;
+
+    final hs = (ss['hysteriaSettings'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    hs['version'] = 2;
+    hs['auth'] ??= Uri.decodeComponent(uri.userInfo);
+    hs['udpIdleTimeout'] ??= 60;
+    hs.removeWhere((_, v) => v == null);
+    ss['hysteriaSettings'] = hs;
+
+    final fm = (ss['finalmask'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    final udp = List<dynamic>.from(fm['udp'] as List? ?? const []);
+    bool has(String type) =>
+        udp.any((m) => m is Map && m['type'] == type);
+
+    final obfs = p(['obfs'])?.toLowerCase();
+    final pw = p(['obfs-password', 'obfs_password', 'obfsPassword']);
+    if ((obfs == 'salamander' || obfs == 'gecko') && pw != null &&
+        !has('salamander')) {
+      final settings = <String, dynamic>{'password': pw};
+      if (obfs == 'gecko') {
+        final mn = int.tryParse(p(['minPacketSize']) ?? '');
+        final mx = int.tryParse(p(['maxPacketSize']) ?? '');
+        if (mn != null && mx != null && mn >= 1 && mx >= mn && mx <= 2048) {
+          settings['packetSize'] = '$mn-$mx';
+        }
+      }
+      udp.add({'type': 'salamander', 'settings': settings});
+    }
+    final mport = p(['mport']);
+    if (mport != null && !has('udphop')) {
+      udp.add({
+        'type': 'udphop',
+        'settings': {
+          'mode': 'intervalremote',
+          'interval': '5-10',
+          'remotePorts': mport,
+        },
+      });
+    }
+    if (udp.isNotEmpty) {
+      fm['udp'] = udp;
+      ss['finalmask'] = fm;
+    }
+    // TCP keep-alive к QUIC не относится.
+    final so = (ss['sockopt'] as Map?)?.cast<String, dynamic>();
+    so?.remove('tcpKeepAliveIdle');
+    so?.remove('tcpKeepAliveInterval');
+    if (so != null && so.isEmpty) ss.remove('sockopt');
+    ob['streamSettings'] = ss;
+  }
 }
 
 String _randomToken() {
