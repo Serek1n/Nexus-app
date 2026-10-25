@@ -91,8 +91,10 @@ String buildXrayConfig(
   }
 
   // Стабильность на мобильной сети: TCP keep-alive не даёт оператору
-  // молча закрыть простаивающее соединение (NAT), а IPv4 исключает
-  // зависания на сломанном IPv6.
+  // молча закрыть простаивающее соединение (NAT).
+  // domainStrategy здесь не задаём: тогда адрес сервера резолвился бы через
+  // DNS самого Xray, а тот идёт через этот же сервер — замкнутый круг,
+  // и серверы с доменом вместо IP переставали отвечать.
   for (final ob in (cfg['outbounds'] as List? ?? [])) {
     if (ob is Map<String, dynamic> && ob['tag'] == 'proxy') {
       final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
@@ -101,7 +103,7 @@ String buildXrayConfig(
           <String, dynamic>{};
       so['tcpKeepAliveIdle'] = 30;
       so['tcpKeepAliveInterval'] = 15;
-      so['domainStrategy'] = 'UseIPv4';
+      so.remove('domainStrategy');
       ss['sockopt'] = so;
       ob['streamSettings'] = ss;
     }

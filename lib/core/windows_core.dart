@@ -407,7 +407,7 @@ class WindowsCore extends VpnCore {
       await p.stdin.close();
 
       var up = false;
-      for (var i = 0; i < 20 && !up; i++) {
+      for (var i = 0; i < 40 && !up; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         up = await _portOpen(port);
       }

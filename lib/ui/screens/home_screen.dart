@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../changelog.dart';
 import '../../models.dart';
 import '../add_sheet.dart';
 import '../app_scope.dart';
@@ -98,37 +99,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         if (app.appUpdate != null) ...[
-          NeonCard(
-            active: app.updateFile != null,
-            onTap: app.updateProgress == null ? app.installAppUpdate : null,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Row(
-              children: [
-                const Icon(Icons.system_update_rounded,
-                    color: NX.violet, size: 19),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    app.updateProgress != null
-                        ? 'Загрузка обновления ${(app.updateProgress! * 100).round()}%'
-                        : (app.updateFile != null
-                                ? 'Обновление готово'
-                                : 'Доступно обновление') +
-                            (app.appUpdate!.xray.isEmpty || app.isDesktop
-                                ? ''
-                                : ' · Xray ${app.appUpdate!.xray}'),
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-                if (app.updateProgress == null)
-                  const Text('Установить',
-                      style: TextStyle(
-                          color: NX.violet,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13)),
-              ],
-            ),
-          ),
+          const _UpdateCard(),
           const SizedBox(height: 10),
         ],
         if (sub != null && _subWarning(sub) != null) ...[
@@ -236,6 +207,157 @@ String? _subWarning(Subscription sub) {
     return 'Использовано ${(sub.used / sub.total * 100).round()}% трафика подписки';
   }
   return null;
+}
+
+/// Карточка обновления: что именно обновляется и до какой версии.
+class _UpdateCard extends StatelessWidget {
+  const _UpdateCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final u = app.appUpdate!;
+    final newApp = u.version.replaceFirst(RegExp(r'^Nexus\s*'), '').trim();
+    final appChanged = newApp.isNotEmpty && newApp != appVersion;
+    // На Windows ядро обновляется отдельно, в релизе важна только версия Nexus.
+    final xrayChanged = !app.isDesktop &&
+        u.xray.isNotEmpty &&
+        !app.coreVersion.contains(u.xray);
+    final title = switch ((appChanged, xrayChanged)) {
+      (true, true) => 'Nexus $newApp + Xray ${u.xray}',
+      (false, true) => 'Xray ${u.xray}',
+      _ => 'Nexus ${newApp.isEmpty ? '' : newApp}'.trim(),
+    };
+    final progress = app.updateProgress;
+    final ready = app.updateFile != null;
+    final status = progress != null
+        ? 'Загрузка ${(progress * 100).round()}%'
+        : ready
+            ? 'Готово к установке'
+            : 'Доступно обновление';
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: NX.violet.withValues(alpha: 0.28)),
+        gradient: LinearGradient(
+          colors: [NX.violet.withValues(alpha: 0.14), NX.surface],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+        children: [
+          InkWell(
+            // Нажатие на карточку — список изменений.
+            onTap: u.notes.isEmpty
+                ? null
+                : () => _showNotes(context, title, u.notes),
+            child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: NX.neon,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    xrayChanged && !appChanged
+                        ? Icons.memory_rounded
+                        : Icons.arrow_downward_rounded,
+                    color: Colors.white,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 15)),
+                      const SizedBox(height: 2),
+                      Text(status,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: ready ? NX.mint : NX.text2,
+                              fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (progress == null)
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: NX.violet,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    onPressed: app.installAppUpdate,
+                    child: const Text('Установить'),
+                  ),
+              ],
+            ),
+          ),
+          ),
+          if (progress != null)
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 3,
+              color: NX.violet,
+              backgroundColor: Colors.transparent,
+            ),
+        ],
+      ),
+      ),
+    );
+  }
+
+  void _showNotes(BuildContext context, String title, List<String> notes) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: NX.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: NX.strokeStrong)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Что нового в $title',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                ChangeList(notes),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _Notice extends StatelessWidget {

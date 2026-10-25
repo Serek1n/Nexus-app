@@ -4,11 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.3');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.4');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.8.4', [
+    'Новый логотип и иконка',
+    'Новый значок в трее',
+    'Обновление показывает, до какой версии',
+    'Исправлено «нет связи» у серверов с доменом',
+  ]),
   ('1.8.3', [
     'Список изменений в приложении',
     'Что нового — перед установкой обновления',
