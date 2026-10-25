@@ -1,3 +1,4 @@
+import 'changelog.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -107,6 +108,10 @@ class _ShellState extends State<Shell> {
   void initState() {
     super.initState();
     _links = DeepLinks.stream.listen(_onLink);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null) showWhatsNewIfUpdated(ctx);
+    });
     final p = DeepLinks.takePending();
     if (p != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _onLink(p));

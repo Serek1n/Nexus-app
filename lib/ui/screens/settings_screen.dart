@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../changelog.dart';
 import '../../models.dart';
 import '../../services/app_updater.dart';
 import '../../platform/android_system.dart';
@@ -11,7 +12,6 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'apps_screen.dart';
 
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.2');
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -452,6 +452,11 @@ class SettingsScreen extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (app.appUpdate != null &&
+                    app.appUpdate!.notes.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  ChangeList(app.appUpdate!.notes),
+                ],
                 if (app.appUpdate != null) ...[
                   const SizedBox(height: 12),
                   if (app.updateProgress != null) ...[
@@ -475,6 +480,13 @@ class SettingsScreen extends StatelessWidget {
                     onPressed: app.installAppUpdate,
                   ),
                 ],
+                const SizedBox(height: 10),
+                NeonButton(
+                  label: 'Что нового',
+                  icon: Icons.history_rounded,
+                  secondary: true,
+                  onPressed: () => showChangelog(context),
+                ),
                 if (AppUpdater.configured) ...[
                   const Divider(height: 22),
                   switchRow(

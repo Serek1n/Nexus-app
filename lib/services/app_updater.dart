@@ -25,6 +25,7 @@ class AppUpdate {
     required this.url,
     required this.fileName,
     required this.sha256,
+    this.notes = const [],
   });
   final int build;
   final String version;
@@ -32,6 +33,9 @@ class AppUpdate {
   final String url;
   final String fileName;
   final String sha256;
+
+  /// Что изменилось (пункты из описания релиза).
+  final List<String> notes;
 }
 
 class AppUpdater {
@@ -153,7 +157,25 @@ class AppUpdater {
       url: assets[fileName]!,
       fileName: fileName,
       sha256: sha,
+      notes: _notes(body),
     );
+  }
+
+  /// Пункты «- …» из раздела «Что нового» описания релиза.
+  static List<String> _notes(String body) {
+    final start = body.indexOf('Что нового');
+    if (start < 0) return const [];
+    final out = <String>[];
+    for (final line in body.substring(start).split('\n').skip(1)) {
+      final t = line.trim();
+      if (t.startsWith('- ')) {
+        out.add(t.substring(2).trim());
+      } else if (t.isNotEmpty) {
+        break;
+      }
+      if (out.length >= 12) break;
+    }
+    return out;
   }
 
   static Future<Directory> _dir() async {

@@ -367,7 +367,10 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          sparse-checkout: pubspec.yaml
+          sparse-checkout: |
+            pubspec.yaml
+            lib/changelog.dart
+          sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
@@ -404,7 +407,21 @@ jobs:
           else
             echo "tag=v$VER" >> $GITHUB_OUTPUT
           fi
+          # «Что нового» — из lib/changelog.dart для этой версии.
+          NOTES=$(python3 - "$VER" <<'PY'
+          import re, sys
+          src = open('lib/changelog.dart', encoding='utf-8').read()
+          m = re.search(r"\('" + re.escape(sys.argv[1]) + r"',\s*\[(.*?)\]\)", src, re.S)
+          for item in re.findall(r"'((?:[^'\\]|\\.)*)'", m.group(1) if m else ''):
+              print('- ' + item.replace("\\'", "'"))
+          PY
+          )
           {
+            if [ -n "$NOTES" ]; then
+              echo "### Что нового"
+              echo "$NOTES"
+              echo
+            fi
             echo "**Android:** Nexus-arm64.apk — большинство телефонов, Nexus-armv7.apk — старые, Nexus-universal.apk — любой."
             echo "**Windows:** Nexus-Setup-$VER.exe — установщик, Nexus-Windows-x64.zip — портативная версия."
             echo
