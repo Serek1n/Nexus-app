@@ -110,7 +110,10 @@ class SubscriptionService {
 
   /// Загружает подписку и обновляет [sub] (трафик, срок, название).
   static Future<FetchResult> fetch(Subscription sub) async {
-    final uri = Uri.parse(sub.url);
+    final uri = Uri.tryParse(sub.url);
+    if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
+      throw Exception('Ссылка подписки должна начинаться с https://');
+    }
     final res = await http.get(uri, headers: {
       'User-Agent': userAgent,
       'Accept': '*/*',
@@ -120,6 +123,10 @@ class SubscriptionService {
       throw Exception('Сервер ответил кодом ${res.statusCode}');
     }
 
+    // Защита от слишком больших ответов.
+    if (res.bodyBytes.length > 8 * 1024 * 1024) {
+      throw Exception('Подписка слишком большая (больше 8 МБ)');
+    }
     final body = utf8.decode(res.bodyBytes, allowMalformed: true);
     final links = extractLinks(body);
     if (links.isEmpty) {
@@ -127,7 +134,7 @@ class SubscriptionService {
     }
 
     final servers = <ServerProfile>[];
-    for (final l in links) {
+    for (final l in links.take(1000)) {
       final p = profileFromLink(l, subscriptionId: sub.id);
       if (p != null) servers.add(p);
     }

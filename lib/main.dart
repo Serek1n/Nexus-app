@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'models.dart';
+import 'platform/windows_host.dart';
 import 'state/app_state.dart';
 import 'ui/add_sheet.dart';
 import 'ui/app_scope.dart';
@@ -16,10 +17,13 @@ import 'ui/screens/subscriptions_screen.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  final startHidden = args.contains('--minimized');
 
   if (Platform.isWindows) {
+    // Второй запуск просто показывает уже открытое окно.
+    if (!await WindowsHost.claimSingleInstance()) exit(0);
     await windowManager.ensureInitialized();
     const options = WindowOptions(
       size: Size(1120, 720),
@@ -30,8 +34,10 @@ Future<void> main() async {
       titleBarStyle: TitleBarStyle.hidden,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
-      await windowManager.show();
-      await windowManager.focus();
+      if (!startHidden) {
+        await windowManager.show();
+        await windowManager.focus();
+      }
     });
     await windowManager.setPreventClose(true);
   } else {
@@ -46,6 +52,10 @@ Future<void> main() async {
   final state = AppState();
   runApp(NexusApp(state: state));
   await state.init();
+  if (Platform.isWindows) {
+    state.setWindowVisible(!startHidden);
+    await WindowsHost(state).init();
+  }
 }
 
 class NexusApp extends StatelessWidget {
@@ -80,30 +90,8 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> with WindowListener {
+class _ShellState extends State<Shell> {
   int _tab = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    if (Platform.isWindows) windowManager.addListener(this);
-  }
-
-  @override
-  void dispose() {
-    if (Platform.isWindows) windowManager.removeListener(this);
-    super.dispose();
-  }
-
-  /// Закрытие окна: сначала гасим ядро и системный прокси.
-  @override
-  void onWindowClose() async {
-    final app = AppScope.read(context);
-    try {
-      if (app.state != ConnState.disconnected) await app.core.disconnect();
-    } catch (_) {}
-    await windowManager.destroy();
-  }
 
   static const _items = [
     (Icons.power_settings_new_rounded, 'Главная'),

@@ -129,6 +129,15 @@ class _SubCard extends StatelessWidget {
                         '$count ${plural(count, 'сервер', 'сервера', 'серверов')} · ${_ago(sub.updatedAt)}',
                         style:
                             const TextStyle(color: NX.text2, fontSize: 12.5)),
+                    if (sub.url.startsWith('http://')) ...[
+                      const SizedBox(height: 6),
+                      const Tooltip(
+                        message:
+                            'Подписка загружается без шифрования: её могут подменить '
+                            'или подсмотреть ключи. Попросите https-ссылку.',
+                        child: Tag('HTTP · без шифрования', color: NX.amber),
+                      ),
+                    ],
                   ],
                 ),
               ),

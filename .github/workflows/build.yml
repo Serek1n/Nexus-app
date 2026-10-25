@@ -4,6 +4,10 @@ on:
   push:
     branches: [main, master]
     tags: ['v*']
+  # Каждый день проверяем, не вышел ли новый Xray. Если вышел —
+  # собираем Nexus со свежим ядром и публикуем релиз (приложения обновятся сами).
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,13 +16,56 @@ permissions:
 env:
   ORG: app.nexusvpn
   GEO_URL: https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download
+  # Куда публиковать релизы и откуда приложение берёт обновления.
+  # Для закрытого репозитория задайте переменную RELEASES_REPO (открытый репозиторий)
+  # и секрет RELEASES_TOKEN — см. README.
+  UPDATE_REPO: ${{ vars.RELEASES_REPO || github.repository }}
 
 jobs:
+  check:
+    name: Проверка версии Xray
+    runs-on: ubuntu-latest
+    outputs:
+      xray: ${{ steps.c.outputs.xray }}
+      build: ${{ steps.c.outputs.build }}
+      release: ${{ steps.c.outputs.release }}
+      run: ${{ steps.c.outputs.run }}
+    steps:
+      - id: c
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
+        run: |
+          XRAY=$(git ls-remote --tags --refs https://github.com/2dust/AndroidLibXrayLite.git \
+                 | awk -F/ '{print $3}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "Последний Xray для Android: $XRAY"
+          echo "xray=$XRAY" >> $GITHUB_OUTPUT
+          echo "build=$(( ${{ github.run_number }} + 100 ))" >> $GITHUB_OUTPUT
+
+          RELEASE=false; RUN=true
+          case "${{ github.event_name }}" in
+            schedule)
+              if gh release list -R "$UPDATE_REPO" --limit 30 --json name -q '.[].name' 2>/dev/null \
+                   | grep -q "Xray ${XRAY#v}\$"; then
+                echo "Релиз с Xray ${XRAY#v} уже есть — пропускаем"; RUN=false
+              else
+                RELEASE=true
+              fi ;;
+            workflow_dispatch) RELEASE=true ;;
+            push) [[ "${{ github.ref }}" == refs/tags/v* ]] && RELEASE=true ;;
+          esac
+          echo "release=$RELEASE" >> $GITHUB_OUTPUT
+          echo "run=$RUN" >> $GITHUB_OUTPUT
+
   android:
     name: Android (APK)
+    needs: check
+    if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
+    env:
+      XRAY: ${{ needs.check.outputs.xray }}
+      BUILD: ${{ needs.check.outputs.build }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v5
         with:
@@ -38,11 +85,16 @@ jobs:
           rm -rf test
           python3 tool/patch_platforms.py
 
-      - name: Гео-базы для умной маршрутизации
+      - name: Гео-базы для умной маршрутизации (с проверкой SHA-256)
         run: |
           mkdir -p android/app/src/main/assets
-          curl -fsSL -o android/app/src/main/assets/geoip.dat   $GEO_URL/geoip.dat
-          curl -fsSL -o android/app/src/main/assets/geosite.dat $GEO_URL/geosite.dat
+          cd android/app/src/main/assets
+          for f in geoip.dat geosite.dat; do
+            curl -fsSL -o $f $GEO_URL/$f
+            curl -fsSL -o $f.sha256sum $GEO_URL/$f.sha256sum
+            sha256sum -c $f.sha256sum
+            rm $f.sha256sum
+          done
 
       - name: Ключ подписи (если задан в секретах)
         env:
@@ -61,34 +113,121 @@ jobs:
           EOF
             echo "Подпись: релизный ключ"
           else
-            echo "::warning::Секрет KEYSTORE_BASE64 не задан — APK подписан отладочным ключом, обновление поверх старой версии работать не будет"
+            echo "::warning::Секрет KEYSTORE_BASE64 не задан — APK подписан отладочным ключом, обновления в приложении работать не будут"
           fi
 
       - name: Зависимости и иконки
         run: |
-          flutter pub get
-          dart run flutter_launcher_icons
+          flutter pub get 2>&1 | tee -a ci.log
+          dart run flutter_launcher_icons 2>&1 | tee -a ci.log
+
+      # ── Свежее ядро Xray: собираем libv2ray.aar из 2dust/AndroidLibXrayLite ──
+      - name: Исходники ядра Xray ${{ env.XRAY }}
+        id: alx
+        continue-on-error: true
+        run: |
+          git clone -q --depth 1 --branch "$XRAY" https://github.com/2dust/AndroidLibXrayLite.git alx
+          cp tool/xray-android/protector.go alx/
+
+      - uses: actions/setup-go@v6
+        if: steps.alx.outcome == 'success'
+        continue-on-error: true
+        with:
+          go-version-file: alx/go.mod
+          cache: false
+
+      - name: Сборка ядра Xray для Android
+        id: aar
+        if: steps.alx.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -eo pipefail
+          cd alx
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          mkdir -p assets
+          gomobile init
+          go mod tidy
+          gomobile bind -androidapi 21 -target android/arm64,android/arm,android/amd64 \
+            -trimpath -ldflags='-s -w -buildid= -checklinkname=0' ./ 2>&1 | tail -30
+
+          # Проверяем, что API совпадает с тем, что ждёт плагин.
+          mkdir -p chk && unzip -o -q libv2ray.aar classes.jar -d chk
+          for m in useProtector setProtectorServer newCoreController initCoreEnv measureOutboundDelay checkVersionX; do
+            javap -cp chk/classes.jar libv2ray.Libv2ray | grep -q " $m(" || { echo "Нет метода $m"; exit 1; }
+          done
+          for m in startLoop stopLoop queryAllOutboundTrafficStats measureDelay; do
+            javap -cp chk/classes.jar libv2ray.CoreController | grep -q " $m(" || { echo "Нет метода $m"; exit 1; }
+          done
+
+          # Подменяем ядро в плагине flutter_v2ray_client.
+          PLUGIN=$(python3 -c "
+          import json, pathlib, urllib.parse
+          cfg = json.load(open('../.dart_tool/package_config.json'))
+          p = next(x for x in cfg['packages'] if x['name'] == 'flutter_v2ray_client')
+          u = p['rootUri']
+          print(urllib.parse.urlparse(u).path if u.startswith('file:') else (pathlib.Path('../.dart_tool') / u).resolve())
+          ")
+          cp libv2ray.aar "$PLUGIN/android/libs/libv2ray.aar"
+          echo "Ядро заменено: $PLUGIN/android/libs/libv2ray.aar"
+
+      - name: Итог по ядру
+        run: |
+          if [ "${{ steps.aar.outcome }}" = "success" ]; then
+            echo "CORE=${XRAY#v}" >> $GITHUB_ENV
+            echo "### ✅ Android: собран свежий Xray ${XRAY#v}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "CORE=встроенное" >> $GITHUB_ENV
+            echo "::warning::Не удалось собрать свежий Xray — используется ядро, встроенное в плагин"
+            echo "### ⚠️ Android: свежий Xray не собран, использовано встроенное ядро" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Сборка APK
         run: |
-          flutter build apk --release --split-per-abi
-          flutter build apk --release
-          mkdir -p dist
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
-          cp build/app/outputs/flutter-apk/app-release.apk             dist/Nexus-$VER-universal.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   dist/Nexus-$VER-arm64.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/Nexus-$VER-armv7.apk
+          echo "VER=$VER" >> $GITHUB_ENV
+          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER"
+          flutter build apk $COMMON --split-per-abi 2>&1 | tee -a ci.log
+          flutter build apk $COMMON 2>&1 | tee -a ci.log
+          mkdir -p dist
+          OUT=build/app/outputs/flutter-apk
+          cp $OUT/app-release.apk             dist/Nexus-universal.apk
+          cp $OUT/app-arm64-v8a-release.apk   dist/Nexus-arm64.apk
+          cp $OUT/app-armeabi-v7a-release.apk dist/Nexus-armv7.apk
+          cd dist && sha256sum *.apk > SHA256SUMS-android.txt
+          echo "$CORE" > xray-android.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Nexus-Android
-          path: dist/*.apk
+          path: dist/*
+
+      - name: Причина ошибки
+        if: failure()
+        run: |
+          {
+            echo "## ❌ Android: причина ошибки"
+            echo '```'
+            if [ -f ci.log ]; then
+              grep -n -E "What went wrong|FAILURE|error:|Error:|Exception|Could not|> " ci.log | tail -40 || true
+              echo "----- последние строки -----"
+              tail -40 ci.log
+            else
+              echo "Лог сборки не создан — ошибка на шаге до сборки, откройте задачу Android (APK)."
+            fi
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
 
   windows:
     name: Windows (x64)
+    needs: check
+    if: needs.check.outputs.run == 'true'
     runs-on: windows-latest
+    env:
+      BUILD: ${{ needs.check.outputs.build }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -108,17 +247,32 @@ jobs:
           dart run flutter_launcher_icons
 
       - name: Сборка
-        run: flutter build windows --release
+        shell: bash
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          flutter build windows --release --obfuscate --split-debug-info=build/symbols \
+            --build-name=$VER --build-number=$BUILD \
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER
 
       - name: Ядро Xray и гео-базы
         shell: pwsh
         run: |
           $rel = "build\windows\x64\runner\Release"
-          Invoke-WebRequest "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip" -OutFile xray.zip
+          $base = "https://github.com/XTLS/Xray-core/releases/latest/download"
+          Invoke-WebRequest "$base/Xray-windows-64.zip" -OutFile xray.zip
+          Invoke-WebRequest "$base/Xray-windows-64.zip.dgst" -OutFile xray.dgst
+          $want = ((Get-Content xray.dgst -Raw) | Select-String -Pattern 'SHA2-256=\s*([0-9a-fA-F]{64})').Matches[0].Groups[1].Value.ToLower()
+          $got = (Get-FileHash xray.zip -Algorithm SHA256).Hash.ToLower()
+          if ($want -ne $got) { throw "Контрольная сумма Xray не совпала: $got != $want" }
           Expand-Archive xray.zip -DestinationPath xray
           Copy-Item xray\xray.exe "$rel\nexus-core.exe"
-          Invoke-WebRequest "$env:GEO_URL/geoip.dat"   -OutFile "$rel\geoip.dat"
-          Invoke-WebRequest "$env:GEO_URL/geosite.dat" -OutFile "$rel\geosite.dat"
+          foreach ($g in "geoip.dat","geosite.dat") {
+            Invoke-WebRequest "$env:GEO_URL/$g" -OutFile "$rel\$g"
+            Invoke-WebRequest "$env:GEO_URL/$g.sha256sum" -OutFile "$g.sha256sum"
+            $want = ((Get-Content "$g.sha256sum" -Raw).Trim() -split '\s+')[0].ToLower()
+            $got = (Get-FileHash "$rel\$g" -Algorithm SHA256).Hash.ToLower()
+            if ($want -ne $got) { throw "Контрольная сумма $g не совпала" }
+          }
           & "$rel\nexus-core.exe" version
 
       - name: Архив
@@ -127,7 +281,7 @@ jobs:
           $ver = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([\d.]+)').Matches[0].Groups[1].Value)
           echo "VER=$ver" >> $env:GITHUB_ENV
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "dist\Nexus-$ver-Windows-x64.zip"
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "dist\Nexus-Windows-x64.zip"
 
       - name: Установщик
         continue-on-error: true
@@ -136,22 +290,59 @@ jobs:
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VER" tool\nexus.iss
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Nexus-Windows
           path: dist/*
 
   release:
-    name: Релиз на GitHub
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android, windows]
+    name: Релиз
+    needs: [check, android, windows]
+    if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: pubspec.yaml
+
+      - uses: actions/download-artifact@v5
         with:
           path: out
           merge-multiple: true
+
+      - name: Описание релиза
+        id: meta
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          BUILD=${{ needs.check.outputs.build }}
+          CORE=$(cat out/xray-android.txt 2>/dev/null || echo "")
+          XRAY=${{ needs.check.outputs.xray }}
+          cd out
+          rm -f xray-android.txt
+          sha256sum * | grep -v SHA256SUMS > SHA256SUMS.txt
+          rm -f SHA256SUMS-android.txt
+          cd ..
+          NAME="Nexus $VER (сборка $BUILD)"
+          if [ "$CORE" = "${XRAY#v}" ]; then NAME="$NAME · Xray ${XRAY#v}"; else CORE=""; fi
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "tag=v$VER-b$BUILD" >> $GITHUB_OUTPUT
+          {
+            echo "**Android:** Nexus-arm64.apk — большинство телефонов, Nexus-armv7.apk — старые, Nexus-universal.apk — любой."
+            echo "**Windows:** Nexus-Setup-$VER.exe — установщик, Nexus-Windows-x64.zip — портативная версия."
+            echo
+            echo "<!--"
+            echo "nexus-build: $BUILD"
+            echo "xray: ${CORE}"
+            echo "-->"
+          } > notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
+          repository: ${{ env.UPDATE_REPO }}
+          token: ${{ secrets.RELEASES_TOKEN || github.token }}
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ vars.RELEASES_REPO == '' && github.sha || '' }}
+          name: ${{ steps.meta.outputs.name }}
+          body_path: notes.md
           files: out/*
-          generate_release_notes: true
+          make_latest: true

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
 import '../models.dart';
+import '../services/app_updater.dart';
+import '../services/ru_apps.dart';
 import 'vpn_core.dart';
 
 /// Android: ядро Xray внутри VpnService (плагин flutter_v2ray_client).
@@ -66,9 +68,16 @@ class AndroidCore extends VpnCore {
         throw Exception('Нет разрешения на VPN — разрешите его в системном окне');
       }
     }
+    // Приложения мимо VPN: выбранные вручную + российские в умном режиме.
+    final bypass = <String>{
+      ...settings.bypassApps,
+      if (settings.routing == RoutingMode.smart && settings.ruAppsDirect)
+        ...ruBypassApps.keys,
+    }.toList();
     await _v2ray.startV2Ray(
       remark: remark,
       config: config,
+      blockedApps: settings.androidVpnMode && bypass.isNotEmpty ? bypass : null,
       proxyOnly: !settings.androidVpnMode,
       notificationDisconnectButtonName: 'ОТКЛЮЧИТЬ',
     );
@@ -97,6 +106,23 @@ class AndroidCore extends VpnCore {
     } catch (_) {
       return _logs;
     }
+  }
+
+  /// На Android ядро встроено в APK: свежий Xray приходит обновлением приложения,
+  /// которое GitHub Actions собирает автоматически при выходе новой версии Xray.
+  @override
+  bool get canUpdateCore => kUpdateRepo.isNotEmpty;
+
+  /// Найденное, но ещё не установленное обновление.
+  AppUpdate? pending;
+
+  @override
+  Future<String> updateCore({bool force = false}) async {
+    final u = await AppUpdater.check();
+    pending = u;
+    if (u == null) return 'Установлена последняя версия';
+    return 'Доступно обновление: ${u.version}'
+        '${u.xray.isEmpty ? '' : ' · Xray ${u.xray.replaceFirst('v', '')}'}';
   }
 
   @override

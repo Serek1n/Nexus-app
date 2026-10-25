@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models.dart';
+import '../../platform/android_system.dart';
+import '../../platform/windows_host.dart';
 import '../../services/config_builder.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'apps_screen.dart';
 
-const appVersion = '1.1.0';
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.5.0');
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -97,14 +100,48 @@ class SettingsScreen extends StatelessWidget {
           routeOption(
             RoutingMode.smart,
             'Умный режим',
-            'Российские сайты и сервисы (госуслуги, банки, VK, Яндекс) '
-                'открываются напрямую, остальное — через Nexus',
+            'Российские сайты, IP и приложения (Госуслуги, банки, VK, Яндекс) '
+                'работают напрямую, без VPN; остальное — через Nexus',
           ),
           routeOption(
             RoutingMode.global,
             'Весь трафик',
             'Абсолютно всё идёт через сервер Nexus',
           ),
+          if (!app.isDesktop)
+            NeonCard(
+              onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AppsScreen())),
+              child: Row(
+                children: [
+                  const Icon(Icons.apps_rounded, color: NX.violet, size: 21),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Приложения без VPN',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            if (st.routing == RoutingMode.smart &&
+                                st.ruAppsDirect)
+                              'Российские — напрямую',
+                            if (st.bypassApps.isNotEmpty)
+                              'выбрано: ${st.bypassApps.length}',
+                          ].join(' · ').ifEmpty('Все приложения через VPN'),
+                          style:
+                              const TextStyle(color: NX.text2, fontSize: 12.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: NX.text3),
+                ],
+              ),
+            ),
           const SectionTitle('Подключение'),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -147,7 +184,7 @@ class SettingsScreen extends StatelessWidget {
                     'Режим VPN',
                     st.androidVpnMode
                         ? 'Весь трафик телефона идёт через Nexus'
-                        : 'Только локальный прокси 127.0.0.1:10807',
+                        : 'Только прокси 127.0.0.1:10807 — им сможет пользоваться любое приложение на телефоне',
                     st.androidVpnMode,
                     (v) async {
                       app.updateSettings((s) => s.androidVpnMode = v);
@@ -157,6 +194,89 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SectionTitle('Работа в фоне'),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+            child: app.isDesktop
+                ? Column(
+                    children: [
+                      switchRow(
+                        Icons.minimize_rounded,
+                        'Сворачивать в трей',
+                        'Кнопка «закрыть» прячет окно, VPN продолжает работать. '
+                            'Выйти можно из меню значка в трее',
+                        st.closeToTray,
+                        (v) => app.updateSettings((s) => s.closeToTray = v),
+                      ),
+                      const Divider(height: 14),
+                      switchRow(
+                        Icons.power_rounded,
+                        'Запускать вместе с Windows',
+                        'Nexus стартует свёрнутым в трей',
+                        st.launchAtStartup,
+                        (v) {
+                          app.updateSettings((s) => s.launchAtStartup = v);
+                          Autostart.apply(v);
+                        },
+                      ),
+                    ],
+                  )
+                : const _AndroidBackground(),
+          ),
+          if (!app.isDesktop) ...[
+            const SectionTitle('Защита'),
+            NeonCard(
+              padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+              child: Column(
+                children: [
+                  switchRow(
+                    Icons.screenshot_monitor_rounded,
+                    'Скрывать экран',
+                    'Запрет скриншотов и размытие в списке недавних приложений',
+                    st.secureScreen,
+                    (v) {
+                      app.updateSettings((s) => s.secureScreen = v);
+                      AndroidSystem.setSecureScreen(v);
+                    },
+                  ),
+                  const Divider(height: 14),
+                  InkWell(
+                    onTap: AndroidSystem.openVpnSettings,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.shield_rounded,
+                              color: NX.violet, size: 21),
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Kill switch',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14.5)),
+                                SizedBox(height: 2),
+                                Text(
+                                    'В настройках VPN выберите Nexus и включите '
+                                    '«Постоянная VPN» и «Блокировать соединения без VPN»',
+                                    style: TextStyle(
+                                        color: NX.text2, fontSize: 12.5)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.open_in_new_rounded,
+                              color: NX.text3, size: 18),
+                          SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SectionTitle('Запуск'),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -203,7 +323,9 @@ class SettingsScreen extends StatelessWidget {
                           Text(
                             app.core.canUpdateCore
                                 ? (app.coreUpdateStatus ??
-                                    'Новые версии берутся с GitHub XTLS/Xray-core')
+                                    (app.isDesktop
+                                        ? 'Новые версии берутся с GitHub XTLS/Xray-core'
+                                        : 'Свежий Xray приходит обновлением Nexus'))
                                 : 'Обновляется вместе с приложением',
                             style: const TextStyle(
                                 color: NX.text2, fontSize: 12.5),
@@ -220,12 +342,35 @@ class SettingsScreen extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (app.androidUpdate != null) ...[
+                  const SizedBox(height: 12),
+                  if (app.updateProgress != null) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: app.updateProgress,
+                        minHeight: 5,
+                        backgroundColor: NX.surface2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  NeonButton(
+                    label: 'Обновить до ${app.androidUpdate!.version}',
+                    icon: Icons.system_update_rounded,
+                    expand: true,
+                    loading: app.updateProgress != null,
+                    onPressed: app.installAndroidUpdate,
+                  ),
+                ],
                 if (app.core.canUpdateCore) ...[
                   const Divider(height: 22),
                   switchRow(
                     Icons.update_rounded,
                     'Автообновление ядра',
-                    'Раз в сутки проверять и ставить новую версию',
+                    app.isDesktop
+                        ? 'Раз в сутки проверять и ставить новую версию'
+                        : 'Раз в сутки проверять и предлагать обновление',
                     st.autoUpdateCore,
                     (v) => app.updateSettings((s) => s.autoUpdateCore = v),
                   ),
@@ -364,4 +509,82 @@ class _CopyChip extends StatelessWidget {
         },
         child: Tag(text, color: NX.cyan),
       );
+}
+
+/// Android: статус экономии батареи и кнопка исключения.
+class _AndroidBackground extends StatefulWidget {
+  const _AndroidBackground();
+
+  @override
+  State<_AndroidBackground> createState() => _AndroidBackgroundState();
+}
+
+class _AndroidBackgroundState extends State<_AndroidBackground>
+    with WidgetsBindingObserver {
+  bool? _ok;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Пользователь возвращается из системных настроек — обновляем статус.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await AndroidSystem.isIgnoringBattery();
+    if (mounted) setState(() => _ok = ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = _ok ?? true;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.battery_full_rounded : Icons.battery_alert_rounded,
+              color: ok ? NX.mint : NX.amber, size: 21),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(ok ? 'Работа в фоне разрешена' : 'Система может остановить VPN',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14.5)),
+                const SizedBox(height: 2),
+                Text(
+                    ok
+                        ? 'Экономия батареи не мешает Nexus'
+                        : 'Отключите для Nexus экономию батареи, чтобы VPN не обрывался',
+                    style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+              ],
+            ),
+          ),
+          if (!ok)
+            NeonButton(
+              label: 'Разрешить',
+              secondary: true,
+              onPressed: AndroidSystem.requestIgnoreBattery,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
 }

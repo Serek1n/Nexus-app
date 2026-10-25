@@ -145,7 +145,12 @@ class AppSettings {
     this.autoConnectOnStart = false,
     this.autoUpdateCore = true,
     this.lastCoreCheck = 0,
-  });
+    this.closeToTray = true,
+    this.launchAtStartup = false,
+    this.secureScreen = false,
+    this.ruAppsDirect = true,
+    List<String>? bypassApps,
+  }) : bypassApps = bypassApps ?? [];
 
   RoutingMode routing;
 
@@ -163,6 +168,21 @@ class AppSettings {
   /// Время последней проверки обновлений ядра (мс).
   int lastCoreCheck;
 
+  /// Windows: кнопка «закрыть» сворачивает в трей.
+  bool closeToTray;
+
+  /// Windows: запускать вместе с системой (свёрнутым в трей).
+  bool launchAtStartup;
+
+  /// Android: запрет скриншотов и скрытие в списке недавних.
+  bool secureScreen;
+
+  /// Android, умный режим: российские приложения работают мимо VPN.
+  bool ruAppsDirect;
+
+  /// Android: приложения, выбранные пользователем для работы без VPN.
+  List<String> bypassApps;
+
   String toJsonString() => jsonEncode({
         'routing': routing.name,
         'androidVpnMode': androidVpnMode,
@@ -171,6 +191,11 @@ class AppSettings {
         'autoConnectOnStart': autoConnectOnStart,
         'autoUpdateCore': autoUpdateCore,
         'lastCoreCheck': lastCoreCheck,
+        'closeToTray': closeToTray,
+        'launchAtStartup': launchAtStartup,
+        'secureScreen': secureScreen,
+        'ruAppsDirect': ruAppsDirect,
+        'bypassApps': bypassApps,
       });
 
   factory AppSettings.fromJsonString(String? s) {
@@ -186,6 +211,11 @@ class AppSettings {
         autoConnectOnStart: j['autoConnectOnStart'] as bool? ?? false,
         autoUpdateCore: j['autoUpdateCore'] as bool? ?? true,
         lastCoreCheck: (j['lastCoreCheck'] as num?)?.toInt() ?? 0,
+        closeToTray: j['closeToTray'] as bool? ?? true,
+        launchAtStartup: j['launchAtStartup'] as bool? ?? false,
+        secureScreen: j['secureScreen'] as bool? ?? false,
+        ruAppsDirect: j['ruAppsDirect'] as bool? ?? true,
+        bypassApps: (j['bypassApps'] as List?)?.whereType<String>().toList(),
       );
     } catch (_) {
       return AppSettings();

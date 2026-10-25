@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
@@ -27,6 +28,7 @@ String buildXrayConfig(
   ServerProfile server, {
   required RoutingMode routing,
   required bool desktop,
+  bool lockLocalProxy = false,
 }) {
   final parsed = V2ray.parseFromURL(server.link);
   final cfg =
@@ -71,6 +73,19 @@ String buildXrayConfig(
           'destOverride': ['http', 'tls', 'quic'],
           'routeOnly': true,
         };
+        // В режиме VPN локальный SOCKS не нужен приложениям. Без пароля любое
+        // приложение на телефоне могло бы через него узнать IP сервера или
+        // обнаружить VPN — закрываем его случайным логином и паролем.
+        if (lockLocalProxy && ib['protocol'] == 'socks') {
+          final settings =
+              (ib['settings'] as Map?)?.cast<String, dynamic>() ?? {};
+          settings['auth'] = 'password';
+          settings['accounts'] = [
+            {'user': _randomToken(), 'pass': _randomToken()},
+          ];
+          settings['udp'] = false;
+          ib['settings'] = settings;
+        }
       }
     }
   }
@@ -123,5 +138,11 @@ String buildXrayConfig(
     'rules': rules,
   };
 
-  return const JsonEncoder.withIndent('  ').convert(cfg);
+  return jsonEncode(cfg);
+}
+
+String _randomToken() {
+  final r = Random.secure();
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
 }

@@ -44,6 +44,9 @@ abstract class VpnCore {
   Future<String> updateCore({bool force = false}) async =>
       'Ядро обновляется вместе с приложением';
 
+  /// Окно видно пользователю (на Windows без окна статистику не опрашиваем).
+  void setForeground(bool visible) {}
+
   Future<void> dispose() async {}
 }
 

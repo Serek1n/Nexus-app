@@ -17,15 +17,23 @@ class ServersScreen extends StatefulWidget {
 
 class _ServersScreenState extends State<ServersScreen> {
   String _q = '';
+  bool _byPing = false;
+
+  List<ServerProfile> _sorted(List<ServerProfile> list) {
+    if (!_byPing) return list;
+    int key(ServerProfile s) =>
+        (s.ping == null || s.ping! < 0) ? 1 << 30 : s.ping!;
+    return [...list]..sort((a, b) => key(a).compareTo(key(b)));
+  }
 
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final groups = <(String, List<ServerProfile>)>[];
     for (final sub in app.subscriptions) {
-      groups.add((sub.title, app.serversOf(sub.id)));
+      groups.add((sub.title, _sorted(app.serversOf(sub.id))));
     }
-    final manual = app.serversOf(null);
+    final manual = _sorted(app.serversOf(null));
     if (manual.isNotEmpty) groups.add(('Добавлены вручную', manual));
 
     bool match(ServerProfile s) =>
@@ -46,6 +54,17 @@ class _ServersScreenState extends State<ServersScreen> {
                     ? null
                     : '${app.servers.length} ${plural(app.servers.length, 'локация', 'локации', 'локаций')}',
                 actions: [
+                  NxIconButton(
+                    icon: _byPing
+                        ? Icons.sort_rounded
+                        : Icons.format_list_bulleted_rounded,
+                    tooltip: _byPing
+                        ? 'Сортировка: по задержке'
+                        : 'Сортировка: как в подписке',
+                    onPressed: app.servers.isEmpty
+                        ? null
+                        : () => setState(() => _byPing = !_byPing),
+                  ),
                   NxIconButton(
                     icon: Icons.speed_rounded,
                     tooltip: 'Проверить задержку',

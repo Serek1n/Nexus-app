@@ -5,8 +5,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/android_core.dart';
 import '../core/vpn_core.dart';
+import '../services/app_updater.dart';
 import '../models.dart';
+import '../platform/android_system.dart';
+import '../platform/win_dpapi.dart';
 import '../services/config_builder.dart';
 import '../services/subscription_service.dart';
 
@@ -23,7 +27,11 @@ class AppState extends ChangeNotifier {
 
   String? selectedId;
   ConnState state = ConnState.disconnected;
-  ConnStats stats = const ConnStats();
+  /// Статистика обновляется каждую секунду — держим её отдельно,
+  /// чтобы не перерисовывать весь интерфейс.
+  final statsNotifier = ValueNotifier<ConnStats>(const ConnStats());
+  ConnStats get stats => statsNotifier.value;
+  bool windowVisible = true;
   DateTime? connectedAt;
   String? lastError;
   bool pingingAll = false;
@@ -32,7 +40,13 @@ class AppState extends ChangeNotifier {
   bool coreUpdating = false;
   String? coreUpdateStatus;
 
+  /// Android: доступное обновление приложения со свежим ядром Xray.
+  AppUpdate? get androidUpdate =>
+      core is AndroidCore ? (core as AndroidCore).pending : null;
+  double? updateProgress;
+
   StreamSubscription? _stSub, _statsSub;
+  Timer? _subTimer;
 
   bool get isDesktop => Platform.isWindows;
 
@@ -59,21 +73,28 @@ class AppState extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     try {
-      final subs = jsonDecode(_prefs.getString('subscriptions') ?? '[]') as List;
+      final subs = jsonDecode(_readSecret('subscriptions')) as List;
       subscriptions
         ..clear()
         ..addAll(subs.map((e) => Subscription.fromJson(e)));
-      final srv = jsonDecode(_prefs.getString('servers') ?? '[]') as List;
+      final srv = jsonDecode(_readSecret('servers')) as List;
       servers
         ..clear()
         ..addAll(srv.map((e) => ServerProfile.fromJson(e)));
+      // Старые незашифрованные данные сразу перешифровываем.
+      if (WinDpapi.available &&
+          !WinDpapi.isProtected(_prefs.getString('servers') ?? 'dpapi:')) {
+        _save();
+      }
     } catch (_) {}
+    if (!isDesktop && settings.secureScreen) {
+      unawaited(AndroidSystem.setSecureScreen(true));
+    }
     selectedId = _prefs.getString('selected');
 
     _stSub = core.states.listen(_onCoreState);
     _statsSub = core.stats.listen((s) {
-      stats = s;
-      notifyListeners();
+      statsNotifier.value = s;
     });
     try {
       await core.init();
@@ -93,6 +114,16 @@ class AppState extends ChangeNotifier {
       unawaited(connect());
     }
 
+    // Пока приложение открыто — обновляем подписки раз в 6 часов.
+    _subTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      final stale = DateTime.now().subtract(const Duration(hours: 6));
+      for (final sub in [...subscriptions]) {
+        if (sub.updatedAt == null || sub.updatedAt!.isBefore(stale)) {
+          unawaited(refresh(sub, silent: true));
+        }
+      }
+    });
+
     // Раз в сутки тихо проверяем обновление ядра Xray.
     final day = const Duration(hours: 20).inMilliseconds;
     if (core.canUpdateCore &&
@@ -102,7 +133,8 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Проверка и установка новой версии ядра Xray (Windows).
+  /// Проверка новой версии ядра Xray: на Windows — замена ядра,
+  /// на Android — поиск обновления приложения со свежим ядром.
   Future<void> updateCore({bool silent = false}) async {
     if (coreUpdating) return;
     coreUpdating = true;
@@ -122,10 +154,46 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Android: скачать обновление, проверить SHA-256 и открыть установщик.
+  Future<void> installAndroidUpdate() async {
+    final u = androidUpdate;
+    if (u == null || updateProgress != null) return;
+    updateProgress = 0;
+    coreUpdateStatus = 'Загрузка обновления…';
+    notifyListeners();
+    var lastPct = -1;
+    try {
+      await AppUpdater.downloadAndInstall(u, onProgress: (p) {
+        final pct = (p * 100).floor();
+        if (pct != lastPct) {
+          lastPct = pct;
+          updateProgress = p;
+          notifyListeners();
+        }
+      });
+      coreUpdateStatus = 'Подтвердите установку в системном окне';
+    } catch (e) {
+      coreUpdateStatus = _msg(e);
+    } finally {
+      updateProgress = null;
+      notifyListeners();
+    }
+  }
+
+  /// Ссылки подписок и ключи серверов на Windows хранятся зашифрованными (DPAPI).
+  String _readSecret(String key) {
+    final raw = _prefs.getString(key);
+    if (raw == null) return '[]';
+    return WinDpapi.unprotect(raw) ?? '[]';
+  }
+
+  void _writeSecret(String key, String value) =>
+      _prefs.setString(key, WinDpapi.protect(value));
+
   void _save() {
-    _prefs.setString('subscriptions',
+    _writeSecret('subscriptions',
         jsonEncode(subscriptions.map((e) => e.toJson()).toList()));
-    _prefs.setString(
+    _writeSecret(
         'servers', jsonEncode(servers.map((e) => e.toJson()).toList()));
     if (selectedId != null) _prefs.setString('selected', selectedId!);
     _prefs.setString('settings', settings.toJsonString());
@@ -145,14 +213,18 @@ class AppState extends ChangeNotifier {
     }
     if (s == ConnState.disconnected) {
       connectedAt = null;
-      stats = const ConnStats();
+      statsNotifier.value = const ConnStats();
     }
     state = s;
     notifyListeners();
   }
 
-  String _configFor(ServerProfile s) =>
-      buildXrayConfig(s, routing: settings.routing, desktop: isDesktop);
+  String _configFor(ServerProfile s) => buildXrayConfig(
+        s,
+        routing: settings.routing,
+        desktop: isDesktop,
+        lockLocalProxy: !isDesktop && settings.androidVpnMode,
+      );
 
   Future<void> toggle() async {
     if (state == ConnState.connected || state == ConnState.connecting) {
@@ -162,7 +234,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  bool _askedNotifications = false;
+
   Future<void> connect() async {
+    if (!isDesktop && !_askedNotifications) {
+      _askedNotifications = true;
+      await AndroidSystem.requestNotifications();
+    }
     final s = selected;
     if (s == null) {
       lastError = 'Сначала добавьте подписку или сервер';
@@ -387,6 +465,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Окно свёрнуто/скрыто в трей — ядру можно реже опрашивать статистику.
+  void setWindowVisible(bool v) {
+    if (windowVisible == v) return;
+    windowVisible = v;
+    core.setForeground(v);
+  }
+
   void clearError() {
     lastError = null;
     notifyListeners();
@@ -401,6 +486,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _stSub?.cancel();
     _statsSub?.cancel();
+    _subTimer?.cancel();
     core.dispose();
     super.dispose();
   }

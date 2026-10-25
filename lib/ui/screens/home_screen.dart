@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models.dart';
 import '../add_sheet.dart';
@@ -26,7 +27,14 @@ class HomeScreen extends StatelessWidget {
         ConnectButton(
           state: app.state,
           size: wide ? 220 : 196,
-          onTap: () => sel == null ? showAddSheet(context) : app.toggle(),
+          onTap: () {
+            if (sel == null) {
+              showAddSheet(context);
+              return;
+            }
+            HapticFeedback.mediumImpact();
+            app.toggle();
+          },
         ),
         const SizedBox(height: 22),
         _TimerLine(state: app.state, since: app.connectedAt),
@@ -39,6 +47,39 @@ class HomeScreen extends StatelessWidget {
       children: [
         if (app.lastError != null) ...[
           _ErrorBanner(text: app.lastError!, onClose: app.clearError),
+          const SizedBox(height: 10),
+        ],
+        if (app.androidUpdate != null) ...[
+          NeonCard(
+            onTap: app.updateProgress == null ? app.installAndroidUpdate : null,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                const Icon(Icons.system_update_rounded,
+                    color: NX.violet, size: 19),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    app.updateProgress != null
+                        ? 'Загрузка ${(app.updateProgress! * 100).round()}%'
+                        : 'Доступно обновление'
+                            '${app.androidUpdate!.xray.isEmpty ? '' : ' · Xray ${app.androidUpdate!.xray.replaceFirst('v', '')}'}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                if (app.updateProgress == null)
+                  const Text('Обновить',
+                      style: TextStyle(
+                          color: NX.violet,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (sub != null && _subWarning(sub) != null) ...[
+          _Notice(text: _subWarning(sub)!),
           const SizedBox(height: 10),
         ],
         if (sel != null)
@@ -73,7 +114,10 @@ class HomeScreen extends StatelessWidget {
           child: app.state == ConnState.connected
               ? Padding(
                   padding: const EdgeInsets.only(top: 10),
-                  child: _StatsRow(stats: app.stats),
+                  child: ValueListenableBuilder<ConnStats>(
+                    valueListenable: app.statsNotifier,
+                    builder: (_, st, __) => _StatsRow(stats: st),
+                  ),
                 )
               : const SizedBox(width: double.infinity),
         ),
@@ -126,6 +170,44 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Предупреждение о скором окончании подписки или трафика.
+String? _subWarning(Subscription sub) {
+  final days = sub.expire?.difference(DateTime.now()).inDays;
+  if (days != null && days < 0) return 'Подписка «${sub.title}» закончилась — продлите её в боте';
+  if (days != null && days <= 3) {
+    return 'Подписка заканчивается через $days ${plural(days, 'день', 'дня', 'дней')} — продлите её в боте';
+  }
+  if (sub.total > 0 && sub.used / sub.total >= 0.9) {
+    return 'Использовано ${(sub.used / sub.total * 100).round()}% трафика подписки';
+  }
+  return null;
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: NX.amber.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: NX.amber.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.schedule_rounded, color: NX.amber, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(text,
+                  style: const TextStyle(color: NX.text, fontSize: 13)),
+            ),
+          ],
+        ),
+      );
 }
 
 class _StatusPill extends StatelessWidget {

@@ -37,10 +37,37 @@ def android():
     if not (ROOT / "android").exists():
         return
     # Манифест: название, http-подписки (3x-ui часто отдаёт по http).
+    # Манифест: название; http-подписки (3x-ui часто отдаёт по http);
+    # запрет резервного копирования (в данных — ссылки подписок с ключами);
+    # убираем лишнее разрешение на чтение памяти, которое объявляет плагин ядра.
     patch("android/app/src/main/AndroidManifest.xml", [
+        (re.compile(r'<manifest xmlns:android="http://schemas.android.com/apk/res/android"'),
+         '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
+         '    xmlns:tools="http://schemas.android.com/tools"'),
         (re.compile(r'android:label="[^"]*"'), 'android:label="Nexus"'),
-        (re.compile(r"<application"),
-         '<application\n        android:usesCleartextTraffic="true"'),
+        # FileProvider для установки скачанных обновлений.
+        (re.compile(r"(\s*)</application>"),
+         r'\1    <provider\n'
+         r'            android:name="androidx.core.content.FileProvider"\n'
+         r'            android:authorities="${applicationId}.nexus.files"\n'
+         r'            android:exported="false"\n'
+         r'            android:grantUriPermissions="true">\n'
+         r'            <meta-data\n'
+         r'                android:name="android.support.FILE_PROVIDER_PATHS"\n'
+         r'                android:resource="@xml/nexus_files" />\n'
+         r'        </provider>\1</application>'),
+        # Видеть установленные приложения (для списка «Приложения без VPN»).
+        (re.compile(r"<queries>"),
+         '<queries>\n        <intent>\n'
+         '            <action android:name="android.intent.action.MAIN"/>\n'
+         '            <category android:name="android.intent.category.LAUNCHER"/>\n'
+         '        </intent>'),
+        (re.compile(r"(\s*)<application"),
+         r'\1<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />'
+         r'\1<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />'
+         r'\1<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
+         r'\1<application\n        android:usesCleartextTraffic="true"'
+         r'\n        android:allowBackup="false"'),
     ])
 
     gradle = "android/app/build.gradle.kts"
@@ -77,6 +104,8 @@ if (keystorePropertiesFile.exists()) {
     }
 
 """),
+        (re.compile(r"\nflutter \{"),
+         '\ndependencies {\n    implementation("androidx.core:core-ktx:1.13.1")\n}\n\nflutter {'),
         (re.compile(r'signingConfig = signingConfigs\.getByName\("debug"\)'),
          'signingConfig = if (keystorePropertiesFile.exists()) '
          'signingConfigs.getByName("release") else signingConfigs.getByName("debug")\n'
@@ -84,17 +113,33 @@ if (keystorePropertiesFile.exists()) {
     ])
     shutil.copy(ROOT / "tool/proguard-rules.pro", ROOT / "android/app/proguard-rules.pro")
 
+    # Папка, откуда FileProvider отдаёт APK обновления установщику.
+    xml_dir = ROOT / "android/app/src/main/res/xml"
+    xml_dir.mkdir(parents=True, exist_ok=True)
+    (xml_dir / "nexus_files.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<paths>\n    <cache-path name="updates" path="updates/" />\n</paths>\n',
+        encoding="utf-8")
+
+    # MainActivity с системным каналом nexus/system (фон, уведомления, настройки VPN).
+    acts = list((ROOT / "android/app/src/main").rglob("MainActivity.kt"))
+    if len(acts) != 1:
+        errors.append(f"ожидался один MainActivity.kt, найдено {len(acts)}")
+    else:
+        m = re.search(r"^package\s+([\w.]+)", acts[0].read_text(encoding="utf-8"), re.M)
+        if not m:
+            errors.append("в MainActivity.kt не найден package")
+        else:
+            tpl = (ROOT / "tool/MainActivity.kt").read_text(encoding="utf-8")
+            acts[0].write_text(tpl.replace("__PACKAGE__", m.group(1)), encoding="utf-8")
+            print("patched", acts[0].relative_to(ROOT))
+
     # Плагин ядра (flutter_v2ray_client) собран под AGP 8.13 — выравниваем версию.
     patch("android/settings.gradle.kts", [
         (re.compile(r'id\("com\.android\.application"\) version "[^"]+"'),
          'id("com.android.application") version "8.13.0"'),
     ])
 
-    props = ROOT / "android/gradle.properties"
-    s = props.read_text(encoding="utf-8")
-    if "enableUncompressedNativeLibs" not in s:
-        s += "\nandroid.bundle.enableUncompressedNativeLibs=false\n"
-    props.write_text(s, encoding="utf-8")
 
 
 def windows():

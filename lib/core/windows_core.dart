@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:http/http.dart' as http;
 
@@ -25,6 +26,21 @@ class WindowsCore extends VpnCore {
   bool _proxySet = false;
   int _lastUp = 0, _lastDown = 0;
   int _failedChecks = 0;
+
+  // Для автопереподключения, если ядро упало.
+  String? _lastRemark, _lastConfig;
+  AppSettings? _lastSettings;
+  int _restarts = 0;
+  bool _restarting = false;
+  bool _foreground = true;
+  int _tickN = 0;
+  DateTime? _lastStatsAt;
+
+  /// Порт API статистики выбирается случайно при каждом подключении.
+  int _apiPort = kApiPort;
+
+  @override
+  void setForeground(bool visible) => _foreground = visible;
 
   String get _exeDir => File(Platform.resolvedExecutable).parent.path;
 
@@ -85,7 +101,7 @@ class WindowsCore extends VpnCore {
     cfg['stats'] = <String, dynamic>{};
     cfg['api'] = {
       'tag': 'api',
-      'listen': '127.0.0.1:$kApiPort',
+      'listen': '127.0.0.1:$_apiPort',
       'services': ['StatsService'],
     };
     cfg['policy'] = {
@@ -110,7 +126,12 @@ class WindowsCore extends VpnCore {
     _states.add(ConnState.connecting);
     await _stopProcess();
     await _applyPendingUpdate();
+    _lastRemark = remark;
+    _lastConfig = config;
+    _lastSettings = settings;
+    if (!_restarting) _restarts = 0;
 
+    _apiPort = await _freePort();
     final cfgFile = File('$_dataDir\\config.json');
     await cfgFile.writeAsString(_withStats(config));
 
@@ -143,6 +164,10 @@ class WindowsCore extends VpnCore {
       await Future.delayed(const Duration(milliseconds: 200));
       up = await _portOpen(kHttpPort);
     }
+    // Конфиг с ключами больше не нужен на диске — ядро уже его прочитало.
+    try {
+      if (cfgFile.existsSync()) cfgFile.deleteSync();
+    } catch (_) {}
     if (!up) {
       await _stopProcess();
       _states.add(ConnState.disconnected);
@@ -159,6 +184,7 @@ class WindowsCore extends VpnCore {
 
     _lastUp = 0;
     _lastDown = 0;
+    _lastStatsAt = null;
     _failedChecks = 0;
     _watchdog?.cancel();
     _watchdog =
@@ -171,19 +197,47 @@ class WindowsCore extends VpnCore {
     if (!await _portOpen(kHttpPort)) {
       _failedChecks++;
       if (_failedChecks >= 3) {
-        _log('Ядро перестало отвечать — отключение');
-        await disconnect();
+        _watchdog?.cancel();
+        if (_restarts < 3 && _lastConfig != null && _lastSettings != null) {
+          _restarts++;
+          _log('Ядро перестало отвечать — перезапуск ($_restarts из 3)');
+          _restarting = true;
+          try {
+            await connect(
+                remark: _lastRemark ?? '',
+                config: _lastConfig!,
+                settings: _lastSettings!);
+          } catch (e) {
+            _log('Перезапуск не удался: $e');
+            await disconnect();
+          } finally {
+            _restarting = false;
+          }
+        } else {
+          _log('Ядро перестало отвечать — отключение');
+          await disconnect();
+        }
       }
       return;
     }
     _failedChecks = 0;
+    // Статистику запрашиваем раз в 2 секунды и только когда окно открыто.
+    _tickN++;
+    if (!_foreground || _tickN.isOdd) return;
     final s = await _queryStats();
     if (s != null) {
       final (up, down) = s;
-      final upSpeed = _lastUp == 0 ? 0 : math.max(0, up - _lastUp);
-      final downSpeed = _lastDown == 0 ? 0 : math.max(0, down - _lastDown);
+      final now = DateTime.now();
+      final secs = _lastStatsAt == null
+          ? 1.0
+          : math.max(1, now.difference(_lastStatsAt!).inMilliseconds) / 1000;
+      final upSpeed =
+          _lastUp == 0 ? 0 : (math.max(0, up - _lastUp) / secs).round();
+      final downSpeed =
+          _lastDown == 0 ? 0 : (math.max(0, down - _lastDown) / secs).round();
       _lastUp = up;
       _lastDown = down;
+      _lastStatsAt = now;
       _stats.add(ConnStats(
         uploadSpeed: upSpeed,
         downloadSpeed: downSpeed,
@@ -197,7 +251,7 @@ class WindowsCore extends VpnCore {
     try {
       final p = await Process.start(
         _corePath,
-        ['api', 'statsquery', '--server=127.0.0.1:$kApiPort'],
+        ['api', 'statsquery', '--server=127.0.0.1:$_apiPort'],
         workingDirectory: _coreDir,
         mode: ProcessStartMode.detachedWithStdio,
       );
@@ -217,6 +271,17 @@ class WindowsCore extends VpnCore {
       return (up, down);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<int> _freePort() async {
+    try {
+      final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final p = s.port;
+      await s.close();
+      return p;
+    } catch (_) {
+      return kApiPort;
     }
   }
 
@@ -244,6 +309,10 @@ class WindowsCore extends VpnCore {
   Future<void> disconnect() async {
     _watchdog?.cancel();
     _watchdog = null;
+    if (!_restarting) {
+      _lastConfig = null;
+      _lastSettings = null;
+    }
     if (_proxySet) {
       WinProxy.disable();
       _proxySet = false;
@@ -333,18 +402,34 @@ class WindowsCore extends VpnCore {
       return 'Установлена последняя версия ($current)';
     }
 
-    String? url;
+    String? url, dgstUrl;
     for (final a in (j['assets'] as List? ?? [])) {
-      if (a['name'] == 'Xray-windows-64.zip') {
-        url = a['browser_download_url']?.toString();
-      }
+      final name = a['name'];
+      final link = a['browser_download_url']?.toString();
+      if (link == null || !link.startsWith('https://github.com/XTLS/')) continue;
+      if (name == 'Xray-windows-64.zip') url = link;
+      if (name == 'Xray-windows-64.zip.dgst') dgstUrl = link;
     }
-    if (url == null) throw Exception('В релизе $tag нет сборки для Windows');
+    if (url == null || dgstUrl == null) {
+      throw Exception('В релизе $tag нет сборки для Windows');
+    }
 
     final dir = Directory(_updDir);
     if (!dir.existsSync()) dir.createSync(recursive: true);
 
-    final zip = ZipDecoder().decodeBytes(await _download(url));
+    // Проверяем контрольную сумму из официального файла .dgst релиза.
+    final zipBytes = await _download(url);
+    final dgst = utf8.decode(await _download(dgstUrl), allowMalformed: true);
+    final want = RegExp(r'SHA2-256=\s*([0-9a-fA-F]{64})')
+        .firstMatch(dgst)
+        ?.group(1)
+        ?.toLowerCase();
+    final got = sha256.convert(zipBytes).toString();
+    if (want == null || want != got) {
+      throw Exception('Контрольная сумма ядра не совпала — обновление отменено');
+    }
+
+    final zip = ZipDecoder().decodeBytes(zipBytes);
     ArchiveFile? exe;
     for (final f in zip.files) {
       if (f.isFile && f.name.toLowerCase() == 'xray.exe') exe = f;
@@ -360,11 +445,21 @@ class WindowsCore extends VpnCore {
       throw Exception('Скачанное ядро не запускается');
     }
 
-    // Свежие гео-базы для умного режима.
+    // Свежие гео-базы для умного режима — тоже с проверкой SHA-256.
     for (final g in ['geoip.dat', 'geosite.dat']) {
       try {
-        await File('$_updDir\\$g.new')
-            .writeAsBytes(await _download('$_geoBase/$g'), flush: true);
+        final data = await _download('$_geoBase/$g');
+        final sum = utf8
+            .decode(await _download('$_geoBase/$g.sha256sum'))
+            .trim()
+            .split(RegExp(r'\s+'))
+            .first
+            .toLowerCase();
+        if (sha256.convert(data).toString() == sum) {
+          await File('$_updDir\\$g.new').writeAsBytes(data, flush: true);
+        } else {
+          _log('Гео-база $g не прошла проверку и пропущена');
+        }
       } catch (_) {}
     }
 
