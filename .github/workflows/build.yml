@@ -73,15 +73,15 @@ jobs:
       XRAY: ${{ needs.check.outputs.xray }}
       BUILD: ${{ needs.check.outputs.build }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '17'
 
       # Плагин ядра Xray пока несовместим с AGP 9 (Flutter 3.44+), поэтому версия зафиксирована.
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: '3.41.9'
           channel: stable
@@ -126,7 +126,12 @@ jobs:
 
       - name: Зависимости и иконки
         run: |
-          flutter pub get 2>&1 | tee -a ci.log
+          # Если pubspec.lock уже в репозитории — версии зависимостей строго по нему.
+          if git ls-files --error-unmatch pubspec.lock >/dev/null 2>&1; then
+            flutter pub get --enforce-lockfile 2>&1 | tee -a ci.log
+          else
+            flutter pub get 2>&1 | tee -a ci.log
+          fi
           dart run flutter_launcher_icons 2>&1 | tee -a ci.log
 
       # ── Свежее ядро Xray: собираем libv2ray.aar из 2dust/AndroidLibXrayLite ──
@@ -137,7 +142,7 @@ jobs:
           git clone -q --depth 1 --branch "$XRAY" https://github.com/2dust/AndroidLibXrayLite.git alx
           cp tool/xray-android/protector.go alx/
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         if: steps.alx.outcome == 'success'
         continue-on-error: true
         with:
@@ -151,7 +156,9 @@ jobs:
         run: |
           set -eo pipefail
           cd alx
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          # gomobile той же версии, что указана в go.mod ядра (не @latest).
+          MOBILE=$(go list -m -f '{{.Version}}' golang.org/x/mobile)
+          go install golang.org/x/mobile/cmd/gomobile@$MOBILE golang.org/x/mobile/cmd/gobind@$MOBILE
           export PATH="$PATH:$(go env GOPATH)/bin"
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
           mkdir -p assets
@@ -221,10 +228,23 @@ jobs:
           cd dist && sha256sum *.apk > SHA256SUMS-android.txt
           echo "$CORE" > xray-android.txt
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Nexus-Android
           path: dist/*
+
+      # Первая успешная сборка сама добавляет pubspec.lock в репозиторий —
+      # дальше версии всех зависимостей зафиксированы.
+      - name: Зафиксировать версии зависимостей
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        run: |
+          if ! git ls-files --error-unmatch pubspec.lock >/dev/null 2>&1 && [ -f pubspec.lock ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pubspec.lock
+            git commit -m "Зафиксировать версии зависимостей (pubspec.lock)"
+            git push || echo "::warning::Не удалось отправить pubspec.lock"
+          fi
 
       - name: Причина ошибки
         if: failure()
@@ -250,10 +270,11 @@ jobs:
     env:
       BUILD: ${{ needs.check.outputs.build }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
+          flutter-version: '3.41.9'
           channel: stable
           cache: true
 
@@ -265,8 +286,13 @@ jobs:
           python tool/patch_platforms.py
 
       - name: Зависимости и иконки
+        shell: bash
         run: |
-          flutter pub get
+          if git ls-files --error-unmatch pubspec.lock >/dev/null 2>&1; then
+            flutter pub get --enforce-lockfile
+          else
+            flutter pub get
+          fi
           dart run flutter_launcher_icons
 
       - name: Ключ проверки обновлений
@@ -328,7 +354,7 @@ jobs:
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VER" tool\nexus.iss
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Nexus-Windows
           path: dist/*
@@ -339,11 +365,11 @@ jobs:
     if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           sparse-checkout: pubspec.yaml
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           path: out
           merge-multiple: true
@@ -351,6 +377,12 @@ jobs:
       - name: Описание релиза
         id: meta
         run: |
+          # В релиз идёт только ядро, собранное из исходников в этой сборке.
+          if [ "$(cat out/xray-android.txt 2>/dev/null)" != "${{ needs.check.outputs.xray }}" ] && \
+             [ "$(cat out/xray-android.txt 2>/dev/null)" != "$(echo ${{ needs.check.outputs.xray }} | sed 's/^v//')" ]; then
+            echo "::error::Свежее ядро Xray для Android не собралось — релиз не публикуется (файлы есть в артефактах сборки)"
+            exit 1
+          fi
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           BUILD=${{ needs.check.outputs.build }}
           CORE=$(cat out/xray-android.txt 2>/dev/null || echo "")
@@ -404,7 +436,7 @@ jobs:
             echo "Релиз подписан"
           fi
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           repository: ${{ env.UPDATE_REPO }}
           token: ${{ secrets.RELEASES_TOKEN || github.token }}

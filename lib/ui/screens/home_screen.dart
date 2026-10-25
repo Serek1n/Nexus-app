@@ -52,6 +52,10 @@ class HomeScreen extends StatelessWidget {
           _ErrorBanner(text: app.lastError!, onClose: app.clearError),
           const SizedBox(height: 10),
         ],
+        if (app.failoverNote != null) ...[
+          _Notice(text: app.failoverNote!, icon: Icons.alt_route_rounded),
+          const SizedBox(height: 10),
+        ],
         if (app.blocked) ...[
           Container(
             padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
@@ -231,8 +235,9 @@ String? _subWarning(Subscription sub) {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.text});
+  const _Notice({required this.text, this.icon = Icons.schedule_rounded});
   final String text;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -244,7 +249,7 @@ class _Notice extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.schedule_rounded, color: NX.amber, size: 18),
+            Icon(icon, color: NX.amber, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,

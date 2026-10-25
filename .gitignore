@@ -16,7 +16,6 @@
 .packages
 .pub-cache/
 .pub/
-pubspec.lock
 .metadata
 
 # Ключи подписи — никогда в репозиторий

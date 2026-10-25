@@ -78,19 +78,17 @@ class AppState extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     try {
-      final subs = jsonDecode(_readSecret('subscriptions')) as List;
+      final subs = jsonDecode(await _readSecret('subscriptions')) as List;
       subscriptions
         ..clear()
         ..addAll(subs.map((e) => Subscription.fromJson(e)));
-      final srv = jsonDecode(_readSecret('servers')) as List;
+      final srv = jsonDecode(await _readSecret('servers')) as List;
       servers
         ..clear()
         ..addAll(srv.map((e) => ServerProfile.fromJson(e)));
       // Старые незашифрованные данные сразу перешифровываем.
-      if (WinDpapi.available &&
-          !WinDpapi.isProtected(_prefs.getString('servers') ?? 'dpapi:')) {
-        _save();
-      }
+      final raw = _prefs.getString('servers');
+      if (raw != null && !_isProtected(raw)) _save();
     } catch (_) {}
     if (!isDesktop) {
       await RuAppsUpdater.load();
@@ -252,21 +250,42 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ссылки подписок и ключи серверов на Windows хранятся зашифрованными (DPAPI).
-  String _readSecret(String key) {
+  /// Ссылки подписок и ключи серверов хранятся зашифрованными:
+  /// на Windows — DPAPI, на Android — ключом из Android Keystore.
+  static const _aks = 'aks:';
+
+  bool _isProtected(String raw) =>
+      raw.startsWith(_aks) || WinDpapi.isProtected(raw);
+
+  Future<String> _readSecret(String key) async {
     final raw = _prefs.getString(key);
     if (raw == null) return '[]';
+    if (raw.startsWith(_aks)) {
+      return await AndroidSystem.unprotect(raw.substring(_aks.length)) ?? '[]';
+    }
     return WinDpapi.unprotect(raw) ?? '[]';
   }
 
-  void _writeSecret(String key, String value) =>
-      _prefs.setString(key, WinDpapi.protect(value));
+  Future<void> _writeSecret(String key, String value) async {
+    if (Platform.isAndroid) {
+      final enc = await AndroidSystem.protect(value);
+      // Если Keystore недоступен — не теряем данные, сохраняем как есть.
+      await _prefs.setString(key, enc != null ? '$_aks$enc' : value);
+    } else {
+      await _prefs.setString(key, WinDpapi.protect(value));
+    }
+  }
+
+  /// Сохранения выполняются строго по очереди, чтобы старое не затёрло новое.
+  Future<void> _saveChain = Future.value();
 
   void _save() {
-    _writeSecret('subscriptions',
-        jsonEncode(subscriptions.map((e) => e.toJson()).toList()));
-    _writeSecret(
-        'servers', jsonEncode(servers.map((e) => e.toJson()).toList()));
+    final subs = jsonEncode(subscriptions.map((e) => e.toJson()).toList());
+    final srv = jsonEncode(servers.map((e) => e.toJson()).toList());
+    _saveChain = _saveChain.then((_) async {
+      await _writeSecret('subscriptions', subs);
+      await _writeSecret('servers', srv);
+    }).catchError((_) {});
     if (selectedId != null) _prefs.setString('selected', selectedId!);
     _prefs.setString('settings', settings.toJsonString());
   }
@@ -285,7 +304,7 @@ class AppState extends ChangeNotifier {
   /// Реальная задержка через туннель после подключения.
   int? liveLatency;
 
-  Future<void> measureLatency() async {
+  Future<void> measureLatency({bool afterConnect = false}) async {
     final s = selected;
     if (s == null || state != ConnState.connected) return;
     liveLatency = null;
@@ -296,12 +315,48 @@ class AppState extends ChangeNotifier {
       liveLatency = -1;
     }
     notifyListeners();
+    if (afterConnect && liveLatency == -1) await _failover(s);
+  }
+
+  /// Серверы, уже опробованные в текущей попытке подключения.
+  final Set<String> _failoverTried = {};
+  String? failoverNote;
+
+  /// Сервер подключился, но трафик не идёт — пробуем следующие
+  /// по задержке (до 3 штук), если включено «Автовыбор при сбое».
+  Future<void> _failover(ServerProfile bad) async {
+    if (!settings.autoFailover || core.blocked) return;
+    _failoverTried.add(bad.id);
+    if (_failoverTried.length > 3) {
+      failoverNote = null;
+      lastError = 'Ни один сервер не отвечает — проверьте интернет или подписку';
+      notifyListeners();
+      return;
+    }
+    final candidates = servers
+        .where((x) => !_failoverTried.contains(x.id))
+        .toList()
+      ..sort((a, b) {
+        int k(ServerProfile x) =>
+            (x.ping == null || x.ping! < 0) ? 1 << 30 : x.ping!;
+        return k(a).compareTo(k(b));
+      });
+    if (candidates.isEmpty) return;
+    final next = candidates.first;
+    failoverNote = '«${bad.cleanName}» не отвечает — переключаюсь на «${next.cleanName}»';
+    notifyListeners();
+    selectedId = next.id;
+    _save();
+    await core.disconnect();
+    await Future.delayed(const Duration(milliseconds: 400));
+    await connect(keepFailover: true);
   }
 
   void _onCoreState(ConnState s) {
     if (s == ConnState.connected && state != ConnState.connected) {
       connectedAt = DateTime.now();
-      Future.delayed(const Duration(seconds: 1), measureLatency);
+      Future.delayed(const Duration(seconds: 1),
+          () => measureLatency(afterConnect: true));
     }
     if (s != ConnState.connected) liveLatency = null;
     if (s == ConnState.disconnected) {
@@ -329,7 +384,11 @@ class AppState extends ChangeNotifier {
 
   bool _askedNotifications = false;
 
-  Future<void> connect() async {
+  Future<void> connect({bool keepFailover = false}) async {
+    if (!keepFailover) {
+      _failoverTried.clear();
+      failoverNote = null;
+    }
     if (!isDesktop && !_askedNotifications) {
       _askedNotifications = true;
       await AndroidSystem.requestNotifications();
@@ -381,6 +440,14 @@ class AppState extends ChangeNotifier {
       await connect();
     }
   }
+
+  bool isFavorite(ServerProfile s) => settings.favorites.contains(s.favKey);
+
+  void toggleFavorite(ServerProfile s) => updateSettings((st) {
+        st.favorites = isFavorite(s)
+            ? st.favorites.where((k) => k != s.favKey).toList()
+            : [...st.favorites, s.favKey];
+      });
 
   /// Полное переподключение (в том числе после срабатывания kill switch).
   Future<void> reconnect() async {

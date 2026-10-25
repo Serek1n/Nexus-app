@@ -15,6 +15,11 @@ class AndroidSystem {
     }
   }
 
+  /// Шифрование ключом Android Keystore (AES-256-GCM).
+  static Future<String?> protect(String plain) => _call<String>('protect', plain);
+  static Future<String?> unprotect(String data) =>
+      _call<String>('unprotect', data);
+
   /// Ссылки nexus://: первая (с которой открыли приложение) и последующие.
   static Future<void> listenLinks(void Function(String) onLink) async {
     if (!Platform.isAndroid) return;

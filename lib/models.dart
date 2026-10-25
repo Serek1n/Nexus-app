@@ -58,6 +58,9 @@ class ServerProfile {
     return null;
   }
 
+  /// Устойчивый ключ для избранного.
+  String get favKey => '$name|$host:$port';
+
   /// Название без флага — для аккуратного отображения.
   String get cleanName {
     final f = flag;
@@ -152,9 +155,12 @@ class AppSettings {
     this.autoUpdateApp = true,
     this.windowsKillSwitch = true,
     this.clearClipboard = true,
+    this.autoFailover = true,
+    List<String>? favorites,
     this.lastAppCheck = 0,
     List<String>? bypassApps,
-  }) : bypassApps = bypassApps ?? [];
+  })  : bypassApps = bypassApps ?? [],
+        favorites = favorites ?? [];
 
   RoutingMode routing;
 
@@ -184,6 +190,12 @@ class AppSettings {
   /// Windows: при падении VPN не выпускать трафик мимо него.
   bool windowsKillSwitch;
 
+  /// Избранные серверы (ключ — название и адрес, переживает обновление подписки).
+  List<String> favorites;
+
+  /// Если сервер не пропускает трафик — переключаться на следующий.
+  bool autoFailover;
+
   /// Очищать буфер обмена после импорта ключа или подписки.
   bool clearClipboard;
 
@@ -212,6 +224,8 @@ class AppSettings {
         'autoUpdateApp': autoUpdateApp,
         'windowsKillSwitch': windowsKillSwitch,
         'clearClipboard': clearClipboard,
+        'autoFailover': autoFailover,
+        'favorites': favorites,
         'lastAppCheck': lastAppCheck,
         'bypassApps': bypassApps,
       });
@@ -236,6 +250,8 @@ class AppSettings {
         autoUpdateApp: j['autoUpdateApp'] as bool? ?? true,
         windowsKillSwitch: j['windowsKillSwitch'] as bool? ?? true,
         clearClipboard: j['clearClipboard'] as bool? ?? true,
+        autoFailover: j['autoFailover'] as bool? ?? true,
+        favorites: (j['favorites'] as List?)?.whereType<String>().toList(),
         lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
         bypassApps: (j['bypassApps'] as List?)?.whereType<String>().toList(),
       );

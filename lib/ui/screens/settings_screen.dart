@@ -11,7 +11,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'apps_screen.dart';
 
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.7.1');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.8.1');
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -316,6 +316,14 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
               children: [
+                switchRow(
+                  Icons.alt_route_rounded,
+                  'Автовыбор при сбое',
+                  'Если сервер не пропускает трафик, Nexus сам переключится на следующий',
+                  st.autoFailover,
+                  (v) => app.updateSettings((s) => s.autoFailover = v),
+                ),
+                const Divider(height: 14),
                 switchRow(
                   Icons.sync_rounded,
                   'Обновлять подписки',

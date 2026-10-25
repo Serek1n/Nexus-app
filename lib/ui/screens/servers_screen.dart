@@ -19,11 +19,19 @@ class _ServersScreenState extends State<ServersScreen> {
   String _q = '';
   bool _byPing = false;
 
+  /// Избранные — всегда сверху; внутри — по задержке, если выбрано.
   List<ServerProfile> _sorted(List<ServerProfile> list) {
-    if (!_byPing) return list;
+    final app = AppScope.read(context);
+    int fav(ServerProfile s) => app.isFavorite(s) ? 0 : 1;
     int key(ServerProfile s) =>
         (s.ping == null || s.ping! < 0) ? 1 << 30 : s.ping!;
-    return [...list]..sort((a, b) => key(a).compareTo(key(b)));
+    final out = [...list];
+    out.sort((a, b) {
+      final f = fav(a).compareTo(fav(b));
+      if (f != 0 || !_byPing) return f;
+      return key(a).compareTo(key(b));
+    });
+    return out;
   }
 
   @override
@@ -163,11 +171,19 @@ class _ServerTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(server.cleanName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14.5)),
+                Row(children: [
+                  if (app.isFavorite(server)) ...[
+                    const Icon(Icons.star_rounded, size: 16, color: NX.amber),
+                    const SizedBox(width: 4),
+                  ],
+                  Flexible(
+                    child: Text(server.cleanName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14.5)),
+                  ),
+                ]),
                 const SizedBox(height: 5),
                 Row(children: [
                   Tag(server.protocol, color: NX.cyan),
@@ -225,6 +241,20 @@ class _ServerTile extends StatelessWidget {
                             fontWeight: FontWeight.w700, fontSize: 15)),
                   ),
                 ]),
+              ),
+              ListTile(
+                leading: Icon(
+                    app.isFavorite(server)
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: NX.amber),
+                title: Text(app.isFavorite(server)
+                    ? 'Убрать из избранного'
+                    : 'В избранное'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  app.toggleFavorite(server);
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.speed_rounded, color: NX.cyan),

@@ -9,7 +9,15 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.core.content.FileProvider
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import java.io.File
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -20,6 +28,38 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
+
+    // Ключ AES-256 в Android Keystore: не покидает устройство и не извлекается.
+    private fun secretKey(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (ks.getKey("nexus_data", null) as? SecretKey)?.let { return it }
+        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        gen.init(
+            KeyGenParameterSpec.Builder(
+                "nexus_data",
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build()
+        )
+        return gen.generateKey()
+    }
+
+    private fun encrypt(plain: String): String {
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, secretKey())
+        val out = c.iv + c.doFinal(plain.toByteArray(Charsets.UTF_8))
+        return Base64.encodeToString(out, Base64.NO_WRAP)
+    }
+
+    private fun decrypt(data: String): String {
+        val raw = Base64.decode(data, Base64.NO_WRAP)
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, raw, 0, 12))
+        return String(c.doFinal(raw, 12, raw.size - 12), Charsets.UTF_8)
+    }
     private var pendingLink: String? = null
 
     private fun linkOf(intent: Intent?): String? {
@@ -39,6 +79,22 @@ class MainActivity : FlutterActivity() {
         channel!!
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "protect" -> {
+                        try {
+                            result.success(encrypt(call.arguments as String))
+                        } catch (e: Exception) {
+                            result.success(null)
+                        }
+                    }
+
+                    "unprotect" -> {
+                        try {
+                            result.success(decrypt(call.arguments as String))
+                        } catch (e: Exception) {
+                            result.success(null)
+                        }
+                    }
+
                     "initialLink" -> {
                         result.success(pendingLink)
                         pendingLink = null

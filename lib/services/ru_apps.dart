@@ -137,6 +137,30 @@ class RuAppsUpdater {
   /// Корректное имя пакета Android.
   static final _pkg = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){1,8}$');
 
+  /// Внешний список может только добавлять российские приложения.
+  /// Иначе подменённый список мог бы тихо вывести из VPN мессенджер или
+  /// браузер и раскрыть твой настоящий IP. Поэтому принимаем пакеты
+  /// только с российскими префиксами, а приватные приложения — никогда.
+  static const _ruPrefixes = [
+    'ru.', 'com.yandex.', 'com.vk.', 'com.vkontakte.', 'com.uma.',
+    'com.idamob.', 'com.avito.', 'com.wildberries.', 'com.kazanexpress.',
+    'com.octopod.', 'com.gnivts.', 'com.apteka.', 'com.lamoda.',
+    'tv.lfstrm.', 'io.itforces.', 'com.myhouse',
+  ];
+  static const _neverBypass = [
+    'org.telegram.', 'org.thunderdog.', 'com.whatsapp', 'org.thoughtcrime.',
+    'com.discord', 'com.google.', 'com.android.', 'org.mozilla.',
+    'com.brave.', 'com.opera.', 'com.microsoft.', 'com.facebook.',
+    'com.instagram.', 'com.twitter.', 'com.x.', 'com.zhiliaoapp.',
+    'com.ss.android.', 'com.snapchat.', 'com.reddit.', 'com.spotify.',
+    'org.torproject.', 'ch.protonmail.', 'com.signal',
+  ];
+
+  static bool _allowed(String p) =>
+      _pkg.hasMatch(p) &&
+      _ruPrefixes.any(p.startsWith) &&
+      !_neverBypass.any(p.startsWith);
+
   static List<String> _cached = const [];
 
   /// Пакеты из встроенного списка + подгруженные.
@@ -147,7 +171,7 @@ class RuAppsUpdater {
 
   static Future<void> load() async {
     final p = await SharedPreferences.getInstance();
-    _cached = p.getStringList(_key) ?? const [];
+    _cached = (p.getStringList(_key) ?? const []).where(_allowed).toList();
   }
 
   /// Обновляет список не чаще раза в сутки. Ошибки сети не мешают работе.
@@ -167,7 +191,7 @@ class RuAppsUpdater {
           .decode(res.bodyBytes, allowMalformed: true)
           .split(RegExp(r'[\s,]+'))
           .map((e) => e.trim())
-          .where(_pkg.hasMatch)
+          .where(_allowed)
           .toSet()
           .take(500)
           .toList();
