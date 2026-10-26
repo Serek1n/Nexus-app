@@ -110,6 +110,7 @@ String buildXrayConfig(
   }
 
   _patchHysteria2(cfg, server.link);
+  _patchShareParams(cfg, server.link);
 
   cfg['dns'] = {
     'servers': ['1.1.1.1', '8.8.8.8'],
@@ -252,6 +253,79 @@ void _patchHysteria2(Map<String, dynamic> cfg, String link) {
     so?.remove('tcpKeepAliveIdle');
     so?.remove('tcpKeepAliveInterval');
     if (so != null && so.isEmpty) ss.remove('sockopt');
+    ob['streamSettings'] = ss;
+  }
+}
+
+/// VLESS / Trojan / Shadowsocks: параметры ссылок 3x-ui, которые плагин
+/// пропускает. Без них часть серверов просто не отвечает:
+/// pqv (ML-DSA-65 у Reality), ech, cs (шифры TLS), fm (finalmask —
+/// фрагментация и шумы), доп. настройки XHTTP и authority у gRPC.
+void _patchShareParams(Map<String, dynamic> cfg, String link) {
+  final scheme = link.split('://').first.toLowerCase();
+  if (!const ['vless', 'trojan', 'ss'].contains(scheme)) return;
+  final qi = link.indexOf('?');
+  if (qi < 0) return;
+  var query = link.substring(qi + 1);
+  final hi = query.indexOf('#');
+  if (hi >= 0) query = query.substring(0, hi);
+  Map<String, String> q;
+  try {
+    q = Uri.splitQueryString(query);
+  } catch (_) {
+    return;
+  }
+  String? p(String k) {
+    final v = q[k]?.trim();
+    return v == null || v.isEmpty ? null : v;
+  }
+
+  for (final ob in (cfg['outbounds'] as List? ?? [])) {
+    if (ob is! Map<String, dynamic> || ob['tag'] != 'proxy') continue;
+    final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>();
+    if (ss == null) continue;
+
+    final tls = (ss['tlsSettings'] as Map?)?.cast<String, dynamic>();
+    if (tls != null) {
+      if (p('ech') != null) tls['echConfigList'] = p('ech');
+      if (p('cs') != null) tls['cipherSuites'] = p('cs');
+      ss['tlsSettings'] = tls;
+    }
+    final re = (ss['realitySettings'] as Map?)?.cast<String, dynamic>();
+    if (re != null) {
+      if (p('pqv') != null) re['mldsa65Verify'] = p('pqv');
+      if ((re['fingerprint'] as String?)?.isEmpty ?? true) {
+        re['fingerprint'] = 'chrome';
+      }
+      ss['realitySettings'] = re;
+    }
+    final fm = p('fm');
+    if (fm != null && ss['finalmask'] == null) {
+      try {
+        final parsed = jsonDecode(fm);
+        if (parsed is Map) ss['finalmask'] = parsed;
+      } catch (_) {}
+    }
+    if (ss['network'] == 'xhttp') {
+      final xh = (ss['xhttpSettings'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final xpb = p('x_padding_bytes') ?? p('xPaddingBytes');
+      if (xpb != null) xh['xPaddingBytes'] = xpb;
+      for (final k in const [
+        'scMaxEachPostBytes',
+        'scMinPostsIntervalMs',
+        'uplinkChunkSize'
+      ]) {
+        if (p(k) != null) xh[k] = p(k);
+      }
+      ss['xhttpSettings'] = xh;
+    }
+    if (ss['network'] == 'grpc' && p('authority') != null) {
+      final g = (ss['grpcSettings'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      g['authority'] = p('authority');
+      ss['grpcSettings'] = g;
+    }
     ob['streamSettings'] = ss;
   }
 }

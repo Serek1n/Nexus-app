@@ -108,6 +108,7 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       lastError = 'Ошибка инициализации ядра: $e';
     }
+    unawaited(refreshBattery());
     core.coreVersion().then((v) {
       coreVersion = v;
       notifyListeners();
@@ -377,44 +378,157 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  /// Каждые 45 с проверяем, что через туннель реально идёт трафик.
-  /// Два провала подряд — переподключение; если не помогло — следующий сервер.
+  /// Проверка канала: раз в 45 с запрос через туннель. Провал — повтор через
+  /// 10 с; второй провал — переподключение; если и после него трафика нет —
+  /// следующий сервер. Смена сети (Wi-Fi ↔ мобильный) — проверка сразу.
+  Timer? _netTimer;
+  String? _netSig;
+  DateTime _lastNetTick = DateTime.now();
+  Timer? _connectGuard;
+
+  /// Итог последней сессии («1 ч 12 мин · ↓ 1.2 ГБ · ↑ 80 МБ»).
+  String? lastSession;
+
+  /// Android: включена экономия батареи для Nexus — система может рвать VPN.
+  bool batteryRestricted = false;
+
+  Future<void> refreshBattery() async {
+    if (isDesktop) return;
+    final restricted = !(await AndroidSystem.isIgnoringBattery());
+    if (restricted != batteryRestricted) {
+      batteryRestricted = restricted;
+      notifyListeners();
+    }
+  }
+
+  /// Переподключений подряд без восстановления трафика (сбрасывается
+  /// только успешной проверкой, а не новым подключением).
+  int _deadReconnects = 0;
+
   void _startHealth() {
     _healthTimer?.cancel();
+    _netTimer?.cancel();
     _healthFails = 0;
     if (!settings.autoReconnect) return;
-    _healthTimer = Timer.periodic(const Duration(seconds: 45), (_) async {
-      final s = selected;
-      if (s == null || state != ConnState.connected || core.blocked) return;
-      final d = await core.connectedDelay(s);
+    _scheduleHealth(const Duration(seconds: 45));
+    _networkSignature().then((v) => _netSig = v);
+    _lastNetTick = DateTime.now();
+    _netTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (state != ConnState.connected) return;
-      if (d > 0) {
-        _healthFails = 0;
-        liveLatency = d;
-        if (reconnectNote != null) reconnectNote = null;
-        notifyListeners();
+      // Большой разрыв между тиками — компьютер/телефон спал: проверяем канал.
+      final now = DateTime.now();
+      final slept = now.difference(_lastNetTick).inSeconds > 20;
+      _lastNetTick = now;
+      if (slept) {
+        _scheduleHealth(const Duration(seconds: 3));
         return;
       }
-      _healthFails++;
-      if (_healthFails == 2) {
-        reconnectNote = 'Канал не отвечает — переподключаюсь…';
-        notifyListeners();
-        await reconnect();
-      } else if (_healthFails >= 4) {
-        _healthFails = 0;
-        await _failover(s);
-      }
+      final sig = await _networkSignature();
+      if (sig.isEmpty) return;
+      final changed = _netSig != null && _netSig!.isNotEmpty && sig != _netSig;
+      _netSig = sig;
+      if (changed) _scheduleHealth(const Duration(seconds: 2));
     });
   }
 
+  void _stopHealth() {
+    _healthTimer?.cancel();
+    _netTimer?.cancel();
+  }
+
+  void _scheduleHealth(Duration d) {
+    _healthTimer?.cancel();
+    _healthTimer = Timer(d, _healthCheck);
+  }
+
+  Future<void> _healthCheck() async {
+    final s = selected;
+    if (state != ConnState.connected) return;
+    if (s == null || core.blocked) {
+      _scheduleHealth(const Duration(seconds: 45));
+      return;
+    }
+    final d = await core.connectedDelay(s);
+    if (state != ConnState.connected) return;
+    if (d > 0) {
+      _healthFails = 0;
+      _deadReconnects = 0;
+      liveLatency = d;
+      if (reconnectNote != null) reconnectNote = null;
+      notifyListeners();
+      _scheduleHealth(const Duration(seconds: 45));
+      return;
+    }
+    // Нет ни одной сети — ждём её, сервер не виноват.
+    if ((await _networkSignature()).isEmpty) {
+      _scheduleHealth(const Duration(seconds: 10));
+      return;
+    }
+    _healthFails++;
+    if (_healthFails == 1) {
+      _scheduleHealth(const Duration(seconds: 10));
+      return;
+    }
+    _healthFails = 0;
+    if (_deadReconnects == 0 || !settings.autoFailover) {
+      _deadReconnects++;
+      reconnectNote = 'Канал не отвечает — переподключаюсь…';
+      notifyListeners();
+      await reconnect();
+    } else {
+      _deadReconnects = 0;
+      await _failover(s);
+    }
+  }
+
+  /// «Отпечаток» сетей устройства: меняется при переключении Wi-Fi/мобильной
+  /// сети. Учитываем только IPv4 и пропускаем туннели (свой VPN и чужие).
+  Future<String> _networkSignature() async {
+    try {
+      final list = await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLoopback: false);
+      final parts = <String>[];
+      for (final i in list) {
+        final n = i.name.toLowerCase();
+        if (n.startsWith('tun') ||
+            n.startsWith('ppp') ||
+            n.contains('wintun') ||
+            n.contains('wireguard') ||
+            n.contains('vpn')) {
+          continue;
+        }
+        for (final a in i.addresses) {
+          if (!a.isLinkLocal) parts.add('${i.name}=${a.address}');
+        }
+      }
+      parts.sort();
+      return parts.join(',');
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
   void _onCoreState(ConnState s) {
+    if (s != ConnState.connecting) _connectGuard?.cancel();
+    if (s == ConnState.connected) unawaited(refreshBattery());
+    if (s == ConnState.disconnected && connectedAt != null) {
+      final d = DateTime.now().difference(connectedAt!);
+      final st = statsNotifier.value;
+      if (d.inSeconds >= 10) {
+        lastSession = [
+          _fmtDuration(d),
+          if (st.download > 0) '↓ ${_fmtBytes(st.download)}',
+          if (st.upload > 0) '↑ ${_fmtBytes(st.upload)}',
+        ].join(' · ');
+      }
+    }
     if (s == ConnState.connected && state != ConnState.connected) {
       _retry = 0;
       reconnectNote = null;
       _startHealth();
     }
     if (s == ConnState.disconnected) {
-      _healthTimer?.cancel();
+      _stopHealth();
       if (_wantConnected && state != ConnState.disconnecting) {
         // Обрыв не по команде пользователя.
         Future.delayed(const Duration(seconds: 2), () {
@@ -474,8 +588,18 @@ class AppState extends ChangeNotifier {
       return;
     }
     lastError = null;
+    lastSession = null;
     state = ConnState.connecting;
     notifyListeners();
+    // Подключение «зависло» (нет ответа от ядра или системы) — не ждём вечно.
+    _connectGuard?.cancel();
+    _connectGuard = Timer(const Duration(seconds: 30), () {
+      if (state != ConnState.connecting) return;
+      if (!settings.autoReconnect) {
+        lastError = 'Не удалось подключиться за 30 секунд';
+      }
+      unawaited(core.disconnect());
+    });
     try {
       await core.connect(
         remark: s.cleanName,
@@ -495,8 +619,10 @@ class AppState extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _wantConnected = false;
+    _connectGuard?.cancel();
     _retryTimer?.cancel();
-    _healthTimer?.cancel();
+    _stopHealth();
+    _deadReconnects = 0;
     reconnectNote = null;
     state = ConnState.disconnecting;
     notifyListeners();
@@ -727,6 +853,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  static String _fmtDuration(Duration d) {
+    if (d.inHours > 0) return '${d.inHours} ч ${d.inMinutes % 60} мин';
+    if (d.inMinutes > 0) return '${d.inMinutes} мин';
+    return '${d.inSeconds} с';
+  }
+
+  static String _fmtBytes(int b) {
+    const u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    var v = b.toDouble();
+    var i = 0;
+    while (v >= 1024 && i < u.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return '${v < 10 && i > 0 ? v.toStringAsFixed(1) : v.round()} ${u[i]}';
+  }
+
   String _msg(Object e) {
     final s = e.toString();
     return s.startsWith('Exception: ') ? s.substring(11) : s;
@@ -739,7 +882,8 @@ class AppState extends ChangeNotifier {
     _subTimer?.cancel();
     _updTimer?.cancel();
     _retryTimer?.cancel();
-    _healthTimer?.cancel();
+    _connectGuard?.cancel();
+    _stopHealth();
     core.dispose();
     super.dispose();
   }

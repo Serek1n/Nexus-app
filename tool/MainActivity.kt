@@ -8,6 +8,9 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import androidx.core.content.FileProvider
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -231,6 +234,24 @@ class MainActivity : FlutterActivity() {
                             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                         }
                         result.success(null)
+                    }
+
+                    "scanQr" -> {
+                        // Окно сканера рисуют сервисы Google; приложению камера не нужна.
+                        try {
+                            val options = GmsBarcodeScannerOptions.Builder()
+                                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                                .enableAutoZoom()
+                                .build()
+                            GmsBarcodeScanning.getClient(this, options).startScan()
+                                .addOnSuccessListener { result.success(it.rawValue ?: "") }
+                                .addOnCanceledListener { result.success(null) }
+                                .addOnFailureListener {
+                                    result.error("scan", it.message ?: "Сканер недоступен", null)
+                                }
+                        } catch (e: Exception) {
+                            result.error("scan", e.message ?: "Сканер недоступен", null)
+                        }
                     }
 
                     else -> result.notImplemented()

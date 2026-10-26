@@ -130,6 +130,12 @@ def main():
     # Адаптивная иконка Android
     gradient(1024, VIOLET, INDIGO).save(OUT / 'app_icon_background.png')
     foreground().save(OUT / 'app_icon_foreground.png')
+    # Иконка exe и панели задач Windows: каждый размер рисуется отдельно,
+    # чтобы на 16–32 px буква оставалась чёткой.
+    app_sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]
+    ims = [tile(s, pad=0.04 if s <= 32 else 0.06) for s in app_sizes]
+    ims[-1].save(OUT / 'app_icon.ico', sizes=[(s, s) for s in app_sizes],
+                 append_images=ims[:-1])
     # Трей
     sizes = [16, 20, 24, 32, 48, 64, 256]
     for on, name in ((True, 'tray_on.ico'), (False, 'tray_off.ico')):

@@ -63,7 +63,10 @@ def android():
          r'            <meta-data\n'
          r'                android:name="android.support.FILE_PROVIDER_PATHS"\n'
          r'                android:resource="@xml/nexus_files" />\n'
-         r'        </provider>\1</application>'),
+         r'        </provider>'
+         r'\1    <meta-data\n'
+         r'            android:name="com.google.mlkit.vision.DEPENDENCIES"\n'
+         r'            android:value="barcode_ui" />\1</application>'),
         # Видеть установленные приложения (для списка «Приложения без VPN»).
         (re.compile(r"<queries>"),
          '<queries>\n        <intent>\n'
@@ -113,7 +116,7 @@ if (keystorePropertiesFile.exists()) {
 
 """),
         (re.compile(r"\nflutter \{"),
-         '\ndependencies {\n    implementation("androidx.core:core-ktx:1.13.1")\n}\n\nflutter {'),
+         '\ndependencies {\n    implementation("androidx.core:core-ktx:1.13.1")\n    // Сканер QR из сервисов Google: своё окно камеры, без разрешения на камеру.\n    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")\n}\n\nflutter {'),
         (re.compile(r'signingConfig = signingConfigs\.getByName\("debug"\)'),
          'signingConfig = if (keystorePropertiesFile.exists()) '
          'signingConfigs.getByName("release") else signingConfigs.getByName("debug")\n'

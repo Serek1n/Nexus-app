@@ -69,6 +69,19 @@ class AndroidSystem {
   /// Системные настройки VPN: «Постоянная VPN» и «Блокировать без VPN».
   static Future<void> openVpnSettings() => _call('openVpnSettings');
 
+  /// Сканирует QR-код камерой (окно сервисов Google). null — отменено.
+  /// Бросает исключение с понятным текстом, если сканер недоступен.
+  static Future<String?> scanQr() async {
+    try {
+      return await _ch.invokeMethod<String>('scanQr');
+    } on PlatformException catch (e) {
+      throw Exception(
+          'Сканер QR недоступен: ${e.message ?? 'нет сервисов Google Play'}');
+    } on MissingPluginException {
+      throw Exception('Сканер QR недоступен на этом устройстве');
+    }
+  }
+
   /// Запрет снимков экрана и показа содержимого в списке недавних приложений.
   static Future<void> setSecureScreen(bool on) => _call('setSecureScreen', on);
 }

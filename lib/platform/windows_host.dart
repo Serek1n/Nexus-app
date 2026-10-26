@@ -22,6 +22,7 @@ class WindowsHost with TrayListener, WindowListener {
 
   ConnState? _trayState;
   String? _trayServer;
+  String? _traySig;
   bool _quitting = false;
 
   /// Гарантирует один запущенный экземпляр. Если Nexus уже открыт —
@@ -32,6 +33,8 @@ class WindowsHost with TrayListener, WindowListener {
           await ServerSocket.bind(InternetAddress.loopbackIPv4, _instancePort);
       _instanceServer!.listen((client) {
         client.listen((data) {
+          // Только короткие команды от второй копии Nexus.
+          if (data.length > 8192) return client.destroy();
           final msg = utf8.decode(data, allowMalformed: true).trim();
           if (msg == 'nexus:show') {
             _showRequests.add(null);
@@ -99,9 +102,16 @@ class WindowsHost with TrayListener, WindowListener {
   Future<void> _updateTray({bool force = false}) async {
     final st = app.state;
     final server = app.selected?.cleanName;
-    if (!force && st == _trayState && server == _trayServer) return;
+    // Меню зависит и от списка серверов, и от режима — следим за всем сразу.
+    final sig = '${app.selectedId}|${app.servers.length}|'
+        '${app.servers.take(15).map((e) => e.id).join(',')}|'
+        '${app.settings.routing.name}';
+    if (!force && st == _trayState && server == _trayServer && sig == _traySig) {
+      return;
+    }
     _trayState = st;
     _trayServer = server;
+    _traySig = sig;
 
     final on = st == ConnState.connected;
     try {
@@ -124,6 +134,25 @@ class WindowsHost with TrayListener, WindowListener {
           label: on || st == ConnState.connecting ? 'Отключить' : 'Подключить',
           disabled: app.selected == null || st == ConnState.disconnecting,
         ),
+        if (app.servers.length > 1)
+          MenuItem.submenu(
+            label: 'Сервер',
+            submenu: Menu(items: [
+              for (final x in app.servers.take(15))
+                MenuItem.checkbox(
+                  key: 'srv:${x.id}',
+                  label: x.cleanName.length > 40
+                      ? '${x.cleanName.substring(0, 39)}…'
+                      : x.cleanName,
+                  checked: x.id == app.selectedId,
+                ),
+            ]),
+          ),
+        MenuItem.checkbox(
+          key: 'smart',
+          label: 'Умный режим (РФ напрямую)',
+          checked: app.settings.routing == RoutingMode.smart,
+        ),
         MenuItem.separator(),
         MenuItem(key: 'quit', label: 'Выход'),
       ]));
@@ -145,6 +174,14 @@ class WindowsHost with TrayListener, WindowListener {
         app.toggle();
       case 'quit':
         quit();
+      case 'smart':
+        app.updateSettings((s) => s.routing =
+            s.routing == RoutingMode.smart ? RoutingMode.global : RoutingMode.smart);
+        app.reconnectIfActive();
+      case final k? when k.startsWith('srv:'):
+        final id = k.substring(4);
+        final x = app.servers.where((e) => e.id == id).firstOrNull;
+        if (x != null) app.select(x);
     }
   }
 

@@ -83,7 +83,7 @@ class WindowsCore extends VpnCore {
     await _killStrayCore();
     final marker = File('$_dataDir\\proxy.lock');
     if (marker.existsSync()) {
-      WinProxy.disable();
+      WinProxy.restore(_readSaved(marker));
       marker.deleteSync();
     }
   }
@@ -188,9 +188,15 @@ class WindowsCore extends VpnCore {
     }
 
     if (settings.windowsSystemProxy) {
+      // Запоминаем прокси, который был у пользователя до Nexus, —
+      // при отключении (и после сбоя) вернём именно его.
+      final marker = File('$_dataDir\\proxy.lock');
+      if (!marker.existsSync()) {
+        _savedProxy = WinProxy.snapshot();
+        marker.writeAsStringSync(jsonEncode(_savedProxy));
+      }
       WinProxy.enable('127.0.0.1:$kHttpPort');
       _proxySet = true;
-      File('$_dataDir\\proxy.lock').writeAsStringSync('1');
     }
 
     _lastUp = 0;
@@ -358,9 +364,10 @@ class WindowsCore extends VpnCore {
       _lastSettings = null;
     }
     if (_proxySet) {
-      WinProxy.disable();
-      _proxySet = false;
       final marker = File('$_dataDir\\proxy.lock');
+      WinProxy.restore(_savedProxy ?? _readSaved(marker));
+      _savedProxy = null;
+      _proxySet = false;
       if (marker.existsSync()) marker.deleteSync();
     }
     await _stopProcess();
@@ -380,6 +387,10 @@ class WindowsCore extends VpnCore {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
       final port = await _freePort();
+      final rnd = math.Random.secure();
+      String token() =>
+          List.generate(16, (_) => rnd.nextInt(36).toRadixString(36)).join();
+      final user = token(), pass = token();
       final cfg = jsonDecode(config) as Map<String, dynamic>;
       cfg['log'] = {'loglevel': 'warning'};
       cfg['inbounds'] = [
@@ -388,7 +399,12 @@ class WindowsCore extends VpnCore {
           'listen': '127.0.0.1',
           'port': port,
           'protocol': 'http',
-          'settings': <String, dynamic>{},
+          // Пароль, чтобы другие программы не воспользовались проверочным прокси.
+          'settings': {
+            'accounts': [
+              {'user': user, 'pass': pass}
+            ],
+          },
         }
       ];
       // Весь трафик проверки — только через сервер.
@@ -406,7 +422,7 @@ class WindowsCore extends VpnCore {
       // Вывод ядра проверки сохраняем: при неудаче причина попадёт в журнал.
       final out = <String>[];
       void collect(Stream<List<int>> st) => st
-          .transform(utf8.decoder)
+          .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen((l) {
             if (out.length < 40) out.add(l);
@@ -427,7 +443,7 @@ class WindowsCore extends VpnCore {
         return -1;
       }
 
-      client.findProxy = (_) => 'PROXY 127.0.0.1:$port';
+      client.findProxy = (_) => 'PROXY $user:$pass@127.0.0.1:$port';
       Future<int> once() async {
         final sw = Stopwatch()..start();
         final req = await client
@@ -661,6 +677,17 @@ class WindowsCore extends VpnCore {
     }
   }
 
+  Map<String, dynamic>? _savedProxy;
+
+  Map<String, dynamic>? _readSaved(File marker) {
+    try {
+      final j = jsonDecode(marker.readAsStringSync());
+      return j is Map<String, dynamic> ? j : null;
+    } catch (_) {
+      return null; // старый формат файла («1») — просто выключаем прокси
+    }
+  }
+
   @override
   Future<void> dispose() => disconnect();
 }
@@ -721,11 +748,91 @@ class WinProxy {
     _inetSet(nullptr, 37, nullptr, 0);
   }
 
+  static final _regGet = _advapi.lookupFunction<
+      Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>, Uint32,
+          Pointer<Uint32>, Pointer<Void>, Pointer<Uint32>),
+      int Function(int, Pointer<Utf16>, Pointer<Utf16>, int, Pointer<Uint32>,
+          Pointer<Void>, Pointer<Uint32>)>('RegGetValueW');
+
+  static int? _getDword(String name) {
+    final sub = _path.toNativeUtf16();
+    final n = name.toNativeUtf16();
+    final data = calloc<Uint32>();
+    final size = calloc<Uint32>()..value = 4;
+    try {
+      // RRF_RT_REG_DWORD = 0x10
+      final r = _regGet(_hkcu, sub, n, 0x10, nullptr, data.cast(), size);
+      return r == 0 ? data.value : null;
+    } finally {
+      calloc.free(sub);
+      calloc.free(n);
+      calloc.free(data);
+      calloc.free(size);
+    }
+  }
+
+  static String? _getString(String name) {
+    final sub = _path.toNativeUtf16();
+    final n = name.toNativeUtf16();
+    const cap = 8192;
+    final data = calloc<Uint16>(cap ~/ 2);
+    final size = calloc<Uint32>()..value = cap;
+    try {
+      // RRF_RT_REG_SZ = 0x2
+      final r = _regGet(_hkcu, sub, n, 0x2, nullptr, data.cast(), size);
+      return r == 0 ? data.cast<Utf16>().toDartString() : null;
+    } finally {
+      calloc.free(sub);
+      calloc.free(n);
+      calloc.free(data);
+      calloc.free(size);
+    }
+  }
+
+  /// Текущие настройки прокси пользователя.
+  static Map<String, dynamic> snapshot() {
+    try {
+      return {
+        'enable': _getDword('ProxyEnable') ?? 0,
+        'server': _getString('ProxyServer'),
+        'override': _getString('ProxyOverride'),
+      };
+    } catch (_) {
+      return {'enable': 0};
+    }
+  }
+
+  /// Возвращает прокси пользователя; без сохранённых данных — просто выключает.
+  static void restore(Map<String, dynamic>? saved) {
+    if (saved == null) return disable();
+    try {
+      final server = saved['server'];
+      final ovr = saved['override'];
+      // Не восстанавливаем собственный адрес Nexus (остался после сбоя).
+      final ours = server is String && server.startsWith('127.0.0.1:$kHttpPort');
+      if (server is String && !ours) _setString('ProxyServer', server);
+      if (ovr is String) _setString('ProxyOverride', ovr);
+      _setDword('ProxyEnable', saved['enable'] == 1 && !ours ? 1 : 0);
+      _notify();
+    } catch (_) {
+      disable();
+    }
+  }
+
   static void enable(String server) {
     try {
       _setString('ProxyServer', server);
-      _setString('ProxyOverride',
-          'localhost;127.*;10.*;172.16.*;192.168.*;*.local;<local>');
+      _setString(
+          'ProxyOverride',
+          [
+            'localhost',
+            '127.*',
+            '10.*',
+            for (var i = 16; i <= 31; i++) '172.$i.*',
+            '192.168.*',
+            '*.local',
+            '<local>',
+          ].join(';'));
       _setDword('ProxyEnable', 1);
       _notify();
     } catch (_) {}

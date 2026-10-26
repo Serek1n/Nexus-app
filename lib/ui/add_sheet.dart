@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../platform/android_system.dart';
 import 'app_scope.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -65,6 +68,24 @@ class _AddFormState extends State<_AddForm> {
     }
     _ctrl.text = t;
     await _submit();
+  }
+
+  Future<void> _scan() async {
+    setState(() => _error = null);
+    try {
+      final code = (await AndroidSystem.scanQr())?.trim();
+      if (code == null) return; // пользователь закрыл сканер
+      if (code.isEmpty) {
+        setState(() => _error = 'В QR-коде нет текста');
+        return;
+      }
+      _ctrl.text = code;
+      await _submit();
+    } catch (e) {
+      final s = e.toString();
+      setState(() =>
+          _error = s.startsWith('Exception: ') ? s.substring(11) : s);
+    }
   }
 
   Future<void> _submit() async {
@@ -152,6 +173,35 @@ class _AddFormState extends State<_AddForm> {
               ],
             ),
           ),
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: 10),
+            NeonCard(
+              onTap: _loading ? null : _scan,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: const Row(
+                children: [
+                  Icon(Icons.qr_code_scanner_rounded, color: NX.violet),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Сканировать QR-код',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 15)),
+                        SizedBox(height: 2),
+                        Text('Наведите камеру на QR подписки или ключа',
+                            style:
+                                TextStyle(color: NX.text2, fontSize: 12.5)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: NX.text3),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           const Row(children: [
             Expanded(child: Divider()),

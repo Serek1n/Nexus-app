@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -129,7 +128,7 @@ class NexusLogo extends StatelessWidget {
       );
 }
 
-/// Задержка: цветная точка и число.
+/// Задержка: индикатор-«антенна» (3 деления) и число.
 class PingBadge extends StatelessWidget {
   const PingBadge({super.key, required this.ping, this.loading = false});
   final int? ping;
@@ -144,21 +143,39 @@ class PingBadge extends StatelessWidget {
         child: CircularProgressIndicator(strokeWidth: 1.6, color: NX.text3),
       );
     }
-    final c = NX.pingColor(ping);
-    final txt = ping == null ? '— мс' : (ping! < 0 ? 'нет связи' : '$ping мс');
+    final p = ping;
+    final c = NX.pingColor(p);
+    final bars = p == null || p < 0
+        ? 0
+        : p < 150
+            ? 3
+            : p < 400
+                ? 2
+                : 1;
+    final txt = p == null ? '— мс' : (p < 0 ? 'нет связи' : '$p мс');
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
+        for (var i = 0; i < 3; i++) ...[
+          Container(
+            width: 3,
+            height: 4.0 + i * 3,
+            decoration: BoxDecoration(
+              color: i < bars ? c : NX.text3.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          if (i < 2) const SizedBox(width: 1.5),
+        ],
+        const SizedBox(width: 7),
         Text(txt,
             style: TextStyle(
-                color: ping == null ? NX.text3 : NX.text2,
+                color: p == null
+                    ? NX.text3
+                    : (p < 0 ? NX.red : NX.text2),
                 fontSize: 12.5,
+                height: 1,
                 fontWeight: FontWeight.w600,
                 fontFeatures: const [FontFeature.tabularFigures()])),
       ],
@@ -166,7 +183,8 @@ class PingBadge extends StatelessWidget {
   }
 }
 
-/// Аватар сервера: флаг или первая буква.
+/// Аватар сервера: флаг страны (картинкой — одинаково на Android и Windows,
+/// где нет цветных флагов-эмодзи) или первая буква названия.
 class ServerAvatar extends StatelessWidget {
   const ServerAvatar({super.key, required this.server, this.size = 40});
   final ServerProfile server;
@@ -174,34 +192,63 @@ class ServerAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var flag = server.flag;
-    // В Windows нет цветных флагов-эмодзи: показываем код страны («FI») аккуратным текстом.
-    String? code;
-    if (flag != null && Platform.isWindows) {
-      code = String.fromCharCodes(flag.runes.map((r) => r - 0x1F1E6 + 65));
-      flag = null;
+    final flag = server.flag;
+    final code = flag == null
+        ? null
+        : String.fromCharCodes(flag.runes.map((r) => r - 0x1F1E6 + 97));
+    final radius = BorderRadius.circular(size * 0.3);
+
+    Widget letters(String text, Color color) => Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            color: code != null ? color.withValues(alpha: 0.16) : NX.surface2,
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: code != null ? size * 0.32 : size * 0.4,
+              letterSpacing: code != null ? 0.5 : 0,
+              color: color,
+            ),
+          ),
+        );
+
+    if (code == null) {
+      return letters(server.cleanName.characters.first.toUpperCase(), NX.text2);
     }
     return Container(
       width: size,
       height: size,
-      alignment: Alignment.center,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.3),
-        color: NX.surface2,
+        borderRadius: radius,
+        border: Border.all(color: NX.strokeStrong),
       ),
-      child: flag != null
-          ? Text(flag, style: TextStyle(fontSize: size * 0.5))
-          : Text(
-              code ?? server.cleanName.characters.first.toUpperCase(),
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: code != null ? size * 0.32 : size * 0.4,
-                letterSpacing: code != null ? 0.5 : 0,
-                color: NX.text2,
-              ),
-            ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Image.asset(
+          'assets/flags/$code.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          // Нет картинки для этого кода — показываем буквы.
+          errorBuilder: (_, __, ___) =>
+              letters(code.toUpperCase(), _tint(code.toUpperCase())),
+        ),
+      ),
     );
   }
+}
+
+/// Устойчивый цвет для кода страны — каждая страна своим оттенком палитры.
+Color _tint(String code) {
+  const palette = [NX.violet, NX.cyan, NX.mint, NX.amber, NX.pink, NX.indigo];
+  final h = code.codeUnits.fold<int>(0, (a, c) => (a * 31 + c) & 0x7fffffff);
+  return palette[h % palette.length];
 }
 
 /// Небольшая метка (протокол, статус).

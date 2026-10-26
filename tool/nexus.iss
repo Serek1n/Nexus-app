@@ -27,6 +27,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
+; Обновить кэш значков — иначе Windows показывает старую иконку
+ChangesAssociations=yes
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -42,6 +44,7 @@ Name: "{group}\Nexus"; Filename: "{app}\nexus.exe"
 Name: "{autodesktop}\Nexus"; Filename: "{app}\nexus.exe"; Tasks: desktopicon
 
 [Run]
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden skipifdoesntexist
 Filename: "{app}\nexus.exe"; Description: "Запустить Nexus"; Flags: nowait postinstall skipifsilent
 ; После тихого автообновления — запустить снова
 Filename: "{app}\nexus.exe"; Flags: nowait; Check: WizardSilent

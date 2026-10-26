@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../changelog.dart';
 import '../../models.dart';
+import '../../platform/android_system.dart';
 import '../add_sheet.dart';
 import '../app_scope.dart';
 import '../connect_button.dart';
@@ -55,6 +56,22 @@ class HomeScreen extends StatelessWidget {
         ],
         if (app.reconnectNote != null) ...[
           _Notice(text: app.reconnectNote!, icon: Icons.autorenew_rounded),
+          const SizedBox(height: 10),
+        ],
+        if (!app.isDesktop &&
+            app.batteryRestricted &&
+            app.settings.autoReconnect &&
+            app.state == ConnState.connected) ...[
+          _Notice(
+            text: 'Android может отключать VPN в фоне. '
+                'Нажмите, чтобы разрешить Nexus работать без ограничений',
+            icon: Icons.battery_alert_rounded,
+            onTap: () async {
+              await AndroidSystem.requestIgnoreBattery();
+              await Future.delayed(const Duration(seconds: 2));
+              await app.refreshBattery();
+            },
+          ),
           const SizedBox(height: 10),
         ],
         if (app.failoverNote != null) ...[
@@ -361,12 +378,16 @@ class _UpdateCard extends StatelessWidget {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.text, this.icon = Icons.schedule_rounded});
+  const _Notice(
+      {required this.text, this.icon = Icons.schedule_rounded, this.onTap});
   final String text;
   final IconData icon;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: NX.amber.withValues(alpha: 0.08),
@@ -381,8 +402,12 @@ class _Notice extends StatelessWidget {
               child: Text(text,
                   style: const TextStyle(color: NX.text, fontSize: 13)),
             ),
+            if (onTap != null)
+              const Icon(Icons.chevron_right_rounded,
+                  color: NX.text3, size: 18),
           ],
         ),
+      ),
       );
 }
 
@@ -510,15 +535,26 @@ class _TimerLineState extends State<_TimerLine> {
         ],
       );
     }
+    final last = AppScope.of(context).lastSession;
+    final idle = widget.state == ConnState.disconnected;
     return SizedBox(
-      height: 38,
-      child: Center(
-        child: Text(
-          widget.state == ConnState.disconnected
-              ? 'Нажмите, чтобы подключиться'
-              : '',
-          style: const TextStyle(color: NX.text3, fontSize: 13.5),
-        ),
+      height: idle && last != null ? 46 : 38,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            idle ? 'Нажмите, чтобы подключиться' : '',
+            style: const TextStyle(color: NX.text3, fontSize: 13.5),
+          ),
+          if (idle && last != null) ...[
+            const SizedBox(height: 3),
+            Text('Прошлая сессия: $last',
+                style: const TextStyle(
+                    color: NX.text3,
+                    fontSize: 11.5,
+                    fontFeatures: [FontFeature.tabularFigures()])),
+          ],
+        ],
       ),
     );
   }
@@ -599,7 +635,11 @@ class _ServerRow extends StatelessWidget {
                   Text(s.protocol,
                       style: const TextStyle(color: NX.text3, fontSize: 12.5)),
                   const SizedBox(width: 10),
-                  PingBadge(ping: s.ping),
+                  PingBadge(
+                      ping: app.state == ConnState.connected &&
+                              app.liveLatency != null
+                          ? app.liveLatency
+                          : s.ping),
                 ]),
               ],
             ),

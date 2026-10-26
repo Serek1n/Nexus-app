@@ -97,6 +97,16 @@ class FetchResult {
   final Subscription meta;
 }
 
+bool _isLoopback(String host) {
+  final h = host.toLowerCase().replaceAll('[', '').replaceAll(']', '');
+  return h == 'localhost' ||
+      h.endsWith('.localhost') ||
+      h.startsWith('127.') ||
+      h == '0.0.0.0' ||
+      h == '::1' ||
+      h == '::';
+}
+
 class SubscriptionService {
   static const userAgent = 'v2rayNG/1.10.0 Nexus/1.0';
 
@@ -108,26 +118,45 @@ class SubscriptionService {
     return v.trim();
   }
 
+  /// Только http(s)-ссылки разумной длины.
+  static String? _safeUrl(String? v) {
+    if (v == null || v.length > 500) return null;
+    final u = Uri.tryParse(v);
+    return u != null && (u.scheme == 'https' || u.scheme == 'http') ? v : null;
+  }
+
   /// Загружает подписку и обновляет [sub] (трафик, срок, название).
   static Future<FetchResult> fetch(Subscription sub) async {
     final uri = Uri.tryParse(sub.url);
     if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
       throw Exception('Ссылка подписки должна начинаться с https://');
     }
-    final res = await http.get(uri, headers: {
-      'User-Agent': userAgent,
-      'Accept': '*/*',
-    }).timeout(const Duration(seconds: 20));
-
-    if (res.statusCode != 200) {
-      throw Exception('Сервер ответил кодом ${res.statusCode}');
+    // Читаем потоком и обрываем на 8 МБ: «бесконечный» ответ сервера
+    // не должен съесть память устройства.
+    const limit = 8 * 1024 * 1024;
+    final client = http.Client();
+    late final http.StreamedResponse res;
+    final bytes = <int>[];
+    try {
+      final req = http.Request('GET', uri)
+        ..headers['User-Agent'] = userAgent
+        ..headers['Accept'] = '*/*'
+        ..maxRedirects = 5;
+      res = await client.send(req).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) {
+        throw Exception('Сервер ответил кодом ${res.statusCode}');
+      }
+      await for (final chunk
+          in res.stream.timeout(const Duration(seconds: 30))) {
+        bytes.addAll(chunk);
+        if (bytes.length > limit) {
+          throw Exception('Подписка слишком большая (больше 8 МБ)');
+        }
+      }
+    } finally {
+      client.close();
     }
-
-    // Защита от слишком больших ответов.
-    if (res.bodyBytes.length > 8 * 1024 * 1024) {
-      throw Exception('Подписка слишком большая (больше 8 МБ)');
-    }
-    final body = utf8.decode(res.bodyBytes, allowMalformed: true);
+    final body = utf8.decode(bytes, allowMalformed: true);
     final links = extractLinks(body);
     if (links.isEmpty) {
       throw Exception('В подписке не найдено ни одного сервера');
@@ -136,7 +165,9 @@ class SubscriptionService {
     final servers = <ServerProfile>[];
     for (final l in links.take(1000)) {
       final p = profileFromLink(l, subscriptionId: sub.id);
-      if (p != null) servers.add(p);
+      // Сервер из подписки не может указывать на сам компьютер/телефон:
+      // так чужая подписка могла бы стучаться в локальные службы устройства.
+      if (p != null && !_isLoopback(p.host)) servers.add(p);
     }
     if (servers.isEmpty) {
       throw Exception('Не удалось разобрать ссылки из подписки');
@@ -163,11 +194,15 @@ class SubscriptionService {
       }
     }
 
-    final title = _decodeHeader(res.headers['profile-title']);
+    // Тексты из заголовков сервера ограничиваем по длине.
+    String? cap(String? v, int n) =>
+        v == null ? null : (v.length > n ? '${v.substring(0, n)}…' : v);
+    final title = cap(_decodeHeader(res.headers['profile-title']), 60);
     if (title != null && title.isNotEmpty) sub.title = title;
-    sub.supportUrl = _decodeHeader(res.headers['support-url']);
-    sub.webPageUrl = _decodeHeader(res.headers['profile-web-page-url']);
-    sub.announce = _decodeHeader(res.headers['announce']);
+    sub.supportUrl = _safeUrl(_decodeHeader(res.headers['support-url']));
+    sub.webPageUrl =
+        _safeUrl(_decodeHeader(res.headers['profile-web-page-url']));
+    sub.announce = cap(_decodeHeader(res.headers['announce']), 500);
     sub.updatedAt = DateTime.now();
 
     return FetchResult(servers, sub);

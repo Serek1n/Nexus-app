@@ -293,6 +293,7 @@ chcp 65001 >nul
 :wait
 tasklist /FI "PID eq $pid" | find "$pid" >nul && (timeout /t 1 /nobreak >nul & goto wait)
 robocopy "${q(stage.path)}" "${q(appDir)}" /E /R:5 /W:1 /NFL /NDL /NJH /NJS >nul
+ie4uinit.exe -show >nul 2>&1
 start "" "$exe"
 ''');
     await Process.start('cmd', ['/c', script.path],
