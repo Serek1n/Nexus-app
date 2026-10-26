@@ -259,7 +259,7 @@ void _patchHysteria2(Map<String, dynamic> cfg, String link) {
 
 /// VLESS / Trojan / Shadowsocks: параметры ссылок 3x-ui, которые плагин
 /// пропускает. Без них часть серверов просто не отвечает:
-/// pqv (ML-DSA-65 у Reality), ech, cs (шифры TLS), fm (finalmask —
+/// ech, cs (шифры TLS), fm (finalmask —
 /// фрагментация и шумы), доп. настройки XHTTP и authority у gRPC.
 void _patchShareParams(Map<String, dynamic> cfg, String link) {
   final scheme = link.split('://').first.toLowerCase();
@@ -293,7 +293,10 @@ void _patchShareParams(Map<String, dynamic> cfg, String link) {
     }
     final re = (ss['realitySettings'] as Map?)?.cast<String, dynamic>();
     if (re != null) {
-      if (p('pqv') != null) re['mldsa65Verify'] = p('pqv');
+      // pqv (ML-DSA-65) намеренно не применяем: если сервер не подписывает
+      // сертификат (ключ в панели сгенерирован, но не включён или сменился),
+      // Xray отвергает соединение целиком. Обычная проверка Reality остаётся.
+      re.remove('mldsa65Verify');
       if ((re['fingerprint'] as String?)?.isEmpty ?? true) {
         re['fingerprint'] = 'chrome';
       }
