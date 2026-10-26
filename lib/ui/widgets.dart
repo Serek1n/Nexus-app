@@ -192,10 +192,7 @@ class ServerAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final flag = server.flag;
-    final code = flag == null
-        ? null
-        : String.fromCharCodes(flag.runes.map((r) => r - 0x1F1E6 + 97));
+    final code = server.countryCode;
     final radius = BorderRadius.circular(size * 0.3);
 
     Widget letters(String text, Color color) => Container(
@@ -218,6 +215,18 @@ class ServerAvatar extends StatelessWidget {
         );
 
     if (code == null) {
+      // Название — просто номер («0863»): буква «0» ничего не говорит,
+      // показываем значок сервера.
+      if (server.nameIsBare) {
+        return Container(
+          width: size,
+          height: size,
+          decoration:
+              BoxDecoration(borderRadius: radius, color: NX.surface2),
+          child: Icon(Icons.public_rounded,
+              size: size * 0.5, color: NX.text3),
+        );
+      }
       return letters(server.cleanName.characters.first.toUpperCase(), NX.text2);
     }
     return Container(

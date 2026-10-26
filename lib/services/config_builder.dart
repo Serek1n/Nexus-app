@@ -9,6 +9,11 @@ import '../models.dart';
 const kSocksPort = 10808;
 const kHttpPort = 10809;
 
+/// Порты, на которых ядро Windows реально слушает сейчас
+/// (если 10808/10809 заняты другой программой — запасные).
+int activeSocksPort = kSocksPort;
+int activeHttpPort = kHttpPort;
+
 const _privateNets = [
   '10.0.0.0/8',
   '172.16.0.0/12',
@@ -34,7 +39,9 @@ String buildXrayConfig(
   final cfg =
       jsonDecode(parsed.getFullConfiguration()) as Map<String, dynamic>;
 
-  cfg['log'] = {'loglevel': 'warning'};
+  // Журнал посещённых сайтов (access log) не ведём: в «Журнале» Nexus
+  // остаются только ошибки и предупреждения ядра.
+  cfg['log'] = {'loglevel': 'warning', 'access': 'none'};
 
   if (desktop) {
     cfg['inbounds'] = [

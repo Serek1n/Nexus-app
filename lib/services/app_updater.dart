@@ -16,6 +16,24 @@ const kAppBuild = int.fromEnvironment('APP_BUILD');
 /// Если сборка сделана с ключом — обновления без верной подписи не ставятся.
 const kUpdatePubKey = String.fromEnvironment('UPDATE_PUBKEY');
 
+/// Опубликованная версия (для отката).
+class AppRelease {
+  AppRelease({
+    required this.build,
+    required this.version,
+    required this.notes,
+    required this.date,
+    required this.pageUrl,
+    required this.raw,
+  });
+  final int build;
+  final String version;
+  final List<String> notes;
+  final DateTime? date;
+  final String pageUrl;
+  final Map<String, dynamic> raw;
+}
+
 /// Найденное обновление приложения.
 class AppUpdate {
   AppUpdate({
@@ -77,15 +95,16 @@ class AppUpdater {
     return [(n) => n == own, (n) => n == 'Nexus-universal.apk'];
   }
 
-  /// Проверяет последний (не пробный) релиз. null — обновлений нет.
-  static Future<AppUpdate?> check() async {
-    if (!configured) throw Exception('Источник обновлений не задан в сборке');
-    final current = await currentBuild();
+  static int _buildOf(Map<String, dynamic> j) =>
+      int.tryParse(RegExp(r'nexus-build:[ \t]*(\d+)')
+                  .firstMatch((j['body'] ?? '').toString())
+                  ?.group(1) ??
+              '') ??
+      0;
 
+  static Future<http.Response> _api(String path) async {
     final res = await http
-        .get(
-            Uri.parse(
-                'https://api.github.com/repos/$kUpdateRepo/releases/latest'),
+        .get(Uri.parse('https://api.github.com/repos/$kUpdateRepo/$path'),
             headers: _headers)
         .timeout(const Duration(seconds: 20));
     if (res.statusCode == 404) {
@@ -94,13 +113,53 @@ class AppUpdater {
     if (res.statusCode != 200) {
       throw Exception('GitHub ответил ${res.statusCode}');
     }
-    final j = jsonDecode(res.body) as Map<String, dynamic>;
+    return res;
+  }
+
+  /// Проверяет последний (не пробный) релиз. null — обновлений нет.
+  static Future<AppUpdate?> check() async {
+    if (!configured) throw Exception('Источник обновлений не задан в сборке');
+    final current = await currentBuild();
+    final j = jsonDecode((await _api('releases/latest')).body)
+        as Map<String, dynamic>;
+    if (_buildOf(j) <= current) return null;
+    return _fromRelease(j);
+  }
+
+  /// Прошлые версии для отката (новые сверху, без пробных сборок).
+  static Future<List<AppRelease>> history() async {
+    if (!configured) throw Exception('Источник обновлений не задан в сборке');
+    final list = jsonDecode((await _api('releases?per_page=30')).body);
+    final out = <AppRelease>[];
+    for (final r in (list is List ? list : const [])) {
+      if (r is! Map<String, dynamic>) continue;
+      if (r['prerelease'] == true || r['draft'] == true) continue;
+      final build = _buildOf(r);
+      if (build <= 0) continue;
+      final html = r['html_url']?.toString() ?? '';
+      out.add(AppRelease(
+        build: build,
+        version: (r['name'] ?? r['tag_name'] ?? '')
+            .toString()
+            .split(' · ')
+            .first
+            .trim(),
+        notes: _notes((r['body'] ?? '').toString()),
+        date: DateTime.tryParse(r['published_at']?.toString() ?? ''),
+        pageUrl: html.startsWith('https://github.com/') ? html : '',
+        raw: r,
+      ));
+    }
+    out.sort((a, b) => b.build.compareTo(a.build));
+    return out;
+  }
+
+  /// Готовит выбранную версию к установке (файл, контрольная сумма, подпись).
+  static Future<AppUpdate> prepare(AppRelease r) => _fromRelease(r.raw);
+
+  static Future<AppUpdate> _fromRelease(Map<String, dynamic> j) async {
     final body = (j['body'] ?? '').toString();
-    final build = int.tryParse(
-            RegExp(r'nexus-build:[ \t]*(\d+)').firstMatch(body)?.group(1) ??
-                '') ??
-        0;
-    if (build <= current) return null;
+    final build = _buildOf(j);
     final xray = RegExp(r'xray:[ \t]*([\d.]+)').firstMatch(body)?.group(1) ?? '';
     // Из названия релиза оставляем только «Nexus 1.7.1» — без версии Xray.
     final version = (j['name'] ?? j['tag_name'] ?? '')

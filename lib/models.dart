@@ -26,6 +26,12 @@ class ServerProfile {
   /// Задержка в мс; -1 — недоступен; null — не измерялась.
   int? ping;
 
+  /// Своё название, заданное пользователем (переживает обновление подписки).
+  String? alias;
+
+  /// Ключ для своего названия: адрес сервера не меняется при обновлении.
+  String get aliasKey => '$host:$port';
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'link': link,
@@ -58,15 +64,149 @@ class ServerProfile {
     return null;
   }
 
+  /// Код страны (две строчные буквы): из флага-эмодзи, а если его нет —
+  /// из названия («Германия», «Germany», «DE-1», «nl_ams»).
+  String? get countryCode {
+    final f = flag;
+    if (f != null) {
+      return String.fromCharCodes(f.runes.map((r) => r - 0x1F1E6 + 97));
+    }
+    return countryFromText(name);
+  }
+
+  /// Транспорт и защита из ссылки: «Reality · TCP», «TLS · WS».
+  String get transport {
+    final q = link.indexOf('?');
+    if (q < 0) return '';
+    var query = link.substring(q + 1);
+    final h = query.indexOf('#');
+    if (h >= 0) query = query.substring(0, h);
+    Map<String, String> m;
+    try {
+      m = Uri.splitQueryString(query);
+    } catch (_) {
+      return '';
+    }
+    final sec = switch (m['security']?.toLowerCase()) {
+      'reality' => 'Reality',
+      'tls' => 'TLS',
+      _ => null,
+    };
+    final type = m['type']?.toLowerCase();
+    final net = switch (type) {
+      null || '' => null,
+      'xhttp' || 'splithttp' => 'XHTTP',
+      'httpupgrade' => 'HTTPUpgrade',
+      final t => t.toUpperCase(),
+    };
+    return [if (sec != null) sec, if (net != null) net].join(' · ');
+  }
+
+  /// В названии нет ни одной буквы (только номер) — показываем адрес.
+  bool get nameIsBare => !RegExp(r'\p{L}', unicode: true).hasMatch(cleanName);
+
   /// Устойчивый ключ для избранного.
   String get favKey => '$name|$host:$port';
 
   /// Название без флага — для аккуратного отображения.
   String get cleanName {
+    if (alias != null && alias!.trim().isNotEmpty) return alias!.trim();
     final f = flag;
     final n = (f == null ? name : name.replaceFirst(f, '')).trim();
     return n.isEmpty ? host : n;
   }
+}
+
+/// Страна по тексту названия сервера.
+String? countryFromText(String text) {
+  final t = ' ${text.toLowerCase()} ';
+  for (final e in _countryWords.entries) {
+    for (final w in e.value) {
+      if (t.contains(w)) return e.key;
+    }
+  }
+  // Код страны отдельным словом: «DE», «nl-1», «US_west».
+  final m = RegExp(r'(?:^|[^a-z])([a-z]{2})(?:[^a-z]|$)')
+      .allMatches(text.toLowerCase());
+  for (final x in m) {
+    final c = x.group(1)!;
+    if (_codes.contains(c)) return c == 'uk' ? 'gb' : c;
+  }
+  return null;
+}
+
+const _codes = {
+  'ru', 'de', 'nl', 'fi', 'se', 'dk', 'ee', 'lv', 'lt', 'pl', 'cz',
+  'ch', 'fr', 'gb', 'uk', 'us', 'ca', 'tr', 'kz', 'ge', 'ae',
+  'jp', 'kr', 'sg', 'hk', 'tw', 'il', 'es', 'pt', 'ie',
+  'lu', 'ro', 'bg', 'hu', 'rs', 'md', 'ua', 'au', 'br', 'ar', 'mx',
+  'cy', 'gr', 'si', 'sk', 'hr', 'az', 'uz', 'kg', 'th',
+  'vn', 'za',
+};
+
+const _countryWords = <String, List<String>>{
+  'ru': ['россия', 'russia', 'москва', 'moscow'],
+  'de': ['герман', 'germany', 'deutschland', 'франкфурт', 'frankfurt', 'berlin', 'берлин'],
+  'nl': ['нидерланд', 'голланд', 'netherlands', 'holland', 'амстердам', 'amsterdam'],
+  'fi': ['финлянд', 'finland', 'хельсинки', 'helsinki'],
+  'se': ['швеци', 'sweden', 'стокгольм', 'stockholm'],
+  'no': ['норвеги', 'norway'],
+  'dk': ['дания', 'дании', 'denmark'],
+  'ee': ['эстони', 'estonia', 'таллин', 'tallinn'],
+  'lv': ['латви', 'latvia', 'рига', 'riga'],
+  'lt': ['литв', 'lithuania', 'вильнюс', 'vilnius'],
+  'pl': ['польш', 'poland', 'варшав', 'warsaw'],
+  'cz': ['чехи', 'czech', 'прага', 'prague'],
+  'at': ['австри', 'austria', 'вена ', 'vienna'],
+  'ch': ['швейцари', 'switzerland', 'цюрих', 'zurich'],
+  'fr': ['франци', 'france', 'париж', 'paris'],
+  'gb': ['великобритан', 'англи', 'united kingdom', 'britain', 'england', 'лондон', 'london'],
+  'us': ['сша', 'америк', 'united states', 'usa', 'america', 'нью-йорк', 'new york'],
+  'ca': ['канад', 'canada'],
+  'tr': ['турци', 'turkey', 'türkiye', 'стамбул', 'istanbul'],
+  'kz': ['казахстан', 'kazakhstan', 'алматы', 'almaty'],
+  'ge': ['грузия', 'грузии', 'georgia', 'тбилиси', 'tbilisi'],
+  'am': ['армени', 'armenia', 'ереван', 'yerevan'],
+  'ae': ['оаэ', 'эмират', 'emirates', 'uae', 'дубай', 'dubai'],
+  'jp': ['япони', 'japan', 'токио', 'tokyo'],
+  'kr': ['корея', 'корее', 'korea', 'сеул', 'seoul'],
+  'sg': ['сингапур', 'singapore'],
+  'hk': ['гонконг', 'hong kong', 'hongkong'],
+  'in': ['индия', 'индии', 'india'],
+  'il': ['израил', 'israel'],
+  'it': ['итали', 'italy', 'милан', 'milan'],
+  'es': ['испани', 'spain', 'мадрид', 'madrid'],
+  'pt': ['португал', 'portugal'],
+  'ie': ['ирланд', 'ireland'],
+  'be': ['бельги', 'belgium'],
+  'ro': ['румыни', 'romania'],
+  'bg': ['болгари', 'bulgaria'],
+  'hu': ['венгри', 'hungary'],
+  'rs': ['серби', 'serbia'],
+  'md': ['молдов', 'moldova'],
+  'ua': ['украин', 'ukraine'],
+  'by': ['беларус', 'belarus'],
+  'au': ['австрали', 'australia'],
+  'br': ['бразили', 'brazil'],
+  'cy': ['кипр', 'cyprus'],
+  'gr': ['греци', 'greece'],
+  'az': ['азербайджан', 'azerbaijan'],
+  'uz': ['узбекистан', 'uzbekistan'],
+};
+
+/// Название подписки по её адресу, если сервер его не прислал:
+/// github.com/user/repo/... → «repo», иначе — домен.
+String titleFromUrl(String url) {
+  final u = Uri.tryParse(url);
+  if (u == null || u.host.isEmpty) return 'Подписка';
+  final seg = u.pathSegments.where((e) => e.isNotEmpty).toList();
+  if ((u.host == 'raw.githubusercontent.com' ||
+          u.host == 'github.com' ||
+          u.host == 'gist.githubusercontent.com') &&
+      seg.length >= 2) {
+    return seg[1];
+  }
+  return u.host.startsWith('www.') ? u.host.substring(4) : u.host;
 }
 
 /// Подписка 3x-ui / Marzban / любой панели, отдающей список ссылок.
@@ -159,9 +299,12 @@ class AppSettings {
     this.autoReconnect = true,
     List<String>? favorites,
     this.lastAppCheck = 0,
+    this.skippedBuild = 0,
+    Map<String, String>? aliases,
     List<String>? bypassApps,
   })  : bypassApps = bypassApps ?? [],
-        favorites = favorites ?? [];
+        favorites = favorites ?? [],
+        aliases = aliases ?? {};
 
   RoutingMode routing;
 
@@ -207,6 +350,12 @@ class AppSettings {
   bool autoUpdateApp;
   int lastAppCheck;
 
+  /// Свои названия серверов: «адрес:порт» → название.
+  Map<String, String> aliases;
+
+  /// После отката: автообновление не предлагает сборки до этой включительно.
+  int skippedBuild;
+
   /// Android, умный режим: российские приложения работают мимо VPN.
   bool ruAppsDirect;
 
@@ -232,6 +381,8 @@ class AppSettings {
         'autoReconnect': autoReconnect,
         'favorites': favorites,
         'lastAppCheck': lastAppCheck,
+        'skippedBuild': skippedBuild,
+        'aliases': aliases,
         'bypassApps': bypassApps,
       });
 
@@ -259,6 +410,9 @@ class AppSettings {
         autoReconnect: j['autoReconnect'] as bool? ?? true,
         favorites: (j['favorites'] as List?)?.whereType<String>().toList(),
         lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
+        skippedBuild: (j['skippedBuild'] as num?)?.toInt() ?? 0,
+        aliases: (j['aliases'] as Map?)?.map(
+            (k, v) => MapEntry(k.toString(), v.toString())),
         bypassApps: (j['bypassApps'] as List?)?.whereType<String>().toList(),
       );
     } catch (_) {

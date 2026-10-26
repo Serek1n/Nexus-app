@@ -30,6 +30,13 @@ abstract class VpnCore {
   /// Задержка до сервера в мс (-1 — недоступен).
   Future<int> ping(ServerProfile server, String config);
 
+  /// Пакетный замер: одно ядро на много серверов (быстрее на сотнях).
+  /// Ключ — id сервера, значение — мс или -1. null — не поддерживается
+  /// или ядро не запустилось: тогда меряем по одному.
+  Future<Map<String, int>?> pingBatch(
+          List<ServerProfile> servers, String Function(ServerProfile) config) async =>
+      null;
+
   Future<String> coreVersion();
 
   /// Последние строки журнала ядра.
@@ -47,6 +54,12 @@ abstract class VpnCore {
   /// Задержка через активное соединение (мс, -1 — нет связи).
   Future<int> connectedDelay(ServerProfile server) =>
       tcpPing(server.host, server.port);
+
+  /// Выполняет [fn] через временный туннель к [server] (локальный HTTP-прокси
+  /// «user:pass@127.0.0.1:port»). null — платформа так не умеет.
+  Future<T?> viaTunnel<T>(ServerProfile server, String config,
+          Future<T> Function(String proxy) fn) async =>
+      null;
 
   /// Kill switch сработал: VPN упал, интернет заблокирован до отключения.
   bool get blocked => false;

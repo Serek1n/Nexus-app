@@ -82,6 +82,10 @@ class AndroidSystem {
     }
   }
 
+  /// Открывает страницу релиза GitHub в браузере.
+  static Future<bool> openUrl(String url) async =>
+      await _call<bool>('openUrl', url) ?? false;
+
   /// Запрет снимков экрана и показа содержимого в списке недавних приложений.
   static Future<void> setSecureScreen(bool on) => _call('setSecureScreen', on);
 }

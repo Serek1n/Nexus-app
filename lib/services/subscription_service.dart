@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 import '../models.dart';
 
@@ -97,6 +100,27 @@ class FetchResult {
   final Subscription meta;
 }
 
+/// Ошибка сети, а не ответ сервера: провайдер оборвал соединение,
+/// не прошло TLS-рукопожатие, истекло время. Такие подписки пробуем
+/// загрузить через туннель Nexus.
+bool isTransportError(Object e) =>
+    e is IOException || e is TimeoutException || e is http.ClientException;
+
+/// Понятный текст для сетевой ошибки.
+String transportErrorText(Object e) {
+  if ('$e'.contains('CERTIFICATE_VERIFY_FAILED')) {
+    return 'Сертификат сервера подписки недействителен или просрочен — '
+        'сообщите владельцу подписки';
+  }
+  if (e is HandshakeException || e is TlsException ||
+      '$e'.contains('Handshake')) {
+    return 'Не удалось установить защищённое соединение с сервером подписки — '
+        'похоже, адрес блокирует провайдер. Подключитесь к VPN и повторите';
+  }
+  if (e is TimeoutException) return 'Сервер подписки не ответил вовремя';
+  return 'Сервер подписки недоступен — проверьте интернет или подключитесь к VPN';
+}
+
 bool _isLoopback(String host) {
   final h = host.toLowerCase().replaceAll('[', '').replaceAll(']', '');
   return h == 'localhost' ||
@@ -126,7 +150,7 @@ class SubscriptionService {
   }
 
   /// Загружает подписку и обновляет [sub] (трафик, срок, название).
-  static Future<FetchResult> fetch(Subscription sub) async {
+  static Future<FetchResult> fetch(Subscription sub, {String? proxy}) async {
     final uri = Uri.tryParse(sub.url);
     if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
       throw Exception('Ссылка подписки должна начинаться с https://');
@@ -134,7 +158,10 @@ class SubscriptionService {
     // Читаем потоком и обрываем на 8 МБ: «бесконечный» ответ сервера
     // не должен съесть память устройства.
     const limit = 8 * 1024 * 1024;
-    final client = http.Client();
+    // proxy — «user:pass@127.0.0.1:port» временного туннеля Nexus.
+    final http.Client client = proxy == null
+        ? http.Client()
+        : IOClient(HttpClient()..findProxy = (_) => 'PROXY $proxy');
     late final http.StreamedResponse res;
     final bytes = <int>[];
     try {
@@ -198,7 +225,11 @@ class SubscriptionService {
     String? cap(String? v, int n) =>
         v == null ? null : (v.length > n ? '${v.substring(0, n)}…' : v);
     final title = cap(_decodeHeader(res.headers['profile-title']), 60);
-    if (title != null && title.isNotEmpty) sub.title = title;
+    if (title != null && title.isNotEmpty) {
+      sub.title = title;
+    } else if (sub.title == 'Подписка') {
+      sub.title = titleFromUrl(sub.url);
+    }
     sub.supportUrl = _safeUrl(_decodeHeader(res.headers['support-url']));
     sub.webPageUrl =
         _safeUrl(_decodeHeader(res.headers['profile-web-page-url']));

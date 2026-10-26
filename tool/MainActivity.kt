@@ -254,6 +254,21 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "openUrl" -> {
+                        // Только страницы релизов на GitHub.
+                        val url = call.arguments as? String
+                        if (url == null || !url.startsWith("https://github.com/")) {
+                            result.success(false)
+                        } else {
+                            try {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.success(false)
+                            }
+                        }
+                    }
+
                     else -> result.notImplemented()
                 }
             }

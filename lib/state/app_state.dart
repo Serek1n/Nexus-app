@@ -86,6 +86,7 @@ class AppState extends ChangeNotifier {
       servers
         ..clear()
         ..addAll(srv.map((e) => ServerProfile.fromJson(e)));
+      _applyAliases();
       // Старые незашифрованные данные сразу перешифровываем.
       final raw = _prefs.getString('servers');
       if (raw != null && !_isProtected(raw)) _save();
@@ -191,6 +192,13 @@ class AppState extends ChangeNotifier {
         updateStatus = 'Установлена последняя версия';
         return;
       }
+      // После отката плохую версию сами не предлагаем — только по кнопке.
+      if (silent && u.build <= settings.skippedBuild) {
+        appUpdate = null;
+        updateFile = null;
+        updateStatus = '${u.version} пропущена после отката';
+        return;
+      }
       if (appUpdate?.build != u.build) updateFile = null;
       appUpdate = u;
       updateStatus = null;
@@ -226,6 +234,30 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Откат (Windows): ставит выбранную старую версию поверх текущей.
+  /// Текущая сборка и всё до неё больше не предлагаются автоматически.
+  Future<void> rollbackTo(AppRelease r) async {
+    final current = await AppUpdater.currentBuild();
+    updateStatus = 'Готовлю ${r.version}…';
+    notifyListeners();
+    try {
+      final u = await AppUpdater.prepare(r);
+      settings.skippedBuild = current;
+      _save();
+      appUpdate = u;
+      updateFile = null;
+      await installAppUpdate();
+    } catch (e) {
+      updateStatus = _msg(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Ссылки всех подписок — чтобы перенести их после переустановки.
+  String exportSubscriptions() =>
+      subscriptions.map((s) => s.url).join('\n');
 
   /// Ставит обновление (при необходимости сначала скачивает).
   Future<void> installAppUpdate() async {
@@ -511,6 +543,9 @@ class AppState extends ChangeNotifier {
   void _onCoreState(ConnState s) {
     if (s != ConnState.connecting) _connectGuard?.cancel();
     if (s == ConnState.connected) unawaited(refreshBattery());
+    if (s == ConnState.connected && state != ConnState.connected) {
+      unawaited(_refreshOnConnect());
+    }
     if (s == ConnState.disconnected && connectedAt != null) {
       final d = DateTime.now().difference(connectedAt!);
       final st = statsNotifier.value;
@@ -674,26 +709,60 @@ class AppState extends ChangeNotifier {
 
   // ─────────────────────────────── пинг ───────────────────────────────
 
-  Future<void> pingOne(ServerProfile s) async {
-    s.ping = null;
-    notifyListeners();
-    try {
-      s.ping = await core.ping(s, _configFor(s));
-    } catch (_) {
-      s.ping = -1;
-    }
-    notifyListeners();
+  /// Серверы, задержка которых измеряется прямо сейчас.
+  final Set<String> pinging = {};
+  Timer? _notifyTimer;
+
+  /// При сотнях замеров перерисовываем экран не на каждый результат,
+  /// а не чаще 4 раз в секунду.
+  void _notifySoon() {
+    if (_notifyTimer?.isActive ?? false) return;
+    _notifyTimer = Timer(const Duration(milliseconds: 250), notifyListeners);
   }
 
   Future<void> pingAll() async {
     if (pingingAll) return;
     pingingAll = true;
-    for (final s in servers) {
+    notifyListeners();
+    await pingMany(servers);
+    pingingAll = false;
+    notifyListeners();
+  }
+
+  /// Проверка группы серверов (например, одной подписки).
+  Future<void> pingMany(Iterable<ServerProfile> list) async {
+    final queue = list.where((s) => !pinging.contains(s.id)).toList();
+    if (queue.isEmpty) return;
+    for (final s in queue) {
       s.ping = null;
+      pinging.add(s.id);
     }
     notifyListeners();
-    // Параллельно, но ограниченно: на Android замер идёт через ядро.
-    final queue = [...servers];
+    final total = queue.length;
+    pingProgress = (0, total);
+
+    // ПК: пачками по 24 сервера на одно ядро — в разы быстрее, чем
+    // запускать ядро на каждый сервер. Не вышло — меряем по одному.
+    if (isDesktop && queue.length > 2) {
+      final rest = <ServerProfile>[];
+      while (queue.isNotEmpty) {
+        final chunk = queue.take(24).toList();
+        queue.removeRange(0, chunk.length);
+        final r = await core.pingBatch(chunk, _configFor);
+        if (r == null) {
+          rest.addAll(chunk);
+          continue;
+        }
+        for (final s in chunk) {
+          s.ping = r[s.id] ?? -1;
+          pinging.remove(s.id);
+        }
+        pingProgress = (total - queue.length - rest.length, total);
+        _notifySoon();
+      }
+      queue.addAll(rest);
+    }
+
     Future<void> worker() async {
       while (queue.isNotEmpty) {
         final s = queue.removeAt(0);
@@ -702,15 +771,55 @@ class AppState extends ChangeNotifier {
         } catch (_) {
           s.ping = -1;
         }
-        notifyListeners();
+        pinging.remove(s.id);
+        pingProgress = (total - queue.length, total);
+        _notifySoon();
       }
     }
 
-    // На ПК каждая проверка запускает отдельное ядро — не больше 4 разом.
-    await Future.wait(List.generate(isDesktop ? 4 : 3, (_) => worker()));
-    pingingAll = false;
+    // По одному: на ПК не больше 4 ядер разом, на Android — 5 замеров.
+    await Future.wait(List.generate(isDesktop ? 4 : 5, (_) => worker()));
+    pingProgress = null;
     notifyListeners();
   }
+
+  /// Прогресс массовой проверки: (готово, всего); null — не идёт.
+  (int, int)? pingProgress;
+
+  /// Своё название сервера («» — вернуть исходное).
+  void renameServer(ServerProfile s, String name) {
+    final n = name.trim();
+    if (n.isEmpty) {
+      settings.aliases.remove(s.aliasKey);
+    } else {
+      settings.aliases[s.aliasKey] = n.length > 40 ? n.substring(0, 40) : n;
+    }
+    _applyAliases();
+    _save();
+    notifyListeners();
+  }
+
+  void _applyAliases() {
+    for (final s in servers) {
+      s.alias = settings.aliases[s.aliasKey];
+    }
+  }
+
+  Future<void> pingOne(ServerProfile s) async {
+    if (pinging.contains(s.id)) return;
+    pinging.add(s.id);
+    s.ping = null;
+    notifyListeners();
+    try {
+      s.ping = await core.ping(s, _configFor(s));
+    } catch (_) {
+      s.ping = -1;
+    }
+    pinging.remove(s.id);
+    notifyListeners();
+  }
+
+
 
   /// Выбирает сервер с минимальной задержкой.
   Future<void> selectFastest() async {
@@ -731,6 +840,23 @@ class AppState extends ChangeNotifier {
     if (isHttpUrl(text) && !text.contains('\n')) {
       final sub = await addSubscription(text);
       return 'Подписка «${sub.title}» добавлена: ${serversOf(sub.id).length} серв.';
+    }
+    // Несколько ссылок подписок (перенос после переустановки).
+    final lines = text
+        .split(RegExp(r'[\r\n]+'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.length > 1 && lines.every(isHttpUrl)) {
+      var ok = 0;
+      for (final l in lines.take(50)) {
+        try {
+          await addSubscription(l);
+          ok++;
+        } catch (_) {}
+      }
+      if (ok == 0) throw Exception('Не удалось загрузить ни одну подписку');
+      return 'Добавлено подписок: $ok из ${lines.length}';
     }
 
     final links = extractLinks(text);
@@ -755,16 +881,89 @@ class AppState extends ChangeNotifier {
     return 'Добавлено серверов: $added';
   }
 
+  /// Загрузка подписки. Если провайдер не пускает к её серверу напрямую
+  /// (оборванное TLS-рукопожатие и т.п.) — пробуем через Nexus:
+  /// через активное подключение, а без него — через временный туннель.
+  Future<FetchResult> _fetchSub(Subscription sub) async {
+    try {
+      return await SubscriptionService.fetch(sub);
+    } catch (e) {
+      if (!isTransportError(e)) rethrow;
+      Object last = e;
+      if (isDesktop && state == ConnState.connected && !core.blocked) {
+        try {
+          return await SubscriptionService.fetch(sub,
+              proxy: '127.0.0.1:$activeHttpPort');
+        } catch (e2) {
+          last = e2;
+        }
+      }
+      // Временный туннель: сначала выбранный сервер, затем ещё пара.
+      final cands = <ServerProfile>[
+        if (selected != null) selected!,
+        ...servers.where((x) => x.id != selectedId && (x.ping ?? 0) >= 0),
+      ].take(3);
+      for (final c in cands) {
+        try {
+          final r = await core.viaTunnel(c, _configFor(c),
+              (proxy) => SubscriptionService.fetch(sub, proxy: proxy));
+          if (r != null) return r;
+        } catch (e3) {
+          if (!isTransportError(e3)) rethrow;
+          last = e3;
+        }
+      }
+      throw Exception(transportErrorText(last));
+    }
+  }
+
+  /// При каждом подключении и переподключении VPN обновляем подписки:
+  /// подписку текущего сервера — не чаще раза в 2 минуты (чтобы не
+  /// дёргать сервер при серии переподключений), остальные — раз в час.
+  /// Загрузка идёт уже через туннель, так что блокировки ей не мешают.
+  Future<void> _refreshOnConnect() async {
+    if (!settings.autoUpdateOnStart || subscriptions.isEmpty) return;
+    await Future.delayed(const Duration(seconds: 3));
+    if (state != ConnState.connected) return;
+    final mainId = selected?.subscriptionId;
+    final now = DateTime.now();
+    final list = [...subscriptions]
+      ..sort((a, b) => (a.id == mainId ? 0 : 1).compareTo(b.id == mainId ? 0 : 1));
+    for (final sub in list) {
+      if (refreshing.contains(sub.id)) continue;
+      final gap = sub.id == mainId
+          ? const Duration(minutes: 2)
+          : const Duration(hours: 1);
+      final last = sub.updatedAt;
+      if (last != null && now.difference(last) < gap) continue;
+      final before = selected?.link;
+      await refresh(sub, silent: true);
+      // Ключ текущего сервера поменялся (панель выдала новый) —
+      // переподключаемся уже с новыми настройками.
+      if (sub.id == mainId &&
+          state == ConnState.connected &&
+          selected != null &&
+          before != null &&
+          selected!.link != before) {
+        await reconnectIfActive();
+        return;
+      }
+    }
+  }
+
   Future<Subscription> addSubscription(String url) async {
     final existing = subscriptions.where((s) => s.url == url).toList();
     if (existing.isNotEmpty) {
       await refresh(existing.first);
       return existing.first;
     }
-    final sub = Subscription(id: newId(), url: url, title: 'Подписка');
-    final res = await SubscriptionService.fetch(sub);
+    final sub = Subscription(id: newId(), url: url, title: titleFromUrl(url));
+    final res = await _fetchSub(sub);
     subscriptions.add(res.meta);
     servers.addAll(res.servers);
+    _applyAliases();
+    // Небольшую подписку сразу проверяем — задержки видны без лишнего нажатия.
+    if (res.servers.length <= 30) unawaited(pingMany(res.servers));
     if (selected == null || selectedId == null) {
       selectedId = res.servers.first.id;
     }
@@ -777,13 +976,22 @@ class AppState extends ChangeNotifier {
     refreshing.add(sub.id);
     notifyListeners();
     try {
-      final res = await SubscriptionService.fetch(sub);
+      final res = await _fetchSub(sub);
       // Сохраняем выбор сервера, если он остался в подписке.
       final sel = selected;
       final keepLink = sel?.subscriptionId == sub.id ? sel?.link : null;
       final keepName = sel?.subscriptionId == sub.id ? sel?.name : null;
+      // Задержки сохраняем: адрес сервера тот же — замер ещё актуален.
+      final oldPing = {
+        for (final s in servers.where((s) => s.subscriptionId == sub.id))
+          s.aliasKey: s.ping
+      };
+      for (final s in res.servers) {
+        s.ping = oldPing[s.aliasKey];
+      }
       servers.removeWhere((s) => s.subscriptionId == sub.id);
       servers.addAll(res.servers);
+      _applyAliases();
       if (keepLink != null) {
         final match = res.servers.where((s) => s.link == keepLink).toList();
         final byName = res.servers.where((s) => s.name == keepName).toList();
@@ -883,6 +1091,7 @@ class AppState extends ChangeNotifier {
     _updTimer?.cancel();
     _retryTimer?.cancel();
     _connectGuard?.cancel();
+    _notifyTimer?.cancel();
     _stopHealth();
     core.dispose();
     super.dispose();

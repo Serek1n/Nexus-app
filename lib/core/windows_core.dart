@@ -98,6 +98,11 @@ class WindowsCore extends VpnCore {
 
   String _withStats(String config) {
     final cfg = jsonDecode(config) as Map<String, dynamic>;
+    for (final ib in (cfg['inbounds'] as List? ?? [])) {
+      if (ib is! Map<String, dynamic>) continue;
+      if (ib['tag'] == 'socks-in') ib['port'] = _socksPort;
+      if (ib['tag'] == 'http-in') ib['port'] = _httpPort;
+    }
     cfg['stats'] = <String, dynamic>{};
     // Статистика по HTTP (/debug/vars) — без запуска отдельного процесса.
     cfg['metrics'] = {
@@ -132,9 +137,20 @@ class WindowsCore extends VpnCore {
     if (!_restarting) _restarts = 0;
 
     _apiPort = await _freePort();
+    // 10808/10809 могут быть заняты другим клиентом (Happ, v2rayN) или
+    // зависшим ядром — тогда берём запасные порты, а не падаем.
+    final (sp, hp) = await _pickPorts();
+    _socksPort = sp;
+    _httpPort = hp;
+    activeSocksPort = sp;
+    activeHttpPort = hp;
 
     _logs.clear();
     _log('Запуск ядра: $remark');
+    if (sp != kSocksPort) {
+      _log('Порты $kSocksPort/$kHttpPort заняты другой программой '
+          '(например, Happ или v2rayN) — Nexus использует $sp/$hp');
+    }
     try {
       // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
       _proc = await Process.start(
@@ -172,7 +188,7 @@ class WindowsCore extends VpnCore {
     var up = false;
     for (var i = 0; i < 25 && !up; i++) {
       await Future.delayed(const Duration(milliseconds: 200));
-      up = await _portOpen(kHttpPort);
+      up = await _portOpen(_httpPort);
     }
     // Старый файл конфига от прошлых версий — удаляем.
     try {
@@ -195,7 +211,7 @@ class WindowsCore extends VpnCore {
         _savedProxy = WinProxy.snapshot();
         marker.writeAsStringSync(jsonEncode(_savedProxy));
       }
-      WinProxy.enable('127.0.0.1:$kHttpPort');
+      WinProxy.enable('127.0.0.1:$_httpPort');
       _proxySet = true;
     }
 
@@ -219,7 +235,7 @@ class WindowsCore extends VpnCore {
     if (_blocked || _recovering) return;
     // Падение ядра ловит exitCode; порт дополнительно проверяем раз в 5 секунд.
     final portDead =
-        !_exited && _tickN % 5 == 0 && !await _portOpen(kHttpPort);
+        !_exited && _tickN % 5 == 0 && !await _portOpen(_httpPort);
     if (_exited || portDead) {
       _failedChecks++;
       if (_exited || _failedChecks >= 2) {
@@ -317,6 +333,37 @@ class WindowsCore extends VpnCore {
     }
   }
 
+  int _socksPort = kSocksPort;
+  int _httpPort = kHttpPort;
+
+  /// Адрес системного прокси — наш (на любом из портов Nexus).
+  static bool isOwnProxy(String server) {
+    const own = [kHttpPort, 20809, 30809];
+    return own.any((p) => server.trim() == '127.0.0.1:$p') ||
+        server.trim() == '127.0.0.1:$activeHttpPort';
+  }
+
+  Future<bool> _canBind(int port) async {
+    try {
+      final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
+      await s.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<(int, int)> _pickPorts() async {
+    for (final (a, b) in const [
+      (kSocksPort, kHttpPort),
+      (20808, 20809),
+      (30808, 30809),
+    ]) {
+      if (await _canBind(a) && await _canBind(b)) return (a, b);
+    }
+    return (await _freePort(), await _freePort());
+  }
+
   Future<int> _freePort() async {
     try {
       final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -373,6 +420,191 @@ class WindowsCore extends VpnCore {
     await _stopProcess();
     _stats.add(const ConnStats());
     _states.add(ConnState.disconnected);
+  }
+
+  @override
+  Future<T?> viaTunnel<T>(ServerProfile server, String config,
+      Future<T> Function(String proxy) fn) async {
+    if (!File(_corePath).existsSync()) return null;
+    Process? p;
+    try {
+      final port = await _freePort();
+      final rnd = math.Random.secure();
+      String token() =>
+          List.generate(16, (_) => rnd.nextInt(36).toRadixString(36)).join();
+      final user = token(), pass = token();
+      final cfg = jsonDecode(config) as Map<String, dynamic>;
+      cfg['log'] = {'loglevel': 'none'};
+      cfg['inbounds'] = [
+        {
+          'tag': 'tunnel',
+          'listen': '127.0.0.1',
+          'port': port,
+          'protocol': 'http',
+          'settings': {
+            'accounts': [
+              {'user': user, 'pass': pass}
+            ],
+          },
+        }
+      ];
+      cfg['routing'] = {'domainStrategy': 'AsIs', 'rules': <dynamic>[]};
+      cfg.remove('metrics');
+      cfg.remove('stats');
+      cfg.remove('api');
+      p = await Process.start(
+        _corePath,
+        ['run', '-format', 'json', '-c', 'stdin:'],
+        workingDirectory: _coreDir,
+        environment: {'XRAY_LOCATION_ASSET': _assetDir},
+      );
+      p.stdout.drain<void>();
+      p.stderr.drain<void>();
+      p.stdin.add(utf8.encode(jsonEncode(cfg)));
+      await p.stdin.close();
+      var up = false;
+      for (var i = 0; i < 40 && !up; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        up = await _portOpen(port);
+      }
+      if (!up) return null;
+      return await fn('$user:$pass@127.0.0.1:$port');
+    } finally {
+      if (p != null) Process.killPid(p.pid);
+    }
+  }
+
+  @override
+  Future<Map<String, int>?> pingBatch(List<ServerProfile> servers,
+      String Function(ServerProfile) config) async {
+    if (servers.isEmpty || !File(_corePath).existsSync()) return null;
+    Process? p;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final rnd = math.Random.secure();
+      String token() =>
+          List.generate(16, (_) => rnd.nextInt(36).toRadixString(36)).join();
+      final user = token(), pass = token();
+      final inbounds = <Map<String, dynamic>>[];
+      final outbounds = <dynamic>[];
+      final rules = <Map<String, dynamic>>[];
+      final ports = <String, int>{};
+      Map<String, dynamic>? base;
+      for (var i = 0; i < servers.length; i++) {
+        final s = servers[i];
+        Map<String, dynamic> cfg;
+        try {
+          cfg = jsonDecode(config(s)) as Map<String, dynamic>;
+        } catch (_) {
+          continue;
+        }
+        base ??= cfg;
+        final ob = (cfg['outbounds'] as List? ?? []).firstWhere(
+            (o) => o is Map && o['tag'] == 'proxy',
+            orElse: () => null);
+        if (ob is! Map<String, dynamic>) continue;
+        final port = await _freePort();
+        ports[s.id] = port;
+        ob['tag'] = 'p$i';
+        outbounds.add(ob);
+        inbounds.add({
+          'tag': 'in$i',
+          'listen': '127.0.0.1',
+          'port': port,
+          'protocol': 'http',
+          'settings': {
+            'accounts': [
+              {'user': user, 'pass': pass}
+            ],
+          },
+        });
+        rules.add({
+          'type': 'field',
+          'inboundTag': ['in$i'],
+          'outboundTag': 'p$i',
+        });
+      }
+      if (base == null || ports.isEmpty) return null;
+      final cfg = <String, dynamic>{
+        'log': {'loglevel': 'none', 'access': 'none'},
+        'inbounds': inbounds,
+        'outbounds': outbounds,
+        'dns': base['dns'],
+        'routing': {'domainStrategy': 'AsIs', 'rules': rules},
+      }..removeWhere((_, v) => v == null);
+
+      p = await Process.start(
+        _corePath,
+        ['run', '-format', 'json', '-c', 'stdin:'],
+        workingDirectory: _coreDir,
+        environment: {'XRAY_LOCATION_ASSET': _assetDir},
+      );
+      p.stdout.drain<void>();
+      p.stderr.drain<void>();
+      p.stdin.add(utf8.encode(jsonEncode(cfg)));
+      await p.stdin.close();
+
+      // Ждём последний порт: ядро открывает входы все сразу.
+      final lastPort = ports.values.last;
+      var up = false;
+      for (var i = 0; i < 50 && !up; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        up = await _portOpen(lastPort);
+      }
+      if (!up) return null; // какой-то конфиг не принят — меряем по одному
+
+      Future<int> measure(int port) async {
+        Future<int> once() async {
+          final c = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 5)
+            ..findProxy = (_) => 'PROXY $user:$pass@127.0.0.1:$port';
+          try {
+            final sw = Stopwatch()..start();
+            final req = await c
+                .getUrl(Uri.parse('http://cp.cloudflare.com/generate_204'))
+                .timeout(const Duration(seconds: 6));
+            final res = await req.close().timeout(const Duration(seconds: 6));
+            await res.drain<void>().timeout(const Duration(seconds: 4));
+            if (res.statusCode >= 400) return -1;
+            return sw.elapsedMilliseconds;
+          } finally {
+            c.close(force: true);
+          }
+        }
+
+        try {
+          final first = await once();
+          if (first < 0) return -1;
+          int? second;
+          try {
+            second = await once();
+          } catch (_) {}
+          final best = second == null || second < 0
+              ? first
+              : math.min(first, second);
+          return best.clamp(1, 9999);
+        } catch (_) {
+          return -1;
+        }
+      }
+
+      final out = <String, int>{};
+      final queue = ports.entries.toList();
+      Future<void> worker() async {
+        while (queue.isNotEmpty) {
+          final e = queue.removeAt(0);
+          out[e.key] = await measure(e.value);
+        }
+      }
+
+      await Future.wait(List.generate(8, (_) => worker()));
+      return out;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
+      if (p != null) Process.killPid(p.pid);
+    }
   }
 
   /// Реальная задержка: временный экземпляр ядра с этим сервером и
@@ -493,7 +725,7 @@ class WindowsCore extends VpnCore {
   Future<int> connectedDelay(ServerProfile server) async {
     final c = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8)
-      ..findProxy = (_) => 'PROXY 127.0.0.1:$kHttpPort';
+      ..findProxy = (_) => 'PROXY 127.0.0.1:$_httpPort';
     final sw = Stopwatch()..start();
     try {
       final req = await c
@@ -809,7 +1041,7 @@ class WinProxy {
       final server = saved['server'];
       final ovr = saved['override'];
       // Не восстанавливаем собственный адрес Nexus (остался после сбоя).
-      final ours = server is String && server.startsWith('127.0.0.1:$kHttpPort');
+      final ours = server is String && WindowsCore.isOwnProxy(server);
       if (server is String && !ours) _setString('ProxyServer', server);
       if (ovr is String) _setString('ProxyOverride', ovr);
       _setDword('ProxyEnable', saved['enable'] == 1 && !ours ? 1 : 0);

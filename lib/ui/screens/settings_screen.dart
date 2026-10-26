@@ -10,6 +10,7 @@ import '../../services/config_builder.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../rollback_sheet.dart';
 import 'apps_screen.dart';
 
 
@@ -173,9 +174,9 @@ class SettingsScreen extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14.5)),
                         ),
-                        _CopyChip('HTTP 127.0.0.1:$kHttpPort'),
+                        _CopyChip('HTTP 127.0.0.1:$activeHttpPort'),
                         const SizedBox(width: 6),
-                        _CopyChip('SOCKS 127.0.0.1:$kSocksPort'),
+                        _CopyChip('SOCKS 127.0.0.1:$activeSocksPort'),
                       ],
                     ),
                   ),
@@ -335,7 +336,7 @@ class SettingsScreen extends StatelessWidget {
                 switchRow(
                   Icons.sync_rounded,
                   'Обновлять подписки',
-                  'При каждом запуске приложения',
+                  'При запуске, подключении и переподключении VPN',
                   st.autoUpdateOnStart,
                   (v) => app.updateSettings((s) => s.autoUpdateOnStart = v),
                 ),
@@ -481,11 +482,24 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 10),
-                NeonButton(
-                  label: 'Что нового',
-                  icon: Icons.history_rounded,
-                  secondary: true,
-                  onPressed: () => showChangelog(context),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    NeonButton(
+                      label: 'Что нового',
+                      icon: Icons.notes_rounded,
+                      secondary: true,
+                      onPressed: () => showChangelog(context),
+                    ),
+                    if (AppUpdater.configured)
+                      NeonButton(
+                        label: 'Откатить версию',
+                        icon: Icons.history_rounded,
+                        secondary: true,
+                        onPressed: () => showRollbackSheet(context),
+                      ),
+                  ],
                 ),
                 if (AppUpdater.configured) ...[
                   const Divider(height: 22),
