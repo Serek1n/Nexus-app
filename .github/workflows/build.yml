@@ -128,6 +128,7 @@ jobs:
               echo "::warning::KEYSTORE_BASE64 не задан — пробная сборка с отладочным ключом"
             else
               echo "::error::Не задан секрет KEYSTORE_BASE64 (и KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD). Добавьте их из github-secrets.txt: Settings → Secrets and variables → Actions."
+              echo "Не заданы секреты подписи APK (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD). Добавьте их из github-secrets.txt в Settings → Secrets and variables → Actions и перезапустите сборку." > ci.log
               exit 1
             fi
           fi
