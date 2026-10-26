@@ -241,6 +241,13 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "vpnPrepared" -> {
+                        // true — разрешение на VPN у Nexus есть (окно не появится).
+                        result.success(
+                            try { android.net.VpnService.prepare(this) == null } catch (e: Exception) { true }
+                        )
+                    }
+
                     "openVpnSettings" -> {
                         try {
                             startActivity(Intent(Settings.ACTION_VPN_SETTINGS))

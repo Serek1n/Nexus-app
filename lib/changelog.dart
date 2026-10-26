@@ -4,11 +4,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.5');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.6');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.9.6', [
+    'Android 8–12: статус VPN нельзя подделать',
+    'Не спорит с другим VPN за подключение',
+    'Подсказки на главной без жёлтой заливки',
+  ]),
   ('1.9.5', [
     'Android: Hysteria2 подключается',
     'Нет бесконечных попыток: другой сервер или ошибка',

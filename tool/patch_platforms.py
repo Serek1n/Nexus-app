@@ -77,6 +77,10 @@ def android():
          r'\1<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />'
          r'\1<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />'
          r'\1<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
+         # Внутреннее разрешение: статус VPN могут присылать только
+         # процессы самого Nexus (см. tool/patch_plugin.py).
+         r'\1<permission android:name="${applicationId}.permission.NEXUS_INTERNAL" android:protectionLevel="signature" />'
+         r'\1<uses-permission android:name="${applicationId}.permission.NEXUS_INTERNAL" />'
          r'\1<application\n        android:usesCleartextTraffic="true"'
          r'\n        android:allowBackup="false"'),
     ])

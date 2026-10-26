@@ -142,6 +142,9 @@ jobs:
             flutter pub get 2>&1 | tee -a ci.log
           fi
           dart run flutter_launcher_icons 2>&1 | tee -a ci.log
+          # Защита приёмников статуса VPN в плагине (Android 8–12).
+          python3 tool/patch_plugin.py 2>&1 | tee -a ci.log
+          test ${PIPESTATUS[0]} -eq 0
 
       # ── Свежее ядро Xray: собираем libv2ray.aar из 2dust/AndroidLibXrayLite ──
       - name: Исходники ядра Xray ${{ env.XRAY }}

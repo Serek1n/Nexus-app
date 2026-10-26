@@ -86,6 +86,10 @@ class AndroidSystem {
     }
   }
 
+  /// Есть ли у Nexus разрешение на VPN (не отобрал ли его другой VPN).
+  static Future<bool> vpnPrepared() async =>
+      await _call<bool>('vpnPrepared') ?? true;
+
   /// Открывает страницу релиза GitHub в браузере.
   static Future<bool> openUrl(String url) async =>
       await _call<bool>('openUrl', url) ?? false;

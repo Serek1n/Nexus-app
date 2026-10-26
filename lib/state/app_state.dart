@@ -425,6 +425,18 @@ class AppState extends ChangeNotifier {
         }
         return;
       }
+      // Android: VPN забрало другое приложение — не воюем с ним и не
+      // выскакиваем системным окном разрешения поверх других программ.
+      if (!isDesktop &&
+          settings.androidVpnMode &&
+          !await AndroidSystem.vpnPrepared()) {
+        _wantConnected = false;
+        reconnectNote = null;
+        lastError = 'VPN включён в другом приложении — Nexus отключился. '
+            'Нажмите «Подключить», чтобы вернуть его';
+        notifyListeners();
+        return;
+      }
       await connect(keepFailover: true, auto: true);
     });
   }

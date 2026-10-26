@@ -402,10 +402,11 @@ class _Notice extends StatelessWidget {
         onTap: onTap,
         child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        // Спокойная карточка: цвет несёт только значок, без жёлтой заливки.
         decoration: BoxDecoration(
-          color: NX.amber.withValues(alpha: 0.08),
+          color: NX.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NX.amber.withValues(alpha: 0.3)),
+          border: Border.all(color: NX.stroke),
         ),
         child: Row(
           children: [
