@@ -35,12 +35,23 @@ class NX {
   static const display = 'Manrope';
   static const body = 'Manrope';
 
+  /// Оценка задержки: 3 — хорошо (зелёный), 2 — средне (жёлтый),
+  /// 1 — плохо (красный), 0 — нет связи или не измерялась.
+  /// Пороги — для «тёплой» задержки через сервер (см. WindowsCore._warmDelay).
+  static int pingLevel(int? ping) {
+    if (ping == null || ping < 0) return 0;
+    if (ping < 200) return 3;
+    if (ping < 500) return 2;
+    return 1;
+  }
+
   static Color pingColor(int? ping) {
     if (ping == null) return text3;
-    if (ping < 0) return red;
-    if (ping < 150) return mint;
-    if (ping < 400) return amber;
-    return pink;
+    return switch (pingLevel(ping)) {
+      3 => mint,
+      2 => amber,
+      _ => red,
+    };
   }
 
   static List<BoxShadow> glow(Color c, {double strength = 1}) => [

@@ -554,35 +554,8 @@ class WindowsCore extends VpnCore {
       if (!up) return null; // какой-то конфиг не принят — меряем по одному
 
       Future<int> measure(int port) async {
-        Future<int> once() async {
-          final c = HttpClient()
-            ..connectionTimeout = const Duration(seconds: 5)
-            ..findProxy = (_) => 'PROXY $user:$pass@127.0.0.1:$port';
-          try {
-            final sw = Stopwatch()..start();
-            final req = await c
-                .getUrl(Uri.parse('http://cp.cloudflare.com/generate_204'))
-                .timeout(const Duration(seconds: 6));
-            final res = await req.close().timeout(const Duration(seconds: 6));
-            await res.drain<void>().timeout(const Duration(seconds: 4));
-            if (res.statusCode >= 400) return -1;
-            return sw.elapsedMilliseconds;
-          } finally {
-            c.close(force: true);
-          }
-        }
-
         try {
-          final first = await once();
-          if (first < 0) return -1;
-          int? second;
-          try {
-            second = await once();
-          } catch (_) {}
-          final best = second == null || second < 0
-              ? first
-              : math.min(first, second);
-          return best.clamp(1, 9999);
+          return await _warmDelay('$user:$pass@127.0.0.1:$port');
         } catch (_) {
           return -1;
         }
@@ -675,27 +648,7 @@ class WindowsCore extends VpnCore {
         return -1;
       }
 
-      client.findProxy = (_) => 'PROXY $user:$pass@127.0.0.1:$port';
-      Future<int> once() async {
-        final sw = Stopwatch()..start();
-        final req = await client
-            .getUrl(Uri.parse('http://cp.cloudflare.com/generate_204'))
-            .timeout(const Duration(seconds: 6));
-        final res = await req.close().timeout(const Duration(seconds: 6));
-        await res.drain<void>().timeout(const Duration(seconds: 4));
-        if (res.statusCode >= 400) throw Exception('HTTP ${res.statusCode}');
-        return sw.elapsedMilliseconds;
-      }
-
-      // Первый запрос включает установку соединения и рукопожатие,
-      // второй показывает реальную задержку уже открытого канала.
-      final first = await once();
-      int? second;
-      try {
-        second = await once();
-      } catch (_) {}
-      final best = second == null ? first : math.min(first, second);
-      return best.clamp(1, 9999);
+      return await _warmDelay('$user:$pass@127.0.0.1:$port');
     } catch (e) {
       failReason = e is TimeoutException ? 'сервер не ответил за 6 с' : '$e';
       return -1;
@@ -723,23 +676,49 @@ class WindowsCore extends VpnCore {
   /// Реальная задержка через туннель: HTTP-запрос через локальный прокси.
   @override
   Future<int> connectedDelay(ServerProfile server) async {
-    final c = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 8)
-      ..findProxy = (_) => 'PROXY 127.0.0.1:$_httpPort';
-    final sw = Stopwatch()..start();
     try {
-      final req = await c
-          .getUrl(Uri.parse('https://www.google.com/generate_204'))
-          .timeout(const Duration(seconds: 8));
-      final res = await req.close().timeout(const Duration(seconds: 8));
-      await res.drain<void>();
-      return sw.elapsedMilliseconds.clamp(1, 99999);
+      return await _warmDelay('127.0.0.1:$_httpPort',
+          timeout: const Duration(seconds: 8));
     } catch (_) {
       return -1;
+    }
+  }
+
+  /// Задержка через прокси так же, как её меряют VPN-клиенты («real delay»),
+  /// но без рукопожатий: два HTTPS-запроса по одному туннелю, в ответ —
+  /// время второго. Первый открывает соединение с сервером, TLS и прочее;
+  /// второй показывает чистое время «туда-обратно» через сервер —
+  /// одинаково честно для VLESS, Trojan и Hysteria2.
+  Future<int> _warmDelay(String proxy,
+      {Duration timeout = const Duration(seconds: 6)}) async {
+    final c = HttpClient()
+      ..connectionTimeout = timeout
+      ..idleTimeout = const Duration(seconds: 15)
+      ..findProxy = (_) => 'PROXY $proxy';
+    Future<int> once() async {
+      final sw = Stopwatch()..start();
+      final req = await c
+          .getUrl(Uri.parse('https://www.gstatic.com/generate_204'))
+          .timeout(timeout);
+      req.persistentConnection = true;
+      final res = await req.close().timeout(timeout);
+      await res.drain<void>().timeout(timeout);
+      if (res.statusCode >= 400) throw Exception('HTTP ${res.statusCode}');
+      return sw.elapsedMilliseconds;
+    }
+
+    try {
+      final first = await once();
+      int? second;
+      try {
+        second = await once();
+      } catch (_) {}
+      return (second ?? first).clamp(1, 9999);
     } finally {
       c.close(force: true);
     }
   }
+
 
   @override
   Future<String> coreVersion() => _versionOf(_corePath);

@@ -145,13 +145,7 @@ class PingBadge extends StatelessWidget {
     }
     final p = ping;
     final c = NX.pingColor(p);
-    final bars = p == null || p < 0
-        ? 0
-        : p < 150
-            ? 3
-            : p < 400
-                ? 2
-                : 1;
+    final bars = NX.pingLevel(p);
     final txt = p == null ? '— мс' : (p < 0 ? 'нет связи' : '$p мс');
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -171,9 +165,7 @@ class PingBadge extends StatelessWidget {
         const SizedBox(width: 7),
         Text(txt,
             style: TextStyle(
-                color: p == null
-                    ? NX.text3
-                    : (p < 0 ? NX.red : NX.text2),
+                color: p == null ? NX.text3 : c,
                 fontSize: 12.5,
                 height: 1,
                 fontWeight: FontWeight.w600,
