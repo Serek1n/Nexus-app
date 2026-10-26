@@ -363,6 +363,8 @@ class AppState extends ChangeNotifier {
     if (_failoverTried.length > 3) {
       failoverNote = null;
       lastError = 'Ни один сервер не отвечает — проверьте интернет или подписку';
+      _wantConnected = false;
+      reconnectNote = null;
       notifyListeners();
       return;
     }
@@ -406,6 +408,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     _retryTimer = Timer(Duration(seconds: sec), () async {
       if (!_wantConnected || state != ConnState.disconnected) return;
+      // Сервер так и не подключился за 4 попытки, а сеть есть —
+      // не крутим бесконечно: другой сервер или понятная ошибка.
+      final s = selected;
+      if (_retry >= 4 && s != null &&
+          (await _networkSignature()).isNotEmpty) {
+        _retry = 0;
+        reconnectNote = null;
+        if (settings.autoFailover && servers.length > 1) {
+          await _failover(s);
+        } else {
+          _wantConnected = false;
+          lastError = 'Не удаётся подключиться к «${s.cleanName}». '
+              'Попробуйте другой сервер';
+          notifyListeners();
+        }
+        return;
+      }
       await connect(keepFailover: true, auto: true);
     });
   }

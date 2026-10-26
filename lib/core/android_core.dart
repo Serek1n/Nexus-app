@@ -13,6 +13,7 @@ class AndroidCore extends VpnCore {
   final List<String> _logs = [];
   late final V2ray _v2ray = V2ray(onStatusChanged: _onStatus);
   ConnState _last = ConnState.disconnected;
+  DateTime? _startedAt;
 
   void _onStatus(V2RayStatus s) {
     final st = s.state.toUpperCase();
@@ -25,6 +26,14 @@ class AndroidCore extends VpnCore {
       mapped = ConnState.connected;
     } else {
       mapped = _last;
+    }
+    // Сразу после запуска плагин может прислать старый «DISCONNECTED» —
+    // не принимаем его за обрыв, иначе начинается цикл переподключений.
+    if (mapped == ConnState.disconnected &&
+        _last == ConnState.connecting &&
+        _startedAt != null &&
+        DateTime.now().difference(_startedAt!).inSeconds < 10) {
+      return;
     }
     if (mapped != _last) {
       _last = mapped;
@@ -77,6 +86,7 @@ class AndroidCore extends VpnCore {
     // «CONNECTED» от плагина может совпасть со старым и потеряться —
     // приложение тогда бесконечно ждёт подключения.
     _last = ConnState.connecting;
+    _startedAt = DateTime.now();
     await _v2ray.startV2Ray(
       remark: remark,
       config: config,
@@ -92,6 +102,7 @@ class AndroidCore extends VpnCore {
       await _v2ray.stopV2Ray();
     } finally {
       // Плагин не всегда присылает «DISCONNECTED» — сообщаем сами.
+      _startedAt = null;
       if (_last != ConnState.disconnected) {
         _last = ConnState.disconnected;
         _states.add(ConnState.disconnected);

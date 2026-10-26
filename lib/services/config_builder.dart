@@ -220,6 +220,18 @@ void _patchHysteria2(Map<String, dynamic> cfg, String link) {
     hs.removeWhere((_, v) => v == null);
     ss['hysteriaSettings'] = hs;
 
+    // Плагин Android ищет адрес сервера в settings.vnext или
+    // settings.servers; у Hysteria их нет — без этого VPN не запускается
+    // и «Подключение…» крутится бесконечно. Xray лишнее поле игнорирует.
+    final st = (ob['settings'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    if (st['address'] != null && st['servers'] == null) {
+      st['servers'] = [
+        {'address': st['address'], 'port': st['port'] ?? 443}
+      ];
+    }
+    ob['settings'] = st;
+
     final fm = (ss['finalmask'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{};
     final udp = List<dynamic>.from(fm['udp'] as List? ?? const []);
