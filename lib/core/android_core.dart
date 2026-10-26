@@ -73,6 +73,10 @@ class AndroidCore extends VpnCore {
       if (settings.routing == RoutingMode.smart && settings.ruAppsDirect)
         ...RuAppsUpdater.all,
     }.toList();
+    // Новое подключение: сбрасываем запомненное состояние, иначе статус
+    // «CONNECTED» от плагина может совпасть со старым и потеряться —
+    // приложение тогда бесконечно ждёт подключения.
+    _last = ConnState.connecting;
     await _v2ray.startV2Ray(
       remark: remark,
       config: config,
@@ -83,7 +87,17 @@ class AndroidCore extends VpnCore {
   }
 
   @override
-  Future<void> disconnect() => _v2ray.stopV2Ray();
+  Future<void> disconnect() async {
+    try {
+      await _v2ray.stopV2Ray();
+    } finally {
+      // Плагин не всегда присылает «DISCONNECTED» — сообщаем сами.
+      if (_last != ConnState.disconnected) {
+        _last = ConnState.disconnected;
+        _states.add(ConnState.disconnected);
+      }
+    }
+  }
 
   @override
   Future<int> ping(ServerProfile server, String config) async {

@@ -4,11 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.2');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.3');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.9.3', [
+    'Исправлено бесконечное «Подключение…»',
+    'Нет лишних переподключений после обновления подписки',
+    'Режим маршрутизации — только в настройках',
+    'Подсказка про батарею — уведомлением',
+    'Разделители в настройках стали тёмными',
+  ]),
   ('1.9.2', [
     'Windows: проверка сотен серверов в разы быстрее',
     'Прогресс проверки и счётчик неотвечающих',

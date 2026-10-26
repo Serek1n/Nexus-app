@@ -75,6 +75,12 @@ ThemeData buildTheme() {
       fontFamily: NX.body,
     ),
     dividerColor: NX.stroke,
+    // Разделители тёмные, но различимые на карточках (в Material 3 по
+    // умолчанию они почти белые).
+    dividerTheme: const DividerThemeData(
+      color: Color(0x1CFFFFFF),
+      thickness: 1,
+    ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: NX.surface2,
       contentTextStyle:

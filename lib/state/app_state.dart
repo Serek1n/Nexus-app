@@ -424,6 +424,21 @@ class AppState extends ChangeNotifier {
   /// Android: включена экономия батареи для Nexus — система может рвать VPN.
   bool batteryRestricted = false;
 
+  /// Пора показать уведомление про батарею: подключены, ограничение есть,
+  /// а прошлое уведомление было больше 3 дней назад.
+  bool get batteryHintDue =>
+      !isDesktop &&
+      batteryRestricted &&
+      settings.autoReconnect &&
+      state == ConnState.connected &&
+      DateTime.now().millisecondsSinceEpoch -
+              (_prefs.getInt('batteryHintAt') ?? 0) >
+          const Duration(days: 3).inMilliseconds;
+
+  void markBatteryHintShown() {
+    _prefs.setInt('batteryHintAt', DateTime.now().millisecondsSinceEpoch);
+  }
+
   Future<void> refreshBattery() async {
     if (isDesktop) return;
     final restricted = !(await AndroidSystem.isIgnoringBattery());
@@ -628,12 +643,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     // Подключение «зависло» (нет ответа от ядра или системы) — не ждём вечно.
     _connectGuard?.cancel();
-    _connectGuard = Timer(const Duration(seconds: 30), () {
+    _connectGuard = Timer(const Duration(seconds: 30), () async {
       if (state != ConnState.connecting) return;
       if (!settings.autoReconnect) {
         lastError = 'Не удалось подключиться за 30 секунд';
       }
-      unawaited(core.disconnect());
+      try {
+        await core.disconnect();
+      } catch (_) {}
+      // Ядро промолчало — выходим из «Подключение…» сами.
+      if (state == ConnState.connecting) _onCoreState(ConnState.disconnected);
     });
     try {
       await core.connect(
@@ -944,11 +963,25 @@ class AppState extends ChangeNotifier {
           state == ConnState.connected &&
           selected != null &&
           before != null &&
-          selected!.link != before) {
+          !_sameLink(selected!.link, before)) {
         await reconnectIfActive();
         return;
       }
     }
+  }
+
+  /// Тот же сервер с теми же ключами? 3x-ui при каждой выдаче подписки
+  /// подставляет случайный spx (путь маскировки Reality) — его и название
+  /// не сравниваем, иначе каждое обновление вызывало бы переподключение.
+  static bool _sameLink(String a, String b) {
+    String norm(String l) {
+      var x = l.split('#').first;
+      x = x.replaceAllMapped(
+          RegExp(r'([?&])spx=[^&]*&?'), (m) => m.group(1)!);
+      return x.replaceAll(RegExp(r'[?&]$'), '');
+    }
+
+    return norm(a) == norm(b);
   }
 
   Future<Subscription> addSubscription(String url) async {
@@ -993,7 +1026,8 @@ class AppState extends ChangeNotifier {
       servers.addAll(res.servers);
       _applyAliases();
       if (keepLink != null) {
-        final match = res.servers.where((s) => s.link == keepLink).toList();
+        final match =
+            res.servers.where((s) => _sameLink(s.link, keepLink)).toList();
         final byName = res.servers.where((s) => s.name == keepName).toList();
         selectedId = match.isNotEmpty
             ? match.first.id

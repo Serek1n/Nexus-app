@@ -58,22 +58,37 @@ class HomeScreen extends StatelessWidget {
           _Notice(text: app.reconnectNote!, icon: Icons.autorenew_rounded),
           const SizedBox(height: 10),
         ],
-        if (!app.isDesktop &&
-            app.batteryRestricted &&
-            app.settings.autoReconnect &&
-            app.state == ConnState.connected) ...[
-          _Notice(
-            text: 'Android может отключать VPN в фоне. '
-                'Нажмите, чтобы разрешить Nexus работать без ограничений',
-            icon: Icons.battery_alert_rounded,
-            onTap: () async {
-              await AndroidSystem.requestIgnoreBattery();
-              await Future.delayed(const Duration(seconds: 2));
-              await app.refreshBattery();
-            },
-          ),
-          const SizedBox(height: 10),
-        ],
+        // Подсказка про батарею — всплывающим уведомлением, а не плашкой.
+        if (app.batteryHintDue)
+          Builder(builder: (ctx) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!app.batteryHintDue) return;
+              app.markBatteryHintShown();
+              ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(SnackBar(
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 8),
+                content: const Row(children: [
+                  Icon(Icons.battery_alert_rounded,
+                      color: NX.amber, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                      child: Text(
+                          'Android может отключать VPN в фоне — '
+                          'разрешите Nexus работать без ограничений')),
+                ]),
+                action: SnackBarAction(
+                  label: 'Разрешить',
+                  textColor: NX.violet,
+                  onPressed: () async {
+                    await AndroidSystem.requestIgnoreBattery();
+                    await Future.delayed(const Duration(seconds: 2));
+                    await app.refreshBattery();
+                  },
+                ),
+              ));
+            });
+            return const SizedBox.shrink();
+          }),
         if (app.failoverNote != null) ...[
           _Notice(text: app.failoverNote!, icon: Icons.alt_route_rounded),
           const SizedBox(height: 10),
@@ -162,8 +177,6 @@ class HomeScreen extends StatelessWidget {
                 )
               : const SizedBox(width: double.infinity),
         ),
-        const SizedBox(height: 10),
-        const _RoutingSwitch(),
         if (sub != null) ...[
           const SizedBox(height: 10),
           _SubscriptionStrip(sub: sub),
@@ -663,62 +676,6 @@ class _ServerRow extends StatelessWidget {
                 : const Icon(Icons.bolt_rounded, color: NX.text2, size: 20),
           ),
           const Icon(Icons.chevron_right_rounded, color: NX.text3),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoutingSwitch extends StatelessWidget {
-  const _RoutingSwitch();
-
-  @override
-  Widget build(BuildContext context) {
-    final app = AppScope.of(context);
-    Widget seg(RoutingMode m, String title) {
-      final on = app.settings.routing == m;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () async {
-            if (on) return;
-            app.updateSettings((s) => s.routing = m);
-            await app.reconnectIfActive();
-          },
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(9),
-                color: on ? NX.surface2 : Colors.transparent,
-                border: Border.all(
-                    color: on ? NX.strokeStrong : Colors.transparent),
-              ),
-              child: Text(title,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
-                      color: on ? NX.text : NX.text3)),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: NX.surface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: NX.stroke),
-      ),
-      child: Row(
-        children: [
-          seg(RoutingMode.smart, 'Умный режим'),
-          const SizedBox(width: 4),
-          seg(RoutingMode.global, 'Весь трафик'),
         ],
       ),
     );
