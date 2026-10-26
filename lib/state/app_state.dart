@@ -203,7 +203,7 @@ class AppState extends ChangeNotifier {
       appUpdate = u;
       updateStatus = null;
       checkingUpdate = false;
-      if (settings.autoUpdateApp) await _downloadUpdate();
+      // Только сообщаем: скачивание начнётся, когда нажмут «Установить».
     } catch (e) {
       if (!silent) updateStatus = _msg(e);
     } finally {

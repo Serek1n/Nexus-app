@@ -437,7 +437,9 @@ class SettingsScreen extends StatelessWidget {
                                 : app.updateStatus ??
                                     (app.updateFile != null
                                         ? 'Скачано и проверено — можно установить'
-                                        : 'Новые версии приходят с GitHub'),
+                                        : app.appUpdate != null
+                                            ? 'Нажмите «Установить» — скачаем и проверим'
+                                            : 'Новые версии приходят с GitHub'),
                             style: const TextStyle(
                                 color: NX.text2, fontSize: 12.5),
                           ),
@@ -505,8 +507,8 @@ class SettingsScreen extends StatelessWidget {
                   const Divider(height: 22),
                   switchRow(
                     Icons.autorenew_rounded,
-                    'Автообновление',
-                    'Проверять и скачивать новые версии в фоне',
+                    'Проверять обновления',
+                    'Сообщать о новой версии; скачивание — по кнопке «Установить»',
                     st.autoUpdateApp,
                     (v) => app.updateSettings((s) => s.autoUpdateApp = v),
                   ),

@@ -304,6 +304,13 @@ class AppUpdater {
         throw Exception(
             'Разрешите Nexus устанавливать приложения и нажмите «Установить» ещё раз');
       }
+      if (!await AndroidSystem.apkSameSigner(file.path)) {
+        throw Exception(
+            'Эта версия подписана другим ключом, и Android не поставит её '
+            'поверх текущей. Скопируйте подписки (Откатить версию → '
+            'Скопировать подписки), удалите Nexus и установите новую версию '
+            'со страницы релиза. Дальше обновления пойдут как обычно.');
+      }
       if (!await AndroidSystem.installApk(file.path)) {
         throw Exception('Не удалось открыть установщик');
       }

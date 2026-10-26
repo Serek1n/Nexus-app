@@ -217,6 +217,30 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "apkSameSigner" -> {
+                        // Подписан ли скачанный APK тем же ключом, что и
+                        // установленный Nexus (иначе Android откажет в установке).
+                        val path = call.arguments as? String
+                        try {
+                            val flags = if (Build.VERSION.SDK_INT >= 28)
+                                PackageManager.GET_SIGNING_CERTIFICATES
+                            else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+                            fun sigs(info: android.content.pm.PackageInfo?): Set<String> {
+                                if (info == null) return emptySet()
+                                val arr = if (Build.VERSION.SDK_INT >= 28)
+                                    info.signingInfo?.apkContentsSigners
+                                else @Suppress("DEPRECATION") info.signatures
+                                return arr?.map { it.toCharsString() }?.toSet() ?: emptySet()
+                            }
+                            val own = sigs(packageManager.getPackageInfo(packageName, flags))
+                            val apk = sigs(path?.let { packageManager.getPackageArchiveInfo(it, flags) })
+                            // Не смогли прочитать — не мешаем установщику.
+                            result.success(own.isEmpty() || apk.isEmpty() || own == apk)
+                        } catch (e: Exception) {
+                            result.success(true)
+                        }
+                    }
+
                     "openVpnSettings" -> {
                         try {
                             startActivity(Intent(Settings.ACTION_VPN_SETTINGS))

@@ -121,7 +121,15 @@ jobs:
           EOF
             echo "Подпись: релизный ключ"
           else
-            echo "::warning::Секрет KEYSTORE_BASE64 не задан — APK подписан отладочным ключом, обновления в приложении работать не будут"
+            # Без постоянного ключа каждая сборка подписывается новым
+            # отладочным ключом, и Android отказывается ставить обновление
+            # («конфликтует с другим пакетом»). Такие сборки не выпускаем.
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "::warning::KEYSTORE_BASE64 не задан — пробная сборка с отладочным ключом"
+            else
+              echo "::error::Не задан секрет KEYSTORE_BASE64 (и KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD). Добавьте их из github-secrets.txt: Settings → Secrets and variables → Actions."
+              exit 1
+            fi
           fi
 
       - name: Зависимости и иконки

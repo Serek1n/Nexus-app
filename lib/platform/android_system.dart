@@ -62,6 +62,10 @@ class AndroidSystem {
 
   static Future<void> openInstallSettings() => _call('openInstallSettings');
 
+  /// Подписан ли APK тем же ключом, что установленное приложение.
+  static Future<bool> apkSameSigner(String path) async =>
+      await _call<bool>('apkSameSigner', path) ?? true;
+
   /// Открывает системный установщик для скачанного обновления.
   static Future<bool> installApk(String path) async =>
       await _call<bool>('installApk', path) ?? false;

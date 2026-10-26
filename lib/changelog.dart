@@ -4,11 +4,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.3');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.4');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.9.4', [
+    'Постоянная подпись APK — обновления ставятся поверх',
+    'Понятная ошибка, если ключ подписи сменился',
+    'Обновление скачивается только по кнопке «Установить»',
+  ]),
   ('1.9.3', [
     'Исправлено бесконечное «Подключение…»',
     'Нет лишних переподключений после обновления подписки',
