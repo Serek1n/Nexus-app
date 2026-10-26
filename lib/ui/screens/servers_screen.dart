@@ -19,6 +19,13 @@ class _ServersScreenState extends State<ServersScreen> {
   String _q = '';
   bool _byPing = false;
 
+  /// Фильтр по подписке: null — все, '★' — избранное, '' — добавленные вручную.
+  String? _filter;
+
+  /// Свёрнутые группы (id подписки, '' — вручную).
+  final Set<String> _collapsed = {};
+  bool _collapseInit = false;
+
   /// Избранные — всегда сверху; внутри — по задержке, если выбрано.
   List<ServerProfile> _sorted(List<ServerProfile> list) {
     final app = AppScope.read(context);
@@ -37,17 +44,39 @@ class _ServersScreenState extends State<ServersScreen> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    final groups = <(String, List<ServerProfile>)>[];
+    // Группы: (ключ, название, серверы).
+    final all = <(String, String, List<ServerProfile>)>[];
     for (final sub in app.subscriptions) {
-      groups.add((sub.title, _sorted(app.serversOf(sub.id))));
+      all.add((sub.id, sub.title, _sorted(app.serversOf(sub.id))));
     }
     final manual = _sorted(app.serversOf(null));
-    if (manual.isNotEmpty) groups.add(('Добавлены вручную', manual));
+    if (manual.isNotEmpty) all.add(('', 'Добавлены вручную', manual));
+
+    // При большом числе подписок сразу сворачиваем всё, кроме группы
+    // с выбранным сервером, — список не превращается в простыню.
+    if (!_collapseInit && all.isNotEmpty) {
+      _collapseInit = true;
+      if (all.length >= 3) {
+        final sel = app.selected?.subscriptionId ?? '';
+        for (final g in all) {
+          if (g.$1 != sel) _collapsed.add(g.$1);
+        }
+      }
+    }
 
     bool match(ServerProfile s) =>
         _q.isEmpty ||
         s.name.toLowerCase().contains(_q) ||
         s.host.toLowerCase().contains(_q);
+
+    final favs = app.servers.where(app.isFavorite).toList();
+    final List<(String, String, List<ServerProfile>)> groups = switch (_filter) {
+      null => all,
+      '★' => [('★', 'Избранное', _sorted(favs))],
+      final f => all.where((g) => g.$1 == f).toList(),
+    };
+    // Поиск или фильтр — показываем группы развёрнутыми.
+    final forceOpen = _q.isNotEmpty || _filter != null;
 
     return SafeArea(
       bottom: false,
@@ -89,6 +118,42 @@ class _ServersScreenState extends State<ServersScreen> {
               ),
             ),
           ),
+          if (all.length > 1 || favs.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 14),
+              sliver: SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 36,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      _Chip(
+                        label: 'Все',
+                        count: app.servers.length,
+                        selected: _filter == null,
+                        onTap: () => setState(() => _filter = null),
+                      ),
+                      if (favs.isNotEmpty)
+                        _Chip(
+                          label: 'Избранное',
+                          icon: Icons.star_rounded,
+                          count: favs.length,
+                          selected: _filter == '★',
+                          onTap: () => setState(() => _filter = '★'),
+                        ),
+                      for (final g in all)
+                        _Chip(
+                          label: g.$2,
+                          count: g.$3.length,
+                          selected: _filter == g.$1,
+                          onTap: () => setState(() => _filter = g.$1),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (app.servers.length > 6)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -117,28 +182,189 @@ class _ServersScreenState extends State<ServersScreen> {
               ),
             )
           else
-            for (final (title, list) in groups) ...[
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverToBoxAdapter(child: SectionTitle(title)),
+            for (final (key, title, list) in groups)
+              if (list.any(match)) ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: _GroupHeader(
+                      title: title,
+                      servers: list,
+                      collapsed: !forceOpen && _collapsed.contains(key),
+                      // Один фильтр — сворачивать незачем.
+                      onToggle: forceOpen || groups.length == 1
+                          ? null
+                          : () => setState(() => _collapsed.contains(key)
+                              ? _collapsed.remove(key)
+                              : _collapsed.add(key)),
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverToBoxAdapter(
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: !forceOpen && _collapsed.contains(key)
+                          ? const SizedBox(width: double.infinity)
+                          : Column(
+                              children: [
+                                for (final (i, s)
+                                    in list.where(match).indexed) ...[
+                                  if (i > 0) const SizedBox(height: 8),
+                                  _ServerTile(
+                                    server: s,
+                                    onSelected: widget.onSelected,
+                                  ),
+                                ],
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Фильтр-«таблетка» над списком.
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Material(
+          color: selected ? NX.violet.withValues(alpha: 0.16) : NX.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+                color: selected
+                    ? NX.violet.withValues(alpha: 0.5)
+                    : NX.stroke),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 15, color: NX.amber),
+                    const SizedBox(width: 5),
+                  ],
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 160),
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? NX.text : NX.text2)),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('$count',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: selected ? NX.violet : NX.text3)),
+                ],
               ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverList.separated(
-                  itemCount: list.where(match).length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final s = list.where(match).elementAt(i);
-                    return _ServerTile(
-                      server: s,
-                      onSelected: widget.onSelected,
-                    );
-                  },
+            ),
+          ),
+        ),
+      );
+}
+
+/// Заголовок группы: название подписки, число серверов, лучшая задержка.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({
+    required this.title,
+    required this.servers,
+    required this.collapsed,
+    this.onToggle,
+  });
+  final String title;
+  final List<ServerProfile> servers;
+  final bool collapsed;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final pings = servers
+        .map((s) => s.ping)
+        .whereType<int>()
+        .where((p) => p > 0)
+        .toList()
+      ..sort();
+    final hasActive = servers.any((s) => s.id == app.selectedId);
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Row(
+          children: [
+            if (onToggle != null) ...[
+              AnimatedRotation(
+                turns: collapsed ? -0.25 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const Icon(Icons.expand_more_rounded,
+                    size: 20, color: NX.text3),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: NX.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700)),
+            ),
+            if (hasActive) ...[
+              const SizedBox(width: 8),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: app.state == ConnState.connected
+                      ? NX.mint
+                      : NX.violet,
                 ),
               ),
             ],
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
-        ],
+            const Spacer(),
+            Text(
+              '${servers.length} '
+              '${plural(servers.length, 'сервер', 'сервера', 'серверов')}'
+              '${pings.isEmpty ? '' : ' · от ${pings.first} мс'}',
+              style: const TextStyle(color: NX.text3, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -157,7 +383,7 @@ class _ServerTile extends StatelessWidget {
     return NeonCard(
       active: active,
       accent: live ? NX.mint : NX.violet,
-      padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
       onTap: () async {
         await app.select(server);
         onSelected?.call();
@@ -165,7 +391,7 @@ class _ServerTile extends StatelessWidget {
       onLongPress: () => _menu(context),
       child: Row(
         children: [
-          ServerAvatar(server: server),
+          ServerAvatar(server: server, size: 38),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
