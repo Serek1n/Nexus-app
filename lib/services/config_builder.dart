@@ -133,6 +133,15 @@ String buildXrayConfig(
   ];
 
   if (routing == RoutingMode.smart) {
+    // Сервисы, заблокированные или замедленные в России, — всегда через
+    // сервер. Их CDN часто стоят у российских провайдеров (кэш YouTube,
+    // узлы TikTok), и правило «российские IP напрямую» отправило бы видео
+    // мимо VPN: YouTube тормозит, TikTok не грузит ленту.
+    rules.add({
+      'type': 'field',
+      'domain': _alwaysProxy,
+      'outboundTag': 'proxy',
+    });
     // Российские сайты и IP — напрямую, всё остальное — через Nexus.
     rules.addAll([
       {
@@ -351,6 +360,31 @@ void _patchShareParams(Map<String, dynamic> cfg, String link) {
     ob['streamSettings'] = ss;
   }
 }
+
+const _alwaysProxy = [
+  // YouTube и видео Google
+  'domain:youtube.com', 'domain:youtu.be', 'domain:googlevideo.com',
+  'domain:ytimg.com', 'domain:ggpht.com', 'domain:youtube-nocookie.com',
+  'domain:youtubei.googleapis.com',
+  // TikTok
+  'domain:tiktok.com', 'domain:tiktokv.com', 'domain:tiktokcdn.com',
+  'domain:tiktokcdn-eu.com', 'domain:tiktokcdn-us.com', 'domain:tiktokw.us',
+  'domain:ttwstatic.com', 'domain:byteoversea.com', 'domain:ibytedtos.com',
+  'domain:ibyteimg.com', 'domain:muscdn.com', 'domain:musical.ly',
+  'domain:byteintlapi.com', 'domain:tiktokv.us', 'domain:tiktokv.eu',
+  // Instagram, Facebook
+  'domain:instagram.com', 'domain:cdninstagram.com', 'domain:facebook.com',
+  'domain:fbcdn.net', 'domain:fb.com', 'domain:whatsapp.net',
+  // X (Twitter)
+  'domain:twitter.com', 'domain:x.com', 'domain:twimg.com', 'domain:t.co',
+  // Discord
+  'domain:discord.com', 'domain:discord.gg', 'domain:discordapp.com',
+  'domain:discordapp.net', 'domain:discord.media',
+  // Прочее часто заблокированное
+  'domain:linkedin.com', 'domain:licdn.com', 'domain:medium.com',
+  'domain:signal.org', 'domain:telegram.org', 'domain:t.me',
+  'domain:patreon.com', 'domain:soundcloud.com',
+];
 
 String _randomToken() {
   final r = Random.secure();

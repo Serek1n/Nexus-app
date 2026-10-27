@@ -89,6 +89,12 @@ class HomeScreen extends StatelessWidget {
             });
             return const SizedBox.shrink();
           }),
+        if (app.state == ConnState.connected &&
+            app.core.modeWarning != null) ...[
+          _Notice(
+              text: app.core.modeWarning!, icon: Icons.lan_outlined),
+          const SizedBox(height: 10),
+        ],
         if (app.failoverNote != null) ...[
           _Notice(text: app.failoverNote!, icon: Icons.alt_route_rounded),
           const SizedBox(height: 10),

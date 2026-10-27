@@ -28,7 +28,15 @@ Future<void> main(List<String> args) async {
 
   if (Platform.isWindows) {
     // Второй запуск просто показывает уже открытое окно (и передаёт ссылку).
-    if (!await WindowsHost.claimSingleInstance(link)) exit(0);
+    var claimed = await WindowsHost.claimSingleInstance(link);
+    // Перезапуск с правами администратора: ждём, пока старая копия закроется.
+    if (args.contains('--relaunch')) {
+      for (var i = 0; i < 40 && !claimed; i++) {
+        await Future.delayed(const Duration(milliseconds: 250));
+        claimed = await WindowsHost.claimSingleInstance(link);
+      }
+    }
+    if (!claimed) exit(0);
     if (link != null) DeepLinks.handle(link);
     await windowManager.ensureInitialized();
     const options = WindowOptions(
@@ -58,6 +66,10 @@ Future<void> main(List<String> args) async {
   final state = AppState();
   runApp(NexusApp(state: state));
   await state.init();
+  // После перезапуска от администратора (режим TUN) — сразу подключаемся.
+  if (args.contains('--connect') && state.selected != null) {
+    unawaited(state.connect());
+  }
   unawaited(AndroidSystem.listenLinks(DeepLinks.handle));
   if (Platform.isWindows) {
     state.setWindowVisible(!startHidden);

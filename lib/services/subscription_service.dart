@@ -132,6 +132,9 @@ bool _isLoopback(String host) {
 }
 
 class SubscriptionService {
+  /// Случайный идентификатор этой установки (задаёт AppState при запуске).
+  static String? deviceId;
+
   static const userAgent = 'v2rayNG/1.10.0 Nexus/1.0';
 
   static String? _decodeHeader(String? v) {
@@ -169,7 +172,26 @@ class SubscriptionService {
         ..headers['User-Agent'] = userAgent
         ..headers['Accept'] = '*/*'
         ..maxRedirects = 5;
+      // Идентификатор устройства для панелей с лимитом устройств (3x-ui,
+      // Remnawave): без него такая подписка отвечает 404. Это случайное
+      // число, созданное при установке Nexus, — не серийный номер.
+      if (deviceId != null) {
+        req.headers['X-HWID'] = deviceId!;
+        req.headers['X-Device-OS'] = Platform.isAndroid ? 'Android' : 'Windows';
+        req.headers['X-Device-Model'] = 'Nexus';
+        final ver = Platform.operatingSystemVersion;
+        req.headers['X-Ver-OS'] =
+            ver.length > 60 ? ver.substring(0, 60) : ver;
+      }
       res = await client.send(req).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 404) {
+        if (res.headers['x-hwid-max-devices-reached'] == 'true') {
+          throw Exception('Лимит устройств подписки исчерпан — отключите '
+              'старое устройство в боте или попросите увеличить лимит');
+        }
+        throw Exception('Подписка не найдена (404) — проверьте ссылку: '
+            'возможно, она устарела, клиент удалён или срок истёк');
+      }
       if (res.statusCode != 200) {
         throw Exception('Сервер ответил кодом ${res.statusCode}');
       }

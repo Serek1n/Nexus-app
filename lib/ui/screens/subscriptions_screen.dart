@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../models.dart';
 import '../add_sheet.dart';
+import '../share_sheet.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -156,6 +157,15 @@ class _SubCard extends StatelessWidget {
                 ),
                 onSelected: (v) async {
                   switch (v) {
+                    case 'share':
+                      await showShareSheet(
+                        context,
+                        title: 'Подписка «${sub.title}»',
+                        text: sub.url,
+                        warning: 'По этой ссылке получают все серверы подписки '
+                            'и тратят её трафик. Делитесь только с теми, '
+                            'кому доверяете, и если владелец подписки не против.',
+                      );
                     case 'copy':
                       await Clipboard.setData(ClipboardData(text: sub.url));
                       if (context.mounted) toast(context, 'Ссылка скопирована');
@@ -166,6 +176,7 @@ class _SubCard extends StatelessWidget {
                   }
                 },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'share', child: Text('Поделиться (QR)')),
                   PopupMenuItem(value: 'copy', child: Text('Скопировать ссылку')),
                   PopupMenuItem(value: 'rename', child: Text('Переименовать')),
                   PopupMenuItem(

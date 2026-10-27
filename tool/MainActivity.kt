@@ -248,6 +248,18 @@ class MainActivity : FlutterActivity() {
                         )
                     }
 
+                    "shareText" -> {
+                        try {
+                            val send = Intent(Intent.ACTION_SEND)
+                                .setType("text/plain")
+                                .putExtra(Intent.EXTRA_TEXT, call.arguments as String)
+                            startActivity(Intent.createChooser(send, "Поделиться"))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.success(false)
+                        }
+                    }
+
                     "openVpnSettings" -> {
                         try {
                             startActivity(Intent(Settings.ACTION_VPN_SETTINGS))

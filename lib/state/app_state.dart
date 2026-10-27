@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -76,6 +77,15 @@ class AppState extends ChangeNotifier {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // Случайный идентификатор установки для подписок с лимитом устройств.
+    var did = _prefs.getString('deviceId');
+    if (did == null || did.length < 16) {
+      final r = math.Random.secure();
+      did = List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'))
+          .join();
+      await _prefs.setString('deviceId', did);
+    }
+    SubscriptionService.deviceId = did;
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     try {
       final subs = jsonDecode(await _readSecret('subscriptions')) as List;
@@ -312,6 +322,9 @@ class AppState extends ChangeNotifier {
   /// Сохранения выполняются строго по очереди, чтобы старое не затёрло новое.
   Future<void> _saveChain = Future.value();
 
+  /// Дождаться записи всех изменений на диск (перед перезапуском).
+  Future<void> flushSaves() => _saveChain;
+
   void _save() {
     final subs = jsonEncode(subscriptions.map((e) => e.toJson()).toList());
     final srv = jsonEncode(servers.map((e) => e.toJson()).toList());
@@ -348,6 +361,9 @@ class AppState extends ChangeNotifier {
       liveLatency = -1;
     }
     notifyListeners();
+    core.note(liveLatency != null && liveLatency! > 0
+        ? 'Трафик через «${s.cleanName}» идёт, задержка $liveLatency мс'
+        : 'Через «${s.cleanName}» трафик не проходит — сервер не ответил');
     if (afterConnect && liveLatency == -1) await _failover(s);
   }
 
@@ -528,6 +544,7 @@ class AppState extends ChangeNotifier {
     }
     final d = await core.connectedDelay(s);
     if (state != ConnState.connected) return;
+    if (d <= 0) core.note('Проверка канала: «${s.cleanName}» не ответил');
     if (d > 0) {
       _healthFails = 0;
       _deadReconnects = 0;

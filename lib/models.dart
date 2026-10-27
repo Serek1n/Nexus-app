@@ -294,6 +294,7 @@ class AppSettings {
     this.ruAppsDirect = true,
     this.autoUpdateApp = true,
     this.windowsKillSwitch = true,
+    this.windowsTun = false,
     this.clearClipboard = true,
     this.autoFailover = true,
     this.autoReconnect = true,
@@ -333,6 +334,9 @@ class AppSettings {
 
   /// Windows: при падении VPN не выпускать трафик мимо него.
   bool windowsKillSwitch;
+
+  /// Windows: режим TUN — через Nexus идут все программы (нужны права администратора).
+  bool windowsTun;
 
   /// Избранные серверы (ключ — название и адрес, переживает обновление подписки).
   List<String> favorites;
@@ -376,6 +380,7 @@ class AppSettings {
         'ruAppsDirect': ruAppsDirect,
         'autoUpdateApp': autoUpdateApp,
         'windowsKillSwitch': windowsKillSwitch,
+        'windowsTun': windowsTun,
         'clearClipboard': clearClipboard,
         'autoFailover': autoFailover,
         'autoReconnect': autoReconnect,
@@ -405,6 +410,7 @@ class AppSettings {
         ruAppsDirect: j['ruAppsDirect'] as bool? ?? true,
         autoUpdateApp: j['autoUpdateApp'] as bool? ?? true,
         windowsKillSwitch: j['windowsKillSwitch'] as bool? ?? true,
+        windowsTun: j['windowsTun'] as bool? ?? false,
         clearClipboard: j['clearClipboard'] as bool? ?? true,
         autoFailover: j['autoFailover'] as bool? ?? true,
         autoReconnect: j['autoReconnect'] as bool? ?? true,

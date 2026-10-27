@@ -138,7 +138,9 @@ class AndroidCore extends VpnCore {
   Future<List<String>> fetchLogs() async {
     try {
       final l = await _v2ray.getLogs();
-      return l.length > 400 ? l.sublist(l.length - 400) : l;
+      final core = l.length > 300 ? l.sublist(l.length - 300) : l;
+      // Строки ядра + заметки самого Nexus (проверки канала).
+      return [...core, ..._logs];
     } catch (_) {
       return _logs;
     }

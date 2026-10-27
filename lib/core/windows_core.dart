@@ -10,6 +10,7 @@ import 'package:ffi/ffi.dart';
 import 'package:http/http.dart' as http;
 
 import '../models.dart';
+import '../platform/win_admin.dart';
 import '../services/config_builder.dart';
 import 'vpn_core.dart';
 
@@ -103,6 +104,7 @@ class WindowsCore extends VpnCore {
       if (ib['tag'] == 'socks-in') ib['port'] = _socksPort;
       if (ib['tag'] == 'http-in') ib['port'] = _httpPort;
     }
+    if (_tun) _addTun(cfg);
     cfg['stats'] = <String, dynamic>{};
     // Статистика по HTTP (/debug/vars) — без запуска отдельного процесса.
     cfg['metrics'] = {
@@ -147,6 +149,22 @@ class WindowsCore extends VpnCore {
 
     _logs.clear();
     _log('Запуск ядра: $remark');
+    _tun = false;
+    _modeWarning = null;
+    if (settings.windowsTun) {
+      if (!WinAdmin.isAdmin) {
+        _modeWarning = 'Режим TUN работает только с правами администратора — '
+            'пока Nexus работает через системный прокси. Включите TUN '
+            'в настройках ещё раз, чтобы перезапустить Nexus от администратора';
+      } else if (!_ensureWintun()) {
+        _modeWarning = 'Нет файла wintun.dll рядом с ядром — режим TUN '
+            'недоступен, работаю через системный прокси. Переустановите Nexus';
+      } else {
+        _tun = true;
+        _log('Режим TUN: весь трафик компьютера идёт через Nexus');
+      }
+      if (_modeWarning != null) _log(_modeWarning!);
+    }
     if (sp != kSocksPort) {
       _log('Порты $kSocksPort/$kHttpPort заняты другой программой '
           '(например, Happ или v2rayN) — Nexus использует $sp/$hp');
@@ -203,7 +221,8 @@ class WindowsCore extends VpnCore {
           'Ядро не запустилось.${tail.isEmpty ? '' : '\n$tail'}');
     }
 
-    if (settings.windowsSystemProxy) {
+    // В режиме TUN системный прокси не нужен: трафик и так идёт через ядро.
+    if (settings.windowsSystemProxy && !_tun) {
       // Запоминаем прокси, который был у пользователя до Nexus, —
       // при отключении (и после сбоя) вернём именно его.
       final marker = File('$_dataDir\\proxy.lock');
@@ -333,6 +352,105 @@ class WindowsCore extends VpnCore {
     }
   }
 
+  bool _tun = false;
+  String? _modeWarning;
+
+  @override
+  String? get modeWarning => _modeWarning;
+
+  /// wintun.dll должен лежать рядом с запускаемым ядром. Ядро после
+  /// автообновления живёт в папке данных — копируем библиотеку туда.
+  bool _ensureWintun() {
+    try {
+      final target = File('$_coreDir\\wintun.dll');
+      if (target.existsSync()) return true;
+      final src = File('$_exeDir\\wintun.dll');
+      if (!src.existsSync()) return false;
+      src.copySync(target.path);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Режим TUN: виртуальная сетевая карта «Nexus», весь IPv4-трафик —
+  /// в ядро. Ядро само держит свои соединения вне TUN (autoOutboundsInterface)
+  /// и через фильтры Windows не выпускает DNS и IPv6 мимо туннеля.
+  void _addTun(Map<String, dynamic> cfg) {
+    final inbounds = (cfg['inbounds'] as List?) ?? [];
+    inbounds.insert(0, {
+      'tag': 'tun-in',
+      'protocol': 'tun',
+      'port': 0,
+      'settings': {
+        'name': 'Nexus',
+        'desc': 'Nexus',
+        'mtu': 1500,
+        'gateway': ['172.19.0.1/30'],
+        'dns': ['1.1.1.1'],
+        'autoSystemRoutingTable': ['0.0.0.0/0'],
+        'autoSystemWfpBlockLeak': ['dns', 'misconfigtun'],
+      },
+      'sniffing': {
+        'enabled': true,
+        'destOverride': ['http', 'tls', 'quic'],
+        'routeOnly': true,
+      },
+    });
+    cfg['inbounds'] = inbounds;
+    final outbounds = (cfg['outbounds'] as List?) ?? [];
+    outbounds.add({'tag': 'dns-out', 'protocol': 'dns'});
+    cfg['outbounds'] = outbounds;
+    final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    final rules = (routing['rules'] as List?) ?? [];
+    // DNS-запросы программ — во встроенный DNS ядра (он ходит через сервер).
+    rules.insert(0, {
+      'type': 'field',
+      'inboundTag': ['tun-in'],
+      'port': '53',
+      'outboundTag': 'dns-out',
+    });
+    routing['rules'] = rules;
+    cfg['routing'] = routing;
+  }
+
+  /// В режиме TUN временные ядра проверки задержки привязываем к обычной
+  /// сетевой карте — иначе их трафик ушёл бы в туннель через текущий сервер
+  /// и задержка всех серверов оказалась бы завышенной.
+  Future<void> _bypassTun(List? outbounds) async {
+    if (!_tun || outbounds == null) return;
+    final iface = await _physicalInterface();
+    if (iface == null) return;
+    for (final ob in outbounds) {
+      if (ob is! Map<String, dynamic>) continue;
+      final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final so = (ss['sockopt'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      so['interface'] = iface;
+      ss['sockopt'] = so;
+      ob['streamSettings'] = ss;
+    }
+  }
+
+  Future<String?> _physicalInterface() async {
+    try {
+      for (final i in await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLoopback: false)) {
+        final n = i.name.toLowerCase();
+        if (n == 'nexus' || n.contains('wintun') || n.contains('vpn')) {
+          continue;
+        }
+        if (i.addresses.any((a) =>
+            !a.isLinkLocal && !a.address.startsWith('172.19.0.'))) {
+          return i.name;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   int _socksPort = kSocksPort;
   int _httpPort = kHttpPort;
 
@@ -449,6 +567,7 @@ class WindowsCore extends VpnCore {
         }
       ];
       cfg['routing'] = {'domainStrategy': 'AsIs', 'rules': <dynamic>[]};
+      await _bypassTun(cfg['outbounds'] as List?);
       cfg.remove('metrics');
       cfg.remove('stats');
       cfg.remove('api');
@@ -507,6 +626,7 @@ class WindowsCore extends VpnCore {
         ports[s.id] = port;
         ob['tag'] = 'p$i';
         outbounds.add(ob);
+        await _bypassTun([ob]);
         inbounds.add({
           'tag': 'in$i',
           'listen': '127.0.0.1',
@@ -614,6 +734,7 @@ class WindowsCore extends VpnCore {
       ];
       // Весь трафик проверки — только через сервер.
       cfg['routing'] = {'domainStrategy': 'AsIs', 'rules': <dynamic>[]};
+      await _bypassTun(cfg['outbounds'] as List?);
       cfg.remove('metrics');
       cfg.remove('stats');
       cfg.remove('api');
@@ -827,6 +948,12 @@ class WindowsCore extends VpnCore {
       if (f.isFile && f.name.toLowerCase() == 'xray.exe') exe = f;
     }
     if (exe == null) throw Exception('В архиве нет xray.exe');
+    for (final f in zip.files) {
+      if (f.isFile && f.name.toLowerCase() == 'wintun.dll') {
+        await File('$_updDir\\wintun.dll.new')
+            .writeAsBytes(f.content as List<int>, flush: true);
+      }
+    }
     final staged = File('$_updDir\\$_newExe');
     await staged.writeAsBytes(exe.content as List<int>, flush: true);
 
@@ -870,6 +997,12 @@ class WindowsCore extends VpnCore {
         final target = File('$_updDir\\$kCoreExe');
         if (target.existsSync()) target.deleteSync();
         staged.renameSync(target.path);
+      }
+      final wt = File('$_updDir\\wintun.dll.new');
+      if (wt.existsSync()) {
+        final t = File('$_updDir\\wintun.dll');
+        if (t.existsSync()) t.deleteSync();
+        wt.renameSync(t.path);
       }
       for (final g in ['geoip.dat', 'geosite.dat']) {
         final n = File('$_updDir\\$g.new');

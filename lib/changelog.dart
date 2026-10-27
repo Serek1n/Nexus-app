@@ -4,11 +4,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.6');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.7');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.9.7', [
+    'Windows: режим TUN — все программы через Nexus',
+    'Telegram подключается одной кнопкой',
+    'В журнале видно, идёт ли трафик через сервер',
+    'Подписки с лимитом устройств загружаются',
+    'Умный режим: YouTube, TikTok, Instagram всегда через VPN',
+    'Android: VPN корректно отключается, интернет не пропадает',
+    'Поделиться подпиской или сервером через QR-код',
+  ]),
   ('1.9.6', [
     'Android 8–12: статус VPN нельзя подделать',
     'Не спорит с другим VPN за подключение',

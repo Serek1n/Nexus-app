@@ -90,6 +90,9 @@ class AndroidSystem {
   static Future<bool> vpnPrepared() async =>
       await _call<bool>('vpnPrepared') ?? true;
 
+  /// Системное меню «Поделиться» с текстом.
+  static Future<void> shareText(String text) => _call('shareText', text);
+
   /// Открывает страницу релиза GitHub в браузере.
   static Future<bool> openUrl(String url) async =>
       await _call<bool>('openUrl', url) ?? false;

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,12 +12,54 @@ import '../../services/config_builder.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../../platform/win_admin.dart';
 import '../rollback_sheet.dart';
 import 'apps_screen.dart';
 
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  /// Включение TUN: без прав администратора — перезапуск через окно UAC.
+  Future<void> _toggleTun(BuildContext context, bool on) async {
+    final app = AppScope.read(context);
+    if (!on || WinAdmin.isAdmin) {
+      app.updateSettings((s) => s.windowsTun = on);
+      await app.reconnectIfActive();
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Нужны права администратора'),
+        content: const Text(
+            'Режим TUN создаёт виртуальную сетевую карту, и для этого Windows '
+            'просит права администратора. Nexus перезапустится — подтвердите '
+            'запрос Windows. Подписки и настройки сохранятся.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Отмена')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Перезапустить')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final wasOn = app.state == ConnState.connected;
+    app.updateSettings((s) => s.windowsTun = true);
+    await app.flushSaves();
+    if (await WinAdmin.relaunchElevated(connect: wasOn)) {
+      await app.quitApp?.call();
+    } else {
+      app.updateSettings((s) => s.windowsTun = false);
+      if (context.mounted) {
+        toast(context, 'Windows не дал прав администратора — TUN не включён',
+            error: true);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +205,21 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   const Divider(height: 14),
+                  switchRow(
+                    Icons.lan_outlined,
+                    'Режим TUN',
+                    st.windowsTun
+                        ? (WinAdmin.isAdmin
+                            ? 'Через Nexus идут все программы: Telegram, игры, '
+                                'всё, что не смотрит на прокси'
+                            : 'Включён, но Nexus запущен без прав администратора — '
+                                'работает системный прокси')
+                        : 'Все программы через Nexus, как VPN на телефоне. '
+                            'Нужны права администратора',
+                    st.windowsTun,
+                    (v) => _toggleTun(context, v),
+                  ),
+                  const Divider(height: 14),
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
@@ -178,6 +237,58 @@ class SettingsScreen extends StatelessWidget {
                         const SizedBox(width: 6),
                         _CopyChip('SOCKS 127.0.0.1:$activeSocksPort'),
                       ],
+                    ),
+                  ),
+                  const Divider(height: 14),
+                  // Telegram Desktop часто не смотрит на системный прокси —
+                  // добавляем ему SOCKS-прокси Nexus одной ссылкой tg://.
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () async {
+                      final url = 'tg://socks?server=127.0.0.1'
+                          '&port=$activeSocksPort';
+                      try {
+                        await Process.start(
+                            'rundll32', ['url.dll,FileProtocolHandler', url]);
+                        if (context.mounted) {
+                          toast(context,
+                              'Подтвердите прокси в окне Telegram');
+                        }
+                      } catch (_) {
+                        if (context.mounted) {
+                          toast(context, 'Telegram не установлен',
+                              error: true);
+                        }
+                      }
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.send_rounded,
+                              color: NX.violet, size: 21),
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Подключить Telegram',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14.5)),
+                                SizedBox(height: 2),
+                                Text(
+                                    'Telegram Desktop не всегда использует '
+                                    'системный прокси — добавим ему прокси Nexus',
+                                    style: TextStyle(
+                                        color: NX.text2, fontSize: 12.5)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded,
+                              color: NX.text3),
+                        ],
+                      ),
                     ),
                   ),
                 ] else

@@ -344,6 +344,9 @@ jobs:
           if ($want -ne $got) { throw "Контрольная сумма Xray не совпала: $got != $want" }
           Expand-Archive xray.zip -DestinationPath xray
           Copy-Item xray\xray.exe "$rel\nexus-core.exe"
+          # Драйвер виртуальной сетевой карты для режима TUN (идёт в архиве Xray).
+          Copy-Item xray\wintun.dll "$rel\wintun.dll"
+          Copy-Item xray\LICENSE-Wintun "$rel\LICENSE-Wintun.txt"
           foreach ($g in "geoip.dat","geosite.dat") {
             Invoke-WebRequest "$env:GEO_URL/$g" -OutFile "$rel\$g"
             Invoke-WebRequest "$env:GEO_URL/$g.sha256sum" -OutFile "$g.sha256sum"

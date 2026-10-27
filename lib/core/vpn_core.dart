@@ -44,6 +44,14 @@ abstract class VpnCore {
 
   Future<List<String>> fetchLogs() async => logs;
 
+  /// Строка от самого Nexus в журнал (результат проверки канала и т.п.).
+  void note(String line) {
+    final t = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    logs.add('${two(t.hour)}:${two(t.minute)}:${two(t.second)} · $line');
+    if (logs.length > 400) logs.removeRange(0, logs.length - 400);
+  }
+
   /// Можно ли обновлять ядро отдельно от приложения (только Windows).
   bool get canUpdateCore => false;
 
@@ -60,6 +68,9 @@ abstract class VpnCore {
   Future<T?> viaTunnel<T>(ServerProfile server, String config,
           Future<T> Function(String proxy) fn) async =>
       null;
+
+  /// Предупреждение о режиме работы (например, TUN недоступен) — или null.
+  String? get modeWarning => null;
 
   /// Kill switch сработал: VPN упал, интернет заблокирован до отключения.
   bool get blocked => false;

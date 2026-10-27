@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../models.dart';
 import '../add_sheet.dart';
+import '../share_sheet.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -595,6 +596,21 @@ class _ServerTile extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(ctx);
                   app.pingOne(server);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.qr_code_2_rounded, color: NX.violet),
+                title: const Text('Поделиться (QR)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showShareSheet(
+                    context,
+                    title: 'Сервер «${server.cleanName}»',
+                    text: server.link,
+                    warning: 'Это ключ доступа к серверу: с ним можно '
+                        'подключаться от вашего имени. Делитесь только с теми, '
+                        'кому доверяете.',
+                  );
                 },
               ),
               ListTile(
