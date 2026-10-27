@@ -69,6 +69,11 @@ abstract class VpnCore {
           Future<T> Function(String proxy) fn) async =>
       null;
 
+  /// HTTP-прокси через активное подключение («127.0.0.1:port» или
+  /// «user:pass@127.0.0.1:port») — для собственных запросов Nexus
+  /// (IP выхода, тест скорости, подписки). null — VPN не подключён.
+  String? get activeProxy => null;
+
   /// Предупреждение о режиме работы (например, TUN недоступен) — или null.
   String? get modeWarning => null;
 

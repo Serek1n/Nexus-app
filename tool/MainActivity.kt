@@ -64,6 +64,13 @@ class MainActivity : FlutterActivity() {
         return String(c.doFinal(raw, 12, raw.size - 12), Charsets.UTF_8)
     }
     private var pendingLink: String? = null
+    private var pendingToggle = false
+
+    /** Нажатие плитки в шторке — только с верным одноразовым ключом. */
+    private fun isToggle(intent: Intent?): Boolean {
+        if (intent == null || intent.action != "$packageName.TOGGLE") return false
+        return NexusTile.consume(this, intent.getStringExtra("token"))
+    }
 
     private fun linkOf(intent: Intent?): String? {
         val data = intent?.data ?: return null
@@ -73,11 +80,13 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         linkOf(intent)?.let { channel?.invokeMethod("link", it) }
+        if (isToggle(intent)) channel?.invokeMethod("toggle", null)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         pendingLink = linkOf(intent)
+        pendingToggle = isToggle(intent)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/system")
         channel!!
             .setMethodCallHandler { call, result ->
@@ -101,6 +110,21 @@ class MainActivity : FlutterActivity() {
                     "initialLink" -> {
                         result.success(pendingLink)
                         pendingLink = null
+                    }
+
+                    "takeToggle" -> {
+                        result.success(pendingToggle)
+                        pendingToggle = false
+                    }
+
+                    "tileState" -> {
+                        val m = call.arguments as? Map<*, *>
+                        NexusTile.save(
+                            this,
+                            m?.get("on") as? Boolean ?: false,
+                            m?.get("vpn") as? Boolean ?: true
+                        )
+                        result.success(null)
                     }
 
                     "requestNotifications" -> {

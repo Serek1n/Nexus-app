@@ -176,9 +176,17 @@ class HomeScreen extends StatelessWidget {
           child: app.state == ConnState.connected && !app.blocked
               ? Padding(
                   padding: const EdgeInsets.only(top: 10),
-                  child: ValueListenableBuilder<ConnStats>(
-                    valueListenable: app.statsNotifier,
-                    builder: (_, st, __) => _StatsRow(stats: st),
+                  child: Column(
+                    children: [
+                      ValueListenableBuilder<ConnStats>(
+                        valueListenable: app.statsNotifier,
+                        builder: (_, st, __) => _StatsRow(stats: st),
+                      ),
+                      if (app.core.activeProxy != null) ...[
+                        const SizedBox(height: 10),
+                        const _ExitCard(),
+                      ],
+                    ],
                   ),
                 )
               : const SizedBox(width: double.infinity),
@@ -620,6 +628,139 @@ class _StatsRow extends StatelessWidget {
           sep(),
           cell(Icons.swap_vert_rounded, 'Всего',
               fmtBytes(stats.upload + stats.download)),
+        ],
+      ),
+    );
+  }
+}
+
+const _countries = {
+  'DE': 'Германия', 'NL': 'Нидерланды', 'FI': 'Финляндия', 'SE': 'Швеция',
+  'FR': 'Франция', 'GB': 'Великобритания', 'US': 'США', 'CA': 'Канада',
+  'PL': 'Польша', 'LV': 'Латвия', 'LT': 'Литва', 'EE': 'Эстония',
+  'KZ': 'Казахстан', 'TR': 'Турция', 'AE': 'ОАЭ', 'JP': 'Япония',
+  'SG': 'Сингапур', 'HK': 'Гонконг', 'CH': 'Швейцария', 'AT': 'Австрия',
+  'CZ': 'Чехия', 'IT': 'Италия', 'ES': 'Испания', 'RU': 'Россия',
+  'NO': 'Норвегия', 'DK': 'Дания', 'RO': 'Румыния', 'BG': 'Болгария',
+  'MD': 'Молдова', 'GE': 'Грузия', 'AM': 'Армения', 'RS': 'Сербия',
+  'IL': 'Израиль', 'IN': 'Индия', 'KR': 'Южная Корея', 'BY': 'Беларусь',
+  'UA': 'Украина', 'HU': 'Венгрия', 'IE': 'Ирландия', 'BE': 'Бельгия',
+};
+
+/// IP выхода (как сайты видят пользователя) и тест скорости.
+class _ExitCard extends StatelessWidget {
+  const _ExitCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final ex = app.exitInfo;
+    final cc = ex?.country ?? '';
+    final place = cc.isEmpty ? '' : (_countries[cc] ?? cc);
+
+    final Widget flag = cc.isEmpty
+        ? Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+                color: NX.surface2, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.public_rounded, color: NX.text3, size: 18),
+          )
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset('assets/flags/${cc.toLowerCase()}.png',
+                width: 34,
+                height: 34,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: Icon(Icons.public_rounded,
+                        color: NX.text3, size: 18))),
+          );
+
+    final speed = app.speedTesting
+        ? '${(app.speedLive ?? 0).toStringAsFixed(1)} Мбит/с…'
+        : app.speedMbps != null
+            ? '${app.speedMbps! >= 100 ? app.speedMbps!.round() : app.speedMbps!.toStringAsFixed(1)} Мбит/с'
+            : null;
+
+    return NeonCard(
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      child: Row(
+        children: [
+          flag,
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              // Долгое нажатие — скопировать IP.
+              onLongPress: ex == null
+                  ? null
+                  : () async {
+                      await Clipboard.setData(ClipboardData(text: ex.ip));
+                      if (context.mounted) toast(context, 'IP скопирован');
+                    },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ex == null
+                        ? (app.exitChecking ? 'Проверяю IP…' : 'IP не определён')
+                        : ex.ip,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        fontFeatures: [FontFeature.tabularFigures()]),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (place.isNotEmpty) 'Сайты видят: $place',
+                      if (place.isEmpty) 'Ваш IP для сайтов',
+                      if (speed != null) speed,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: app.speedTesting ? NX.mint : NX.text2,
+                        fontSize: 12.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Обновить IP',
+            onPressed: app.exitChecking ? null : app.checkExit,
+            icon: app.exitChecking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh_rounded,
+                    color: NX.text2, size: 20),
+          ),
+          IconButton(
+            tooltip: 'Тест скорости',
+            onPressed: app.speedTesting
+                ? null
+                : () async {
+                    final err = await app.runSpeedTest();
+                    if (err != null && context.mounted) {
+                      toast(context, err, error: true);
+                    }
+                  },
+            icon: app.speedTesting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: NX.mint))
+                : const Icon(Icons.speed_rounded, color: NX.text2, size: 20),
+          ),
         ],
       ),
     );

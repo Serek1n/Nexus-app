@@ -260,6 +260,21 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+            child: switchRow(
+              Icons.block_rounded,
+              'Блокировать рекламу',
+              'Рекламные сети и трекеры не загружаются — страницы открываются '
+                  'быстрее, меньше трафика. Если сайт сломался, добавьте его '
+                  'в «Свои правила»',
+              st.blockAds,
+              (v) async {
+                app.updateSettings((s) => s.blockAds = v);
+                await app.reconnectIfActive();
+              },
+            ),
+          ),
           if (!app.isDesktop)
             NeonCard(
               onTap: () => Navigator.of(context).push(

@@ -17,6 +17,8 @@
 .pub-cache/
 .pub/
 .metadata
+# Версии зависимостей фиксируются в pubspec.yaml — lock-файл не храним
+pubspec.lock
 
 # Ключи подписи — никогда в репозиторий
 *.jks

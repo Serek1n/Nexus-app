@@ -36,6 +36,7 @@ String buildXrayConfig(
   bool lockLocalProxy = false,
   List<String> customProxy = const [],
   List<String> customDirect = const [],
+  bool blockAds = false,
 }) {
   final parsed = V2ray.parseFromURL(server.link);
   final cfg =
@@ -151,6 +152,21 @@ String buildXrayConfig(
 
   custom(customDirect, 'direct');
   custom(customProxy, 'proxy');
+
+  // Реклама и трекеры — в «чёрную дыру». Свои правила выше, поэтому
+  // нужный сайт можно вернуть, добавив его в «Свои правила».
+  if (blockAds) {
+    final obs = (cfg['outbounds'] as List?) ?? [];
+    if (!obs.any((o) => o is Map && o['tag'] == 'block')) {
+      obs.add({'tag': 'block', 'protocol': 'blackhole'});
+      cfg['outbounds'] = obs;
+    }
+    rules.add({
+      'type': 'field',
+      'domain': ['geosite:category-ads-all'],
+      'outboundTag': 'block',
+    });
+  }
 
   if (routing == RoutingMode.smart) {
     // Сервисы, заблокированные или замедленные в России, — всегда через

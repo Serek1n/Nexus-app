@@ -70,7 +70,8 @@ Future<void> main(List<String> args) async {
   if (args.contains('--connect') && state.selected != null) {
     unawaited(state.connect());
   }
-  unawaited(AndroidSystem.listenLinks(DeepLinks.handle));
+  unawaited(AndroidSystem.listenLinks(DeepLinks.handle,
+      onToggle: () => unawaited(state.toggle())));
   if (Platform.isWindows) {
     state.setWindowVisible(!startHidden);
     await WindowsHost(state).init();

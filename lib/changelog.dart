@@ -4,11 +4,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.8');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.9');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.9.9', [
+    'Ваш IP и страна, которые видят сайты',
+    'Тест скорости через текущий сервер',
+    'Блокировка рекламы и трекеров',
+    'Android: плитка Nexus в шторке уведомлений',
+    'Android: подписки грузятся через VPN, если сайт заблокирован',
+    'Подписки по http загружаются через VPN',
+    'Android 12+: данные не переносятся на другой телефон',
+  ]),
   ('1.9.8', [
     'Свои правила: сайты через VPN или напрямую',
     'Windows: автозапуск с режимом TUN',

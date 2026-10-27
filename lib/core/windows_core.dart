@@ -43,6 +43,10 @@ class WindowsCore extends VpnCore {
   @override
   void setForeground(bool visible) => _foreground = visible;
 
+  @override
+  String? get activeProxy =>
+      _proc != null && !_blocked ? '127.0.0.1:$activeHttpPort' : null;
+
   String get _exeDir => File(Platform.resolvedExecutable).parent.path;
 
   /// Папка обновляемого ядра (%APPDATA%\\Nexus\\core).

@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
@@ -14,6 +17,50 @@ class AndroidCore extends VpnCore {
   late final V2ray _v2ray = V2ray(onStatusChanged: _onStatus);
   ConnState _last = ConnState.disconnected;
   DateTime? _startedAt;
+
+  /// Служебный вход ядра для запросов самого Nexus (Nexus исключён из
+  /// своего же VPN, поэтому без него проверить IP выхода нельзя).
+  /// Логин и пароль новые при каждом подключении — другие приложения
+  /// на телефоне воспользоваться им не смогут.
+  String? _probe;
+
+  @override
+  String? get activeProxy => _last == ConnState.connected ? _probe : null;
+
+  static String _token() {
+    final r = Random.secure();
+    return List.generate(
+        24, (_) => 'abcdefghijkmnpqrstuvwxyz23456789'[r.nextInt(32)]).join();
+  }
+
+  /// Добавляет в конфиг защищённый паролем HTTP-вход на свободном порту.
+  Future<String> _withProbe(String config) async {
+    try {
+      final cfg = jsonDecode(config) as Map<String, dynamic>;
+      final sock = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = sock.port;
+      await sock.close();
+      final user = _token(), pass = _token();
+      final inbounds = (cfg['inbounds'] as List?) ?? [];
+      inbounds.add({
+        'tag': 'nexus-probe',
+        'listen': '127.0.0.1',
+        'port': port,
+        'protocol': 'http',
+        'settings': {
+          'accounts': [
+            {'user': user, 'pass': pass},
+          ],
+        },
+      });
+      cfg['inbounds'] = inbounds;
+      _probe = '$user:$pass@127.0.0.1:$port';
+      return jsonEncode(cfg);
+    } catch (_) {
+      _probe = null;
+      return config;
+    }
+  }
 
   void _onStatus(V2RayStatus s) {
     final st = s.state.toUpperCase();
@@ -89,7 +136,7 @@ class AndroidCore extends VpnCore {
     _startedAt = DateTime.now();
     await _v2ray.startV2Ray(
       remark: remark,
-      config: config,
+      config: await _withProbe(config),
       blockedApps: settings.androidVpnMode && bypass.isNotEmpty ? bypass : null,
       proxyOnly: !settings.androidVpnMode,
       notificationDisconnectButtonName: 'ОТКЛЮЧИТЬ',
@@ -103,6 +150,7 @@ class AndroidCore extends VpnCore {
     } finally {
       // Плагин не всегда присылает «DISCONNECTED» — сообщаем сами.
       _startedAt = null;
+      _probe = null;
       if (_last != ConnState.disconnected) {
         _last = ConnState.disconnected;
         _states.add(ConnState.disconnected);

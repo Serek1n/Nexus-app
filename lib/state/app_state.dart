@@ -12,6 +12,7 @@ import '../models.dart';
 import '../platform/android_system.dart';
 import '../platform/win_dpapi.dart';
 import '../services/config_builder.dart';
+import '../services/net_probe.dart';
 import '../services/ru_apps.dart';
 import '../services/subscription_service.dart';
 
@@ -365,6 +366,60 @@ class AppState extends ChangeNotifier {
         ? 'Трафик через «${s.cleanName}» идёт, задержка $liveLatency мс'
         : 'Через «${s.cleanName}» трафик не проходит — сервер не ответил');
     if (afterConnect && liveLatency == -1) await _failover(s);
+    if (afterConnect && (liveLatency ?? -1) > 0) unawaited(checkExit());
+  }
+
+  // ───────────────────── IP выхода и тест скорости ─────────────────────
+
+  /// Под каким IP и страной сайты видят пользователя сейчас.
+  ExitInfo? exitInfo;
+  bool exitChecking = false;
+
+  /// Результат последнего теста скорости (Мбит/с) и текущее значение во
+  /// время замера.
+  double? speedMbps;
+  double? speedLive;
+  bool speedTesting = false;
+
+  Future<void> checkExit() async {
+    final proxy = state == ConnState.connected ? core.activeProxy : null;
+    if (proxy == null || exitChecking) return;
+    exitChecking = true;
+    notifyListeners();
+    final r = await NetProbe.exitInfo(proxy);
+    exitChecking = false;
+    if (state == ConnState.connected) exitInfo = r;
+    notifyListeners();
+  }
+
+  /// Тест скорости загрузки через текущий сервер. Возвращает текст ошибки
+  /// или null при успехе.
+  Future<String?> runSpeedTest() async {
+    final proxy = state == ConnState.connected ? core.activeProxy : null;
+    if (proxy == null) return 'Сначала подключитесь';
+    if (speedTesting) return null;
+    speedTesting = true;
+    speedLive = 0;
+    notifyListeners();
+    var last = DateTime.now();
+    final r = await NetProbe.downloadSpeed(proxy, onProgress: (v) {
+      speedLive = v;
+      final now = DateTime.now();
+      if (now.difference(last).inMilliseconds >= 250) {
+        last = now;
+        notifyListeners();
+      }
+    });
+    speedTesting = false;
+    speedLive = null;
+    if (state == ConnState.connected && r != null) {
+      speedMbps = r;
+      core.note('Тест скорости: ${r.toStringAsFixed(1)} Мбит/с '
+          'через «${selected?.cleanName ?? '—'}»');
+    }
+    notifyListeners();
+    if (state != ConnState.connected) return 'Соединение прервалось';
+    return r == null ? 'Не удалось измерить скорость' : null;
   }
 
   /// Серверы, уже опробованные в текущей попытке подключения.
@@ -639,10 +694,20 @@ class AppState extends ChangeNotifier {
       Future.delayed(const Duration(seconds: 1),
           () => measureLatency(afterConnect: true));
     }
-    if (s != ConnState.connected) liveLatency = null;
+    if (s != ConnState.connected) {
+      liveLatency = null;
+      exitInfo = null;
+      speedMbps = null;
+    }
     if (s == ConnState.disconnected) {
       connectedAt = null;
       statsNotifier.value = const ConnStats();
+    }
+    if (!isDesktop &&
+        (s == ConnState.connected || s == ConnState.disconnected) &&
+        s != state) {
+      unawaited(AndroidSystem.setTileState(s == ConnState.connected,
+          vpn: settings.androidVpnMode));
     }
     state = s;
     notifyListeners();
@@ -655,6 +720,7 @@ class AppState extends ChangeNotifier {
         lockLocalProxy: !isDesktop && settings.androidVpnMode,
         customProxy: settings.customProxy,
         customDirect: settings.customDirect,
+        blockAds: settings.blockAds,
       );
 
   Future<void> toggle() async {
@@ -954,15 +1020,25 @@ class AppState extends ChangeNotifier {
   /// (оборванное TLS-рукопожатие и т.п.) — пробуем через Nexus:
   /// через активное подключение, а без него — через временный туннель.
   Future<FetchResult> _fetchSub(Subscription sub) async {
+    // Подписка без шифрования (http): провайдер видел бы ссылку и ключи.
+    // Если VPN подключён — сначала загружаем её через туннель.
+    final tunnel = state == ConnState.connected ? core.activeProxy : null;
+    if (tunnel != null && sub.url.startsWith('http://')) {
+      try {
+        return await SubscriptionService.fetch(sub, proxy: tunnel);
+      } catch (e) {
+        if (!isTransportError(e)) rethrow;
+      }
+    }
     try {
       return await SubscriptionService.fetch(sub);
     } catch (e) {
       if (!isTransportError(e)) rethrow;
       Object last = e;
-      if (isDesktop && state == ConnState.connected && !core.blocked) {
+      final via = state == ConnState.connected ? core.activeProxy : null;
+      if (via != null) {
         try {
-          return await SubscriptionService.fetch(sub,
-              proxy: '127.0.0.1:$activeHttpPort');
+          return await SubscriptionService.fetch(sub, proxy: via);
         } catch (e2) {
           last = e2;
         }

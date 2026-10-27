@@ -135,12 +135,7 @@ jobs:
 
       - name: Зависимости и иконки
         run: |
-          # Если pubspec.lock уже в репозитории — версии зависимостей строго по нему.
-          if git ls-files --error-unmatch pubspec.lock >/dev/null 2>&1; then
-            flutter pub get --enforce-lockfile 2>&1 | tee -a ci.log
-          else
-            flutter pub get 2>&1 | tee -a ci.log
-          fi
+          flutter pub get 2>&1 | tee -a ci.log
           dart run flutter_launcher_icons 2>&1 | tee -a ci.log
           # Защита приёмников статуса VPN в плагине (Android 8–12).
           python3 tool/patch_plugin.py 2>&1 | tee -a ci.log
@@ -245,19 +240,6 @@ jobs:
           name: Nexus-Android
           path: dist/*
 
-      # Первая успешная сборка сама добавляет pubspec.lock в репозиторий —
-      # дальше версии всех зависимостей зафиксированы.
-      - name: Зафиксировать версии зависимостей
-        if: github.event_name == 'push' && github.ref_type == 'branch'
-        run: |
-          if ! git ls-files --error-unmatch pubspec.lock >/dev/null 2>&1 && [ -f pubspec.lock ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add pubspec.lock
-            git commit -m "Зафиксировать версии зависимостей (pubspec.lock)"
-            git push || echo "::warning::Не удалось отправить pubspec.lock"
-          fi
-
       - name: Причина ошибки
         if: failure()
         run: |
@@ -300,11 +282,7 @@ jobs:
       - name: Зависимости и иконки
         shell: bash
         run: |
-          if git ls-files --error-unmatch pubspec.lock >/dev/null 2>&1; then
-            flutter pub get --enforce-lockfile
-          else
-            flutter pub get
-          fi
+          flutter pub get
           dart run flutter_launcher_icons
           # Своя многоразмерная иконка: чёткая на панели задач.
           cp assets/icon/app_icon.ico windows/runner/resources/app_icon.ico

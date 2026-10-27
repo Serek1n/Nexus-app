@@ -55,6 +55,19 @@ def android():
          r'            </intent-filter>'),
         # FileProvider для установки скачанных обновлений.
         (re.compile(r"(\s*)</application>"),
+         r'\1    <service\n'
+         r'            android:name=".NexusTileService"\n'
+         r'            android:exported="true"\n'
+         r'            android:label="Nexus"\n'
+         r'            android:icon="@drawable/ic_nexus_tile"\n'
+         r'            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">\n'
+         r'            <intent-filter>\n'
+         r'                <action android:name="android.service.quicksettings.action.QS_TILE" />\n'
+         r'            </intent-filter>\n'
+         r'            <meta-data\n'
+         r'                android:name="android.service.quicksettings.TOGGLEABLE_TILE"\n'
+         r'                android:value="true" />\n'
+         r'        </service>'
          r'\1    <provider\n'
          r'            android:name="androidx.core.content.FileProvider"\n'
          r'            android:authorities="${applicationId}.nexus.files"\n'
@@ -82,7 +95,11 @@ def android():
          r'\1<permission android:name="${applicationId}.permission.NEXUS_INTERNAL" android:protectionLevel="signature" />'
          r'\1<uses-permission android:name="${applicationId}.permission.NEXUS_INTERNAL" />'
          r'\1<application\n        android:usesCleartextTraffic="true"'
-         r'\n        android:allowBackup="false"'),
+         r'\n        android:allowBackup="false"'
+         # Android 12+: allowBackup не запрещает перенос данных при смене
+         # телефона — запрещаем его отдельными правилами.
+         r'\n        android:fullBackupContent="false"'
+         r'\n        android:dataExtractionRules="@xml/nexus_no_backup"'),
     ])
 
     gradle = "android/app/build.gradle.kts"
@@ -135,6 +152,42 @@ if (keystorePropertiesFile.exists()) {
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<paths>\n    <cache-path name="updates" path="updates/" />\n</paths>\n',
         encoding="utf-8")
+    # Значок плитки в шторке: одноцветная «N» (система сама красит её).
+    dr_dir = ROOT / "android/app/src/main/res/drawable"
+    dr_dir.mkdir(parents=True, exist_ok=True)
+    (dr_dir / "ic_nexus_tile.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    android:width="24dp" android:height="24dp"\n'
+        '    android:viewportWidth="24" android:viewportHeight="24">\n'
+        '    <path android:fillColor="#FFFFFFFF"\n'
+        '        android:pathData="M6,19V5h2.4l7.2,9.6V5H18v14h-2.4L8.4,9.4V19Z" />\n'
+        '    <path android:fillColor="#FFFFFFFF"\n'
+        '        android:pathData="M20,4m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0" />\n'
+        '</vector>\n',
+        encoding="utf-8")
+
+    # Ни облачная копия, ни перенос на новый телефон не забирают данные
+    # Nexus (подписки с ключами, ID устройства для лимита HWID).
+    (xml_dir / "nexus_no_backup.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<data-extraction-rules>\n'
+        '    <cloud-backup>\n'
+        '        <exclude domain="root" />\n'
+        '        <exclude domain="file" />\n'
+        '        <exclude domain="database" />\n'
+        '        <exclude domain="sharedpref" />\n'
+        '        <exclude domain="external" />\n'
+        '    </cloud-backup>\n'
+        '    <device-transfer>\n'
+        '        <exclude domain="root" />\n'
+        '        <exclude domain="file" />\n'
+        '        <exclude domain="database" />\n'
+        '        <exclude domain="sharedpref" />\n'
+        '        <exclude domain="external" />\n'
+        '    </device-transfer>\n'
+        '</data-extraction-rules>\n',
+        encoding="utf-8")
 
     # MainActivity с системным каналом nexus/system (фон, уведомления, настройки VPN).
     acts = list((ROOT / "android/app/src/main").rglob("MainActivity.kt"))
@@ -148,6 +201,10 @@ if (keystorePropertiesFile.exists()) {
             tpl = (ROOT / "tool/MainActivity.kt").read_text(encoding="utf-8")
             acts[0].write_text(tpl.replace("__PACKAGE__", m.group(1)), encoding="utf-8")
             print("patched", acts[0].relative_to(ROOT))
+            # Плитка «Nexus» в шторке — рядом с MainActivity, в том же пакете.
+            tile = (ROOT / "tool/NexusTileService.kt").read_text(encoding="utf-8")
+            (acts[0].parent / "NexusTileService.kt").write_text(
+                tile.replace("__PACKAGE__", m.group(1)), encoding="utf-8")
 
     # Плагин ядра (flutter_v2ray_client) собран под AGP 8.13 — выравниваем версию.
     patch("android/settings.gradle.kts", [

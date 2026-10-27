@@ -322,6 +322,7 @@ class AppSettings {
     this.clearClipboard = true,
     this.autoFailover = true,
     this.autoReconnect = true,
+    this.blockAds = false,
     List<String>? favorites,
     this.lastAppCheck = 0,
     this.skippedBuild = 0,
@@ -375,6 +376,9 @@ class AppSettings {
   /// Если сервер не пропускает трафик — переключаться на следующий.
   bool autoFailover;
 
+  /// Блокировать рекламу и трекеры (geosite:category-ads-all).
+  bool blockAds;
+
   /// Очищать буфер обмена после импорта ключа или подписки.
   bool clearClipboard;
 
@@ -416,6 +420,7 @@ class AppSettings {
         'clearClipboard': clearClipboard,
         'autoFailover': autoFailover,
         'autoReconnect': autoReconnect,
+        'blockAds': blockAds,
         'favorites': favorites,
         'lastAppCheck': lastAppCheck,
         'skippedBuild': skippedBuild,
@@ -448,6 +453,7 @@ class AppSettings {
         clearClipboard: j['clearClipboard'] as bool? ?? true,
         autoFailover: j['autoFailover'] as bool? ?? true,
         autoReconnect: j['autoReconnect'] as bool? ?? true,
+        blockAds: j['blockAds'] as bool? ?? false,
         favorites: (j['favorites'] as List?)?.whereType<String>().toList(),
         lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
         skippedBuild: (j['skippedBuild'] as num?)?.toInt() ?? 0,

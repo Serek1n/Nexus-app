@@ -21,16 +21,24 @@ class AndroidSystem {
       _call<String>('unprotect', data);
 
   /// Ссылки nexus://: первая (с которой открыли приложение) и последующие.
-  static Future<void> listenLinks(void Function(String) onLink) async {
+  /// [onToggle] — нажатие плитки «Nexus» в шторке уведомлений.
+  static Future<void> listenLinks(void Function(String) onLink,
+      {void Function()? onToggle}) async {
     if (!Platform.isAndroid) return;
     _ch.setMethodCallHandler((call) async {
       if (call.method == 'link' && call.arguments is String) {
         onLink(call.arguments as String);
       }
+      if (call.method == 'toggle') onToggle?.call();
     });
     final first = await _call<String>('initialLink');
     if (first != null) onLink(first);
+    if (await _call<bool>('takeToggle') == true) onToggle?.call();
   }
+
+  /// Состояние для плитки в шторке.
+  static Future<void> setTileState(bool on, {required bool vpn}) =>
+      _call('tileState', {'on': on, 'vpn': vpn});
 
   /// Android 13+: разрешение на уведомление о подключении.
   static Future<void> requestNotifications() => _call('requestNotifications');
