@@ -8,6 +8,7 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models.dart';
+import 'win_admin.dart';
 import '../services/deep_links.dart';
 import '../state/app_state.dart';
 
@@ -67,7 +68,8 @@ class WindowsHost with TrayListener, WindowListener {
     await _updateTray(force: true);
     app.addListener(_updateTray);
     // Автозапуск: синхронизируем запись в реестре с настройкой.
-    Autostart.apply(app.settings.launchAtStartup);
+    Autostart.apply(app.settings.launchAtStartup,
+        tun: app.settings.windowsTun);
     // Ссылки nexus:// открывают Nexus.
     Autostart.registerProtocol();
   }
@@ -249,7 +251,37 @@ class Autostart {
     set('$base\\shell\\open\\command', '', '"$exe" "%1"');
   }
 
-  static void apply(bool enabled) {
+  /// Автозапуск. Для режима TUN нужны права администратора, а запуск
+  /// через ключ Run их не даёт — тогда Nexus запускается задачей
+  /// Планировщика с наивысшими правами (создать её можно только от
+  /// администратора). Иначе — обычный ключ Run.
+  static void apply(bool enabled, {bool tun = false}) {
+    // TUN включён, но Nexus сейчас без прав администратора: задачу не
+    // создать и не проверить — оставляем автозапуск как есть.
+    if (enabled && tun && !WinAdmin.isAdmin) return;
+    final elevated = enabled && tun && WinAdmin.isAdmin;
+    _runKeySet(enabled && !elevated);
+    unawaited(_task(elevated, removeOnly: !enabled || !tun));
+  }
+
+  static Future<void> _task(bool create, {required bool removeOnly}) async {
+    try {
+      if (create) {
+        final exe = Platform.resolvedExecutable;
+        await Process.run('schtasks', [
+          '/Create', '/F', '/TN', 'Nexus', '/SC', 'ONLOGON', '/RL', 'HIGHEST',
+          '/TR', '"$exe" --minimized',
+        ]);
+      } else if (removeOnly || WinAdmin.isAdmin) {
+        // Удалить задачу с наивысшими правами можно только от администратора;
+        // без прав она просто останется — вторую копию отсечёт защита
+        // от повторного запуска.
+        await Process.run('schtasks', ['/Delete', '/F', '/TN', 'Nexus']);
+      }
+    } catch (_) {}
+  }
+
+  static void _runKeySet(bool enabled) {
     final sub = _runKey.toNativeUtf16();
     final name = _valueName.toNativeUtf16();
     try {

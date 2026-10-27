@@ -194,6 +194,30 @@ const _countryWords = <String, List<String>>{
   'uz': ['узбекистан', 'uzbekistan'],
 };
 
+/// Разбор своих правил: по одному сайту или IP в строке. Принимает
+/// «https://site.com/path», «*.site.com», «site.com», «1.2.3.4», «10.0.0.0/8».
+List<String> parseRuleList(String text) {
+  final out = <String>{};
+  for (var t in text.split(RegExp(r'[\s,;]+'))) {
+    t = t.trim().toLowerCase();
+    if (t.isEmpty) continue;
+    t = t.replaceFirst(RegExp(r'^[a-z][a-z0-9+.-]*://'), '');
+    // Путь отрезаем, но маску подсети «10.0.0.0/8» оставляем.
+    if (!RegExp(r'^\d+\.\d+\.\d+\.\d+/\d+$').hasMatch(t)) {
+      t = t.split('/').first;
+    }
+    t = t.replaceFirst(RegExp(r'^\*?\.'), '');
+    if (RegExp(r'^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$').hasMatch(t) ||
+        RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$').hasMatch(t)) {
+      out.add(t);
+    } else if (RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+:\d+$').hasMatch(t)) {
+      out.add(t.split(':').first);
+    }
+    if (out.length >= 300) break;
+  }
+  return out.toList();
+}
+
 /// Название подписки по её адресу, если сервер его не прислал:
 /// github.com/user/repo/... → «repo», иначе — домен.
 String titleFromUrl(String url) {
@@ -302,10 +326,14 @@ class AppSettings {
     this.lastAppCheck = 0,
     this.skippedBuild = 0,
     Map<String, String>? aliases,
+    List<String>? customProxy,
+    List<String>? customDirect,
     List<String>? bypassApps,
   })  : bypassApps = bypassApps ?? [],
         favorites = favorites ?? [],
-        aliases = aliases ?? {};
+        aliases = aliases ?? {},
+        customProxy = customProxy ?? [],
+        customDirect = customDirect ?? [];
 
   RoutingMode routing;
 
@@ -357,6 +385,10 @@ class AppSettings {
   /// Свои названия серверов: «адрес:порт» → название.
   Map<String, String> aliases;
 
+  /// Свои правила: сайты и IP, которые всегда идут через VPN / напрямую.
+  List<String> customProxy;
+  List<String> customDirect;
+
   /// После отката: автообновление не предлагает сборки до этой включительно.
   int skippedBuild;
 
@@ -388,6 +420,8 @@ class AppSettings {
         'lastAppCheck': lastAppCheck,
         'skippedBuild': skippedBuild,
         'aliases': aliases,
+        'customProxy': customProxy,
+        'customDirect': customDirect,
         'bypassApps': bypassApps,
       });
 
@@ -419,6 +453,10 @@ class AppSettings {
         skippedBuild: (j['skippedBuild'] as num?)?.toInt() ?? 0,
         aliases: (j['aliases'] as Map?)?.map(
             (k, v) => MapEntry(k.toString(), v.toString())),
+        customProxy:
+            (j['customProxy'] as List?)?.whereType<String>().toList(),
+        customDirect:
+            (j['customDirect'] as List?)?.whereType<String>().toList(),
         bypassApps: (j['bypassApps'] as List?)?.whereType<String>().toList(),
       );
     } catch (_) {

@@ -34,6 +34,8 @@ String buildXrayConfig(
   required RoutingMode routing,
   required bool desktop,
   bool lockLocalProxy = false,
+  List<String> customProxy = const [],
+  List<String> customDirect = const [],
 }) {
   final parsed = V2ray.parseFromURL(server.link);
   final cfg =
@@ -131,6 +133,24 @@ String buildXrayConfig(
       'outboundTag': 'direct',
     },
   ];
+
+  // Свои правила пользователя — важнее всех остальных.
+  void custom(List<String> items, String tag) {
+    final ips = items.where((e) => RegExp(r'^\d').hasMatch(e)).toList();
+    final doms = items
+        .where((e) => !RegExp(r'^\d').hasMatch(e))
+        .map((e) => 'domain:$e')
+        .toList();
+    if (doms.isNotEmpty) {
+      rules.add({'type': 'field', 'domain': doms, 'outboundTag': tag});
+    }
+    if (ips.isNotEmpty) {
+      rules.add({'type': 'field', 'ip': ips, 'outboundTag': tag});
+    }
+  }
+
+  custom(customDirect, 'direct');
+  custom(customProxy, 'proxy');
 
   if (routing == RoutingMode.smart) {
     // Сервисы, заблокированные или замедленные в России, — всегда через

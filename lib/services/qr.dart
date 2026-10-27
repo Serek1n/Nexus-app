@@ -130,7 +130,8 @@ class QrCode {
   }
 
   static List<int> _rsRemainder(List<int> data, List<int> div) {
-    final r = List<int>.filled(div.length, 0);
+    // Список должен быть растущим: ниже removeAt/add.
+    final r = List<int>.filled(div.length, 0, growable: true);
     for (final b in data) {
       final factor = b ^ r.removeAt(0);
       r.add(0);

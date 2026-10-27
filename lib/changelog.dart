@@ -4,11 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.7');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.8');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('1.9.8', [
+    'Свои правила: сайты через VPN или напрямую',
+    'Windows: автозапуск с режимом TUN',
+    'Задержка: зелёный до 350 мс, жёлтый до 700',
+    'Исправлен QR-код при «Поделиться»',
+  ]),
   ('1.9.7', [
     'Windows: режим TUN — все программы через Nexus',
     'Telegram подключается одной кнопкой',
@@ -22,7 +28,7 @@ const changelog = <(String, List<String>)>[
     'Android 8–12: статус VPN нельзя подделать',
     'Не спорит с другим VPN за подключение',
     'Подсказки на главной без жёлтой заливки',
-    'Честная задержка: зелёный до 200 мс, жёлтый до 500, красный дальше',
+    'Честная задержка: зелёный до 350 мс, жёлтый до 700, красный дальше',
   ]),
   ('1.9.5', [
     'Android: Hysteria2 подключается',

@@ -89,7 +89,10 @@ class _ShareBody extends StatelessWidget {
               ),
             )
           else
-            const Text('Ссылка слишком длинная для QR-кода — скопируйте её',
+            Text(
+                text.length > 2000
+                    ? 'Ссылка слишком длинная для QR-кода — скопируйте её'
+                    : 'Не удалось построить QR-код — скопируйте ссылку',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: NX.text2)),
           const SizedBox(height: 16),

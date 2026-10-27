@@ -20,11 +20,88 @@ import 'apps_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
+  /// Свои правила маршрутизации: сайты/IP через VPN и напрямую.
+  Future<void> _editRules(BuildContext context) async {
+    final app = AppScope.read(context);
+    final viaVpn =
+        TextEditingController(text: app.settings.customProxy.join('\n'));
+    final direct =
+        TextEditingController(text: app.settings.customDirect.join('\n'));
+    InputDecoration deco(String hint) => InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: NX.text3, fontSize: 13),
+        );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Свои правила'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                    'По одному сайту или IP в строке. Поддомены входят '
+                    'автоматически: «ozon.ru» — это и «www.ozon.ru». '
+                    'Свои правила важнее режима маршрутизации.',
+                    style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                const SizedBox(height: 14),
+                const Text('Всегда через VPN',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: viaVpn,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: deco('example.com'),
+                ),
+                const SizedBox(height: 14),
+                const Text('Всегда напрямую',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: direct,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: deco('bank.ru\n192.168.0.0/16'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Отмена')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    final p = parseRuleList(viaVpn.text), d = parseRuleList(direct.text);
+    viaVpn.dispose();
+    direct.dispose();
+    if (ok != true) return;
+    app.updateSettings((s) {
+      s.customProxy = p;
+      s.customDirect = d;
+    });
+    await app.reconnectIfActive();
+    if (context.mounted) {
+      toast(context, 'Сохранено: через VPN ${p.length}, напрямую ${d.length}');
+    }
+  }
+
   /// Включение TUN: без прав администратора — перезапуск через окно UAC.
   Future<void> _toggleTun(BuildContext context, bool on) async {
     final app = AppScope.read(context);
     if (!on || WinAdmin.isAdmin) {
       app.updateSettings((s) => s.windowsTun = on);
+      // Автозапуск: с TUN — задачей с правами администратора.
+      Autostart.apply(app.settings.launchAtStartup, tun: on);
       await app.reconnectIfActive();
       return;
     }
@@ -153,6 +230,35 @@ class SettingsScreen extends StatelessWidget {
             RoutingMode.global,
             'Весь трафик',
             'Абсолютно всё идёт через сервер Nexus',
+          ),
+          NeonCard(
+            onTap: () => _editRules(context),
+            child: Row(
+              children: [
+                const Icon(Icons.rule_rounded, color: NX.violet, size: 21),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Свои правила',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 14.5)),
+                      const SizedBox(height: 2),
+                      Text(
+                        st.customProxy.isEmpty && st.customDirect.isEmpty
+                            ? 'Выберите сайты, которые всегда идут через VPN или напрямую'
+                            : 'Через VPN: ${st.customProxy.length} · '
+                                'напрямую: ${st.customDirect.length}',
+                        style:
+                            const TextStyle(color: NX.text2, fontSize: 12.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: NX.text3),
+              ],
+            ),
           ),
           if (!app.isDesktop)
             NeonCard(
@@ -329,7 +435,7 @@ class SettingsScreen extends StatelessWidget {
                         st.launchAtStartup,
                         (v) {
                           app.updateSettings((s) => s.launchAtStartup = v);
-                          Autostart.apply(v);
+                          Autostart.apply(v, tun: st.windowsTun);
                         },
                       ),
                     ],

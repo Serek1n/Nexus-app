@@ -40,8 +40,8 @@ class NX {
   /// Пороги — для «тёплой» задержки через сервер (см. WindowsCore._warmDelay).
   static int pingLevel(int? ping) {
     if (ping == null || ping < 0) return 0;
-    if (ping < 200) return 3;
-    if (ping < 500) return 2;
+    if (ping < 350) return 3;
+    if (ping < 700) return 2;
     return 1;
   }
 

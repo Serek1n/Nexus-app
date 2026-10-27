@@ -653,6 +653,8 @@ class AppState extends ChangeNotifier {
         routing: settings.routing,
         desktop: isDesktop,
         lockLocalProxy: !isDesktop && settings.androidVpnMode,
+        customProxy: settings.customProxy,
+        customDirect: settings.customDirect,
       );
 
   Future<void> toggle() async {
