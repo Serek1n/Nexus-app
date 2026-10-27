@@ -220,6 +220,29 @@ jobs:
             echo "::warning::Секрет UPDATE_SIGNING_KEY не задан — подпись обновлений отключена"
           fi
 
+      # NDK ставим заранее и с повторами: если Gradle качает его сам во время
+      # сборки и архив приходит битым, сборка падает с «did not have a
+      # source.properties file».
+      - name: Android NDK
+        run: |
+          FT="$(dirname "$(dirname "$(which flutter)")")/packages/flutter_tools"
+          NDK=$(grep -hoE 'val ndkVersion: String = "[0-9.]+"' "$FT/gradle/src/main/kotlin/FlutterExtension.kt" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          NDK=${NDK:-28.2.13676358}
+          echo "Нужен NDK $NDK"
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          for i in 1 2 3; do
+            if [ -f "$SDK/ndk/$NDK/source.properties" ]; then break; fi
+            sudo rm -rf "$SDK/ndk/$NDK"
+            yes | sudo "$SM" --install "ndk;$NDK" > /dev/null 2>&1 || true
+            sleep 5
+          done
+          if [ ! -f "$SDK/ndk/$NDK/source.properties" ]; then
+            echo "Не удалось скачать Android NDK $NDK (сбой серверов Google) — перезапустите сборку." | tee -a ci.log
+            exit 1
+          fi
+          echo "NDK $NDK на месте"
+
       - name: Сборка APK
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
