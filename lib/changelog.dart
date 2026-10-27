@@ -14,6 +14,7 @@ const changelog = <(String, List<String>)>[
     'Windows: автозапуск с режимом TUN',
     'Задержка: зелёный до 350 мс, жёлтый до 700',
     'Исправлен QR-код при «Поделиться»',
+    'Windows: исправлена ошибка «StreamSink is bound to a stream»',
   ]),
   ('1.9.7', [
     'Windows: режим TUN — все программы через Nexus',

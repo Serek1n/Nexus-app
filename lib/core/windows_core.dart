@@ -120,8 +120,27 @@ class WindowsCore extends VpnCore {
     return jsonEncode(cfg);
   }
 
+  /// Подключения и отключения идут строго по очереди: два одновременных
+  /// запуска (переподключение + обновление подписки) раньше писали в один
+  /// и тот же процесс ядра и падали с «StreamSink is bound to a stream».
+  Future<void> _queue = Future.value();
+
+  Future<T> _serial<T>(Future<T> Function() op) {
+    final next = _queue.then((_) => op());
+    _queue = next.then((_) {}, onError: (_) {});
+    return next;
+  }
+
   @override
   Future<void> connect({
+    required String remark,
+    required String config,
+    required AppSettings settings,
+  }) =>
+      _serial(() =>
+          _connect(remark: remark, config: config, settings: settings));
+
+  Future<void> _connect({
     required String remark,
     required String config,
     required AppSettings settings,
@@ -171,15 +190,18 @@ class WindowsCore extends VpnCore {
     }
     try {
       // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
-      _proc = await Process.start(
+      final started = await Process.start(
         _corePath,
         ['run', '-format', 'json', '-c', 'stdin:'],
         workingDirectory: _coreDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
       );
-      _proc!.stdin.add(utf8.encode(_withStats(config)));
-      await _proc!.stdin.flush();
-      await _proc!.stdin.close();
+      _proc = started;
+      // Пишем в «свой» процесс, а не в поле _proc — его мог сменить
+      // другой запуск.
+      started.stdin.add(utf8.encode(_withStats(config)));
+      await started.stdin.flush();
+      await started.stdin.close();
     } catch (e) {
       _states.add(ConnState.disconnected);
       throw Exception('Не удалось запустить ядро: $e');
@@ -193,11 +215,11 @@ class WindowsCore extends VpnCore {
         _tick();
       }
     });
-    _proc!.stdout
+    proc.stdout
         .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
         .listen(_log);
-    _proc!.stderr
+    proc.stderr
         .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
         .listen(_log);
@@ -520,7 +542,9 @@ class WindowsCore extends VpnCore {
   bool get blocked => _blocked;
 
   @override
-  Future<void> disconnect() async {
+  Future<void> disconnect() => _serial(_disconnect);
+
+  Future<void> _disconnect() async {
     _watchdog?.cancel();
     _watchdog = null;
     _blocked = false;
