@@ -375,6 +375,10 @@ class AppState extends ChangeNotifier {
   ExitInfo? exitInfo;
   bool exitChecking = false;
 
+  /// Предупреждение: сайты видят российский IP, хотя сервер не в России —
+  /// трафик идёт мимо VPN.
+  String? exitWarning;
+
   /// Результат последнего теста скорости (Мбит/с) и текущее значение во
   /// время замера.
   double? speedMbps;
@@ -388,7 +392,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final r = await NetProbe.exitInfo(proxy);
     exitChecking = false;
-    if (state == ConnState.connected) exitInfo = r;
+    if (state == ConnState.connected && r != null) {
+      exitInfo = r;
+      core.note('IP выхода: ${r.ip}'
+          '${r.country.isEmpty ? '' : ' (${r.country})'}');
+      final serverCc = selected?.countryCode?.toUpperCase();
+      exitWarning = r.country == 'RU' && serverCc != 'RU'
+          ? 'Сайты видят ваш российский IP — трафик идёт мимо VPN. '
+              'Нажмите, чтобы переподключиться'
+          : null;
+      if (exitWarning != null) core.note('Внимание: трафик идёт мимо VPN');
+    }
     notifyListeners();
   }
 
@@ -697,6 +711,7 @@ class AppState extends ChangeNotifier {
     if (s != ConnState.connected) {
       liveLatency = null;
       exitInfo = null;
+      exitWarning = null;
       speedMbps = null;
     }
     if (s == ConnState.disconnected) {
