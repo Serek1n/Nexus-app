@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.9.9');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.0.0');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.0.0', [
+    'Режим «Авто»: всегда самый быстрый сервер, без обрывов',
+    'Обход блокировок: Nexus сложнее распознать',
+    'DNS только зашифрованный (DNS-over-HTTPS)',
+    'Статистика трафика по дням и месяцам',
+    'Резервная копия подписок и настроек под паролем',
+    'Английский язык интерфейса',
+    'Android: плитка и виджет подключают без открытия Nexus',
+    'Android: напоминание за 3 дня и за день до конца подписки',
+    'Windows: «Авто» в меню трея и текущий сервер на главной',
+  ]),
   ('1.9.9', [
     'Предупреждение, если трафик идёт мимо VPN',
     'Тест скорости через текущий сервер — на главной',
@@ -191,7 +203,9 @@ void showChangelog(BuildContext context, {bool onlyCurrent = false}) {
                 child: Row(children: [
                   Expanded(
                     child: Text(
-                      onlyCurrent ? 'Обновлено до $appVersion' : 'Что нового',
+                      onlyCurrent
+                          ? tr('Обновлено до {0}', [appVersion])
+                          : tr('Что нового'),
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w800),
                     ),
@@ -218,8 +232,8 @@ void showChangelog(BuildContext context, {bool onlyCurrent = false}) {
                                     fontSize: 14.5)),
                             if (ver == appVersion) ...[
                               const SizedBox(width: 8),
-                              const Text('· текущая',
-                                  style: TextStyle(
+                              Text(tr('· текущая'),
+                                  style: const TextStyle(
                                       color: NX.mint,
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w600)),

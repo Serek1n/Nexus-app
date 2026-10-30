@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import '../l10n.dart';
 
 /// Системные функции Android (канал nexus/system в MainActivity).
 class AndroidSystem {
@@ -36,9 +38,43 @@ class AndroidSystem {
     if (await _call<bool>('takeToggle') == true) onToggle?.call();
   }
 
+  /// Последний конфиг для плитки и виджета (хранится зашифрованным);
+  /// [config] = null — стереть.
+  static Future<void> saveTileConfig({
+    String? remark,
+    String? config,
+    List<String> blocked = const [],
+    bool vpn = true,
+  }) =>
+      _call('tileConfig', {
+        'remark': remark,
+        'config': config,
+        'blocked': blocked,
+        'vpn': vpn,
+      });
+
+  /// Напоминания о конце подписок: [subs] — (id, название, срок).
+  static Future<void> scheduleExpiry(List<(String, String, DateTime)> subs) =>
+      _call('scheduleExpiry', jsonEncode([
+        for (final (id, title, exp) in subs)
+          {
+            'id': id,
+            'title': title,
+            'expire': exp.millisecondsSinceEpoch,
+            // Тексты уведомлений на языке интерфейса.
+            'm3': tr('Подписка «{0}» закончится через 3 дня — продлите её в боте', [title]),
+            'm1': tr('Подписка «{0}» закончится завтра — продлите её в боте', [title]),
+          },
+      ]));
+
   /// Состояние для плитки в шторке.
   static Future<void> setTileState(bool on, {required bool vpn}) =>
-      _call('tileState', {'on': on, 'vpn': vpn});
+      _call('tileState', {
+        'on': on,
+        'vpn': vpn,
+        'onLabel': tr('Подключено'),
+        'offLabel': tr('Отключено'),
+      });
 
   /// Android 13+: разрешение на уведомление о подключении.
   static Future<void> requestNotifications() => _call('requestNotifications');
@@ -88,9 +124,9 @@ class AndroidSystem {
       return await _ch.invokeMethod<String>('scanQr');
     } on PlatformException catch (e) {
       throw Exception(
-          'Сканер QR недоступен: ${e.message ?? 'нет сервисов Google Play'}');
+          tr('Сканер QR недоступен: {0}', [e.message ?? tr('нет сервисов Google Play')]));
     } on MissingPluginException {
-      throw Exception('Сканер QR недоступен на этом устройстве');
+      throw Exception(tr('Сканер QR недоступен на этом устройстве'));
     }
   }
 

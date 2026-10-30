@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
 import '../models.dart';
+import '../l10n.dart';
 
 /// Локальные порты ядра на Windows.
 const kSocksPort = 10808;
@@ -37,6 +38,7 @@ String buildXrayConfig(
   List<String> customProxy = const [],
   List<String> customDirect = const [],
   bool blockAds = false,
+  bool antiBlock = false,
 }) {
   final parsed = V2ray.parseFromURL(server.link);
   final cfg =
@@ -121,9 +123,16 @@ String buildXrayConfig(
 
   _patchHysteria2(cfg, server.link);
   _patchShareParams(cfg, server.link);
+  if (antiBlock) _addFragment(cfg);
 
+  // DNS-over-HTTPS: запросы Xray зашифрованы и идут через сервер —
+  // провайдер не видит и не может подменить ответы. Адреса — IP, поэтому
+  // отдельный DNS для начального подключения не нужен.
   cfg['dns'] = {
-    'servers': ['1.1.1.1', '8.8.8.8'],
+    'servers': [
+      'https://1.1.1.1/dns-query',
+      'https://8.8.8.8/dns-query',
+    ],
     'queryStrategy': 'UseIPv4',
   };
 
@@ -213,6 +222,123 @@ String buildXrayConfig(
   };
 
   return jsonEncode(cfg);
+}
+
+/// Режим «Авто»: несколько серверов в одном ядре. Xray сам раз в
+/// [probeInterval] проверяет каждый (observatory) и отправляет новые соединения через
+/// самый быстрый живой сервер (balancer leastPing). Упал сервер — трафик
+/// уходит на следующий без переподключения.
+///
+/// [servers] — от лучшего к худшему; первый — запасной, пока проверка не
+/// прошла. Серверы, ссылку которых не удалось разобрать, пропускаются.
+String buildAutoConfig(
+  List<ServerProfile> servers, {
+  required RoutingMode routing,
+  required bool desktop,
+  bool lockLocalProxy = false,
+  List<String> customProxy = const [],
+  List<String> customDirect = const [],
+  bool blockAds = false,
+  bool antiBlock = false,
+  String probeInterval = '2m',
+}) {
+  Map<String, dynamic>? base;
+  final proxies = <Map<String, dynamic>>[];
+  for (var i = 0; i < servers.length; i++) {
+    final s = servers[i];
+    final Map<String, dynamic> c;
+    try {
+      c = jsonDecode(buildXrayConfig(
+        s,
+        routing: routing,
+        desktop: desktop,
+        lockLocalProxy: lockLocalProxy,
+        customProxy: customProxy,
+        customDirect: customDirect,
+        blockAds: blockAds,
+        antiBlock: antiBlock,
+      )) as Map<String, dynamic>;
+    } catch (_) {
+      continue;
+    }
+    final ob = (c['outbounds'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .where((o) => o['tag'] == 'proxy')
+        .firstOrNull;
+    if (ob == null) continue;
+    base ??= c;
+    // Тег — номер сервера в списке: так по результатам проверки видно,
+    // какой именно сервер сейчас самый быстрый.
+    proxies.add({...ob, 'tag': '$kAutoPrefix$i'});
+  }
+  if (base == null) {
+    throw Exception(tr('Не удалось разобрать ни один сервер подписки'));
+  }
+  // Серверы — первыми: плагин Android берёт адрес из первого исходящего.
+  base['outbounds'] = [
+    ...proxies,
+    ...(base['outbounds'] as List)
+        .where((o) => !(o is Map && o['tag'] == 'proxy')),
+  ];
+  final r = (base['routing'] as Map).cast<String, dynamic>();
+  final rules = (r['rules'] as List).cast<Map<String, dynamic>>();
+  for (final rule in rules) {
+    if (rule['outboundTag'] == 'proxy') {
+      rule.remove('outboundTag');
+      rule['balancerTag'] = 'auto';
+    }
+  }
+  // Всё, что не попало под правила, — тоже через балансировщик
+  // (иначе Xray отправил бы это в первый исходящий напрямую).
+  rules.add({'type': 'field', 'network': 'tcp,udp', 'balancerTag': 'auto'});
+  r['rules'] = rules;
+  r['balancers'] = [
+    {
+      'tag': 'auto',
+      'selector': [kAutoPrefix],
+      'strategy': {'type': 'leastPing'},
+      'fallbackTag': proxies.first['tag'],
+    },
+  ];
+  base['routing'] = r;
+  base['observatory'] = {
+    'subjectSelector': [kAutoPrefix],
+    'probeURL': 'https://www.gstatic.com/generate_204',
+    'probeInterval': probeInterval,
+    'enableConcurrency': true,
+  };
+  return jsonEncode(base);
+}
+
+/// Префикс тегов серверов в режиме «Авто».
+const kAutoPrefix = 'nx-';
+
+/// Обход блокировок: первый пакет соединения с сервером (TLS ClientHello)
+/// режется на небольшие TCP-сегменты с паузами. Для сервера это обычный
+/// поток TCP, а системам фильтрации провайдера сложнее распознать
+/// подключение. Только для TCP-транспортов (Hysteria2 работает по UDP);
+/// маски из ссылки 3x-ui (fm) не трогаем.
+void _addFragment(Map<String, dynamic> cfg) {
+  for (final ob in (cfg['outbounds'] as List? ?? [])) {
+    if (ob is! Map<String, dynamic> || ob['tag'] != 'proxy') continue;
+    if (ob['protocol'] == 'hysteria') continue;
+    final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    if (const ['kcp', 'mkcp', 'quic', 'hysteria'].contains(ss['network'])) {
+      continue;
+    }
+    final fm = (ss['finalmask'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    if (fm['tcp'] != null) continue;
+    fm['tcp'] = [
+      {
+        'type': 'fragment',
+        'settings': {'packets': '1-1', 'length': '100-200', 'delay': '10-20'},
+      },
+    ];
+    ss['finalmask'] = fm;
+    ob['streamSettings'] = ss;
+  }
 }
 
 /// Hysteria2: плагин понимает не все параметры ссылки 3x-ui (alpn, obfs

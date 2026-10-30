@@ -9,12 +9,16 @@ import '../../services/app_updater.dart';
 import '../../platform/android_system.dart';
 import '../../platform/windows_host.dart';
 import '../../services/config_builder.dart';
+import '../../services/traffic_log.dart';
 import '../app_scope.dart';
+import '../backup_sheet.dart';
+import 'traffic_screen.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import '../../platform/win_admin.dart';
 import '../rollback_sheet.dart';
 import 'apps_screen.dart';
+import '../../l10n.dart';
 
 
 class SettingsScreen extends StatelessWidget {
@@ -34,7 +38,7 @@ class SettingsScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Свои правила'),
+        title: Text(tr('Свои правила')),
         content: SizedBox(
           width: 440,
           child: SingleChildScrollView(
@@ -42,13 +46,11 @@ class SettingsScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                    'По одному сайту или IP в строке. Поддомены входят '
-                    'автоматически: «ozon.ru» — это и «www.ozon.ru». '
-                    'Свои правила важнее режима маршрутизации.',
+                Text(
+                    tr('По одному сайту или IP в строке. Поддомены входят автоматически: «ozon.ru» — это и «www.ozon.ru». Свои правила важнее режима маршрутизации.'),
                     style: TextStyle(color: NX.text2, fontSize: 12.5)),
                 const SizedBox(height: 14),
-                const Text('Всегда через VPN',
+                Text(tr('Всегда через VPN'),
                     style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 6),
                 TextField(
@@ -58,7 +60,7 @@ class SettingsScreen extends StatelessWidget {
                   decoration: deco('example.com'),
                 ),
                 const SizedBox(height: 14),
-                const Text('Всегда напрямую',
+                Text(tr('Всегда напрямую'),
                     style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 6),
                 TextField(
@@ -74,10 +76,10 @@ class SettingsScreen extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           FilledButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Сохранить')),
+              child: Text(tr('Сохранить'))),
         ],
       ),
     );
@@ -91,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
     });
     await app.reconnectIfActive();
     if (context.mounted) {
-      toast(context, 'Сохранено: через VPN ${p.length}, напрямую ${d.length}');
+      toast(context, tr('Сохранено: через VPN {0}, напрямую {1}', [p.length, d.length]));
     }
   }
 
@@ -108,18 +110,16 @@ class SettingsScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Нужны права администратора'),
-        content: const Text(
-            'Режим TUN создаёт виртуальную сетевую карту, и для этого Windows '
-            'просит права администратора. Nexus перезапустится — подтвердите '
-            'запрос Windows. Подписки и настройки сохранятся.'),
+        title: Text(tr('Нужны права администратора')),
+        content: Text(
+            tr('Режим TUN создаёт виртуальную сетевую карту, и для этого Windows просит права администратора. Nexus перезапустится — подтвердите запрос Windows. Подписки и настройки сохранятся.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           FilledButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Перезапустить')),
+              child: Text(tr('Перезапустить'))),
         ],
       ),
     );
@@ -132,7 +132,7 @@ class SettingsScreen extends StatelessWidget {
     } else {
       app.updateSettings((s) => s.windowsTun = false);
       if (context.mounted) {
-        toast(context, 'Windows не дал прав администратора — TUN не включён',
+        toast(context, tr('Windows не дал прав администратора — TUN не включён'),
             error: true);
       }
     }
@@ -218,18 +218,17 @@ class SettingsScreen extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          const PageHeader(title: 'Настройки'),
-          const SectionTitle('Маршрутизация'),
+          PageHeader(title: tr('Настройки')),
+          SectionTitle(tr('Маршрутизация')),
           routeOption(
             RoutingMode.smart,
-            'Умный режим',
-            'Российские сайты, IP и приложения (Госуслуги, банки, VK, Яндекс) '
-                'работают напрямую, без VPN; остальное — через Nexus',
+            tr('Умный режим'),
+            tr('Российские сайты, IP и приложения (Госуслуги, банки, VK, Яндекс) работают напрямую, без VPN; остальное — через Nexus'),
           ),
           routeOption(
             RoutingMode.global,
-            'Весь трафик',
-            'Абсолютно всё идёт через сервер Nexus',
+            tr('Весь трафик'),
+            tr('Абсолютно всё идёт через сервер Nexus'),
           ),
           NeonCard(
             onTap: () => _editRules(context),
@@ -241,15 +240,14 @@ class SettingsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Свои правила',
+                      Text(tr('Свои правила'),
                           style: TextStyle(
                               fontWeight: FontWeight.w700, fontSize: 14.5)),
                       const SizedBox(height: 2),
                       Text(
                         st.customProxy.isEmpty && st.customDirect.isEmpty
-                            ? 'Выберите сайты, которые всегда идут через VPN или напрямую'
-                            : 'Через VPN: ${st.customProxy.length} · '
-                                'напрямую: ${st.customDirect.length}',
+                            ? tr('Выберите сайты, которые всегда идут через VPN или напрямую')
+                            : tr('Через VPN: {0} · напрямую: {1}', [st.customProxy.length, st.customDirect.length]),
                         style:
                             const TextStyle(color: NX.text2, fontSize: 12.5),
                       ),
@@ -264,10 +262,8 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: switchRow(
               Icons.block_rounded,
-              'Блокировать рекламу',
-              'Рекламные сети и трекеры не загружаются — страницы открываются '
-                  'быстрее, меньше трафика. Если сайт сломался, добавьте его '
-                  'в «Свои правила»',
+              tr('Блокировать рекламу'),
+              tr('Рекламные сети и трекеры не загружаются — страницы открываются быстрее, меньше трафика. Если сайт сломался, добавьте его в «Свои правила»'),
               st.blockAds,
               (v) async {
                 app.updateSettings((s) => s.blockAds = v);
@@ -287,7 +283,7 @@ class SettingsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Приложения без VPN',
+                        Text(tr('Приложения без VPN'),
                             style: TextStyle(
                                 fontWeight: FontWeight.w700, fontSize: 14.5)),
                         const SizedBox(height: 2),
@@ -295,10 +291,10 @@ class SettingsScreen extends StatelessWidget {
                           [
                             if (st.routing == RoutingMode.smart &&
                                 st.ruAppsDirect)
-                              'Российские — напрямую',
+                              tr('Российские — напрямую'),
                             if (st.bypassApps.isNotEmpty)
-                              'выбрано: ${st.bypassApps.length}',
-                          ].join(' · ').ifEmpty('Все приложения через VPN'),
+                              tr('выбрано: {0}', [st.bypassApps.length]),
+                          ].join(' · ').ifEmpty(tr('Все приложения через VPN')),
                           style:
                               const TextStyle(color: NX.text2, fontSize: 12.5),
                         ),
@@ -309,7 +305,7 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-          const SectionTitle('Подключение'),
+          SectionTitle(tr('Подключение')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
@@ -317,8 +313,8 @@ class SettingsScreen extends StatelessWidget {
                 if (app.isDesktop) ...[
                   switchRow(
                     Icons.lan_rounded,
-                    'Системный прокси',
-                    'Браузеры и программы Windows автоматически пойдут через Nexus',
+                    tr('Системный прокси'),
+                    tr('Браузеры и программы Windows автоматически пойдут через Nexus'),
                     st.windowsSystemProxy,
                     (v) async {
                       app.updateSettings((s) => s.windowsSystemProxy = v);
@@ -328,15 +324,12 @@ class SettingsScreen extends StatelessWidget {
                   const Divider(height: 14),
                   switchRow(
                     Icons.lan_outlined,
-                    'Режим TUN',
+                    tr('Режим TUN'),
                     st.windowsTun
                         ? (WinAdmin.isAdmin
-                            ? 'Через Nexus идут все программы: Telegram, игры, '
-                                'всё, что не смотрит на прокси'
-                            : 'Включён, но Nexus запущен без прав администратора — '
-                                'работает системный прокси')
-                        : 'Все программы через Nexus, как VPN на телефоне. '
-                            'Нужны права администратора',
+                            ? tr('Через Nexus идут все программы: Telegram, игры, всё, что не смотрит на прокси')
+                            : tr('Включён, но Nexus запущен без прав администратора — работает системный прокси'))
+                        : tr('Все программы через Nexus, как VPN на телефоне. Нужны права администратора'),
                     st.windowsTun,
                     (v) => _toggleTun(context, v),
                   ),
@@ -348,8 +341,8 @@ class SettingsScreen extends StatelessWidget {
                         const Icon(Icons.settings_ethernet_rounded,
                             color: NX.violet, size: 21),
                         const SizedBox(width: 14),
-                        const Expanded(
-                          child: Text('Локальный прокси',
+                        Expanded(
+                          child: Text(tr('Локальный прокси'),
                               style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14.5)),
@@ -373,16 +366,16 @@ class SettingsScreen extends StatelessWidget {
                             'rundll32', ['url.dll,FileProtocolHandler', url]);
                         if (context.mounted) {
                           toast(context,
-                              'Подтвердите прокси в окне Telegram');
+                              tr('Подтвердите прокси в окне Telegram'));
                         }
                       } catch (_) {
                         if (context.mounted) {
-                          toast(context, 'Telegram не установлен',
+                          toast(context, tr('Telegram не установлен'),
                               error: true);
                         }
                       }
                     },
-                    child: const Padding(
+                    child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Row(
                         children: [
@@ -393,14 +386,13 @@ class SettingsScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Подключить Telegram',
+                                Text(tr('Подключить Telegram'),
                                     style: TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14.5)),
                                 SizedBox(height: 2),
                                 Text(
-                                    'Telegram Desktop не всегда использует '
-                                    'системный прокси — добавим ему прокси Nexus',
+                                    tr('Telegram Desktop не всегда использует системный прокси — добавим ему прокси Nexus'),
                                     style: TextStyle(
                                         color: NX.text2, fontSize: 12.5)),
                               ],
@@ -415,10 +407,10 @@ class SettingsScreen extends StatelessWidget {
                 ] else
                   switchRow(
                     Icons.vpn_lock_rounded,
-                    'Режим VPN',
+                    tr('Режим VPN'),
                     st.androidVpnMode
-                        ? 'Весь трафик телефона идёт через Nexus'
-                        : 'Только прокси 127.0.0.1:10807 — им сможет пользоваться любое приложение на телефоне',
+                        ? tr('Весь трафик телефона идёт через Nexus')
+                        : tr('Только прокси 127.0.0.1:10807 — им сможет пользоваться любое приложение на телефоне'),
                     st.androidVpnMode,
                     (v) async {
                       app.updateSettings((s) => s.androidVpnMode = v);
@@ -428,7 +420,30 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SectionTitle('Работа в фоне'),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+            child: Column(children: [
+            switchRow(
+              Icons.bolt_rounded,
+              tr('Режим «Авто»'),
+              tr('Nexus сам держит соединение через самый быстрый сервер подписки и незаметно переходит на другой, если этот упал'),
+              st.autoMode,
+              (v) => app.setAutoMode(v),
+            ),
+            const Divider(height: 14),
+            switchRow(
+              Icons.call_split_rounded,
+              tr('Обход блокировок'),
+              tr('Если провайдер блокирует подключение к серверу: Nexus режет первый пакет на части, и его сложнее распознать. Подключение чуть медленнее'),
+              st.antiBlock,
+              (v) async {
+                app.updateSettings((s) => s.antiBlock = v);
+                await app.reconnectIfActive();
+              },
+            ),
+            ]),
+          ),
+          SectionTitle(tr('Работа в фоне')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: app.isDesktop
@@ -436,17 +451,16 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       switchRow(
                         Icons.minimize_rounded,
-                        'Сворачивать в трей',
-                        'Кнопка «закрыть» прячет окно, VPN продолжает работать. '
-                            'Выйти можно из меню значка в трее',
+                        tr('Сворачивать в трей'),
+                        tr('Кнопка «закрыть» прячет окно, VPN продолжает работать. Выйти можно из меню значка в трее'),
                         st.closeToTray,
                         (v) => app.updateSettings((s) => s.closeToTray = v),
                       ),
                       const Divider(height: 14),
                       switchRow(
                         Icons.power_rounded,
-                        'Запускать вместе с Windows',
-                        'Nexus стартует свёрнутым в трей',
+                        tr('Запускать вместе с Windows'),
+                        tr('Nexus стартует свёрнутым в трей'),
                         st.launchAtStartup,
                         (v) {
                           app.updateSettings((s) => s.launchAtStartup = v);
@@ -458,7 +472,7 @@ class SettingsScreen extends StatelessWidget {
                 : const _AndroidBackground(),
           ),
           if (app.isDesktop) ...[
-            const SectionTitle('Защита'),
+            SectionTitle(tr('Защита')),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
               child: Column(
@@ -466,15 +480,15 @@ class SettingsScreen extends StatelessWidget {
                   switchRow(
                     Icons.shield_rounded,
                     'Kill switch',
-                    'Если VPN оборвётся, интернет блокируется, а не идёт напрямую',
+                    tr('Если VPN оборвётся, интернет блокируется, а не идёт напрямую'),
                     st.windowsKillSwitch,
                     (v) => app.updateSettings((s) => s.windowsKillSwitch = v),
                   ),
                   const Divider(height: 14),
                   switchRow(
                     Icons.content_paste_off_rounded,
-                    'Очищать буфер обмена',
-                    'После добавления ключа или подписки',
+                    tr('Очищать буфер обмена'),
+                    tr('После добавления ключа или подписки'),
                     st.clearClipboard,
                     (v) => app.updateSettings((s) => s.clearClipboard = v),
                   ),
@@ -483,15 +497,15 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
           if (!app.isDesktop) ...[
-            const SectionTitle('Защита'),
+            SectionTitle(tr('Защита')),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
               child: Column(
                 children: [
                   switchRow(
                     Icons.screenshot_monitor_rounded,
-                    'Скрывать экран',
-                    'Запрет скриншотов и размытие в списке недавних приложений',
+                    tr('Скрывать экран'),
+                    tr('Запрет скриншотов и размытие в списке недавних приложений'),
                     st.secureScreen,
                     (v) {
                       app.updateSettings((s) => s.secureScreen = v);
@@ -501,15 +515,15 @@ class SettingsScreen extends StatelessWidget {
                   const Divider(height: 14),
                   switchRow(
                     Icons.content_paste_off_rounded,
-                    'Очищать буфер обмена',
-                    'После добавления ключа или подписки',
+                    tr('Очищать буфер обмена'),
+                    tr('После добавления ключа или подписки'),
                     st.clearClipboard,
                     (v) => app.updateSettings((s) => s.clearClipboard = v),
                   ),
                   const Divider(height: 14),
                   InkWell(
                     onTap: AndroidSystem.openVpnSettings,
-                    child: const Padding(
+                    child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Row(
                         children: [
@@ -526,8 +540,7 @@ class SettingsScreen extends StatelessWidget {
                                         fontSize: 14.5)),
                                 SizedBox(height: 2),
                                 Text(
-                                    'В настройках VPN выберите Nexus и включите '
-                                    '«Постоянная VPN» и «Блокировать соединения без VPN»',
+                                    tr('В настройках VPN выберите Nexus и включите «Постоянная VPN» и «Блокировать соединения без VPN»'),
                                     style: TextStyle(
                                         color: NX.text2, fontSize: 12.5)),
                               ],
@@ -544,46 +557,46 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ],
-          const SectionTitle('Запуск'),
+          SectionTitle(tr('Запуск')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
               children: [
                 switchRow(
                   Icons.autorenew_rounded,
-                  'Держать соединение',
-                  'Переподключаться при обрыве и раз в 45 секунд проверять, что трафик идёт',
+                  tr('Держать соединение'),
+                  tr('Переподключаться при обрыве и раз в 45 секунд проверять, что трафик идёт'),
                   st.autoReconnect,
                   (v) => app.updateSettings((s) => s.autoReconnect = v),
                 ),
                 const Divider(height: 14),
                 switchRow(
                   Icons.alt_route_rounded,
-                  'Автовыбор при сбое',
-                  'Если сервер не пропускает трафик, Nexus сам переключится на следующий',
+                  tr('Автовыбор при сбое'),
+                  tr('Если сервер не пропускает трафик, Nexus сам переключится на следующий'),
                   st.autoFailover,
                   (v) => app.updateSettings((s) => s.autoFailover = v),
                 ),
                 const Divider(height: 14),
                 switchRow(
                   Icons.sync_rounded,
-                  'Обновлять подписки',
-                  'При запуске, подключении и переподключении VPN',
+                  tr('Обновлять подписки'),
+                  tr('При запуске, подключении и переподключении VPN'),
                   st.autoUpdateOnStart,
                   (v) => app.updateSettings((s) => s.autoUpdateOnStart = v),
                 ),
                 const Divider(height: 14),
                 switchRow(
                   Icons.flash_on_rounded,
-                  'Автоподключение',
-                  'Подключаться сразу после запуска',
+                  tr('Автоподключение'),
+                  tr('Подключаться сразу после запуска'),
                   st.autoConnectOnStart,
                   (v) => app.updateSettings((s) => s.autoConnectOnStart = v),
                 ),
               ],
             ),
           ),
-          const SectionTitle('Ядро Xray'),
+          SectionTitle(tr('Ядро Xray')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
             child: Column(
@@ -607,9 +620,9 @@ class SettingsScreen extends StatelessWidget {
                             app.core.canUpdateCore
                                 ? (app.coreUpdateStatus ??
                                     (app.isDesktop
-                                        ? 'Новые версии берутся с GitHub XTLS/Xray-core'
-                                        : 'Свежий Xray приходит обновлением Nexus'))
-                                : 'Обновляется вместе с приложением',
+                                        ? tr('Новые версии берутся с GitHub XTLS/Xray-core')
+                                        : tr('Свежий Xray приходит обновлением Nexus')))
+                                : tr('Обновляется вместе с приложением'),
                             style: const TextStyle(
                                 color: NX.text2, fontSize: 12.5),
                           ),
@@ -618,7 +631,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     if (app.core.canUpdateCore)
                       NeonButton(
-                        label: 'Проверить',
+                        label: tr('Проверить'),
                         secondary: true,
                         loading: app.coreUpdating,
                         onPressed: () => app.updateCore(),
@@ -629,10 +642,10 @@ class SettingsScreen extends StatelessWidget {
                   const Divider(height: 22),
                   switchRow(
                     Icons.update_rounded,
-                    'Автообновление ядра',
+                    tr('Автообновление ядра'),
                     app.isDesktop
-                        ? 'Раз в сутки проверять и ставить новую версию'
-                        : 'Раз в сутки проверять и предлагать обновление',
+                        ? tr('Раз в сутки проверять и ставить новую версию')
+                        : tr('Раз в сутки проверять и предлагать обновление'),
                     st.autoUpdateCore,
                     (v) => app.updateSettings((s) => s.autoUpdateCore = v),
                   ),
@@ -640,7 +653,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SectionTitle('Обновления Nexus'),
+          SectionTitle(tr('Обновления Nexus')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
             child: Column(
@@ -657,21 +670,21 @@ class SettingsScreen extends StatelessWidget {
                         children: [
                           Text(
                               app.appUpdate != null
-                                  ? 'Доступна ${app.appUpdate!.version}'
-                                  : 'Версия $appVersion',
+                                  ? tr('Доступна {0}', [app.appUpdate!.version])
+                                  : tr('Версия {0}', [appVersion]),
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14.5)),
                           const SizedBox(height: 2),
                           Text(
                             !AppUpdater.configured
-                                ? 'Эта сборка без источника обновлений'
+                                ? tr('Эта сборка без источника обновлений')
                                 : app.updateStatus ??
                                     (app.updateFile != null
-                                        ? 'Скачано и проверено — можно установить'
+                                        ? tr('Скачано и проверено — можно установить')
                                         : app.appUpdate != null
-                                            ? 'Нажмите «Установить» — скачаем и проверим'
-                                            : 'Новые версии приходят с GitHub'),
+                                            ? tr('Нажмите «Установить» — скачаем и проверим')
+                                            : tr('Новые версии приходят с GitHub')),
                             style: const TextStyle(
                                 color: NX.text2, fontSize: 12.5),
                           ),
@@ -680,7 +693,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     if (AppUpdater.configured && app.appUpdate == null)
                       NeonButton(
-                        label: 'Проверить',
+                        label: tr('Проверить'),
                         secondary: true,
                         loading: app.checkingUpdate,
                         onPressed: () => app.checkAppUpdate(),
@@ -707,8 +720,8 @@ class SettingsScreen extends StatelessWidget {
                   ],
                   NeonButton(
                     label: app.isDesktop
-                        ? 'Установить и перезапустить'
-                        : 'Установить обновление',
+                        ? tr('Установить и перезапустить')
+                        : tr('Установить обновление'),
                     icon: Icons.download_rounded,
                     expand: true,
                     loading: app.updateProgress != null,
@@ -721,14 +734,14 @@ class SettingsScreen extends StatelessWidget {
                   runSpacing: 10,
                   children: [
                     NeonButton(
-                      label: 'Что нового',
+                      label: tr('Что нового'),
                       icon: Icons.notes_rounded,
                       secondary: true,
                       onPressed: () => showChangelog(context),
                     ),
                     if (AppUpdater.configured)
                       NeonButton(
-                        label: 'Откатить версию',
+                        label: tr('Откатить версию'),
                         icon: Icons.history_rounded,
                         secondary: true,
                         onPressed: () => showRollbackSheet(context),
@@ -739,8 +752,8 @@ class SettingsScreen extends StatelessWidget {
                   const Divider(height: 22),
                   switchRow(
                     Icons.autorenew_rounded,
-                    'Проверять обновления',
-                    'Сообщать о новой версии; скачивание — по кнопке «Установить»',
+                    tr('Проверять обновления'),
+                    tr('Сообщать о новой версии; скачивание — по кнопке «Установить»'),
                     st.autoUpdateApp,
                     (v) => app.updateSettings((s) => s.autoUpdateApp = v),
                   ),
@@ -748,29 +761,84 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SectionTitle('О приложении'),
+          SectionTitle(tr('Данные')),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 4, 10, 4),
+            child: Column(
+              children: [
+                _NavRow(
+                  icon: Icons.bar_chart_rounded,
+                  title: tr('Статистика трафика'),
+                  subtitle: tr('Сегодня: {0}', [fmtBytes(app.traffic.total(TrafficLog.dayKey(DateTime.now())))]),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const TrafficScreen())),
+                ),
+                const Divider(height: 6),
+                _NavRow(
+                  icon: Icons.backup_rounded,
+                  title: tr('Резервная копия'),
+                  subtitle: tr('Подписки, серверы и настройки под паролем. Восстановить — через «Добавить»'),
+                  onTap: () => showBackupExport(context),
+                ),
+              ],
+            ),
+          ),
+          const SectionTitle('Язык · Language'),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (v, label) in [
+                  ('system', tr('Как в системе')),
+                  ('ru', 'Русский'),
+                  ('en', 'English'),
+                ])
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: st.language == v,
+                    onSelected: (_) => app.setLanguage(v),
+                  ),
+              ],
+            ),
+          ),
+          SectionTitle(tr('О приложении')),
           NeonCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const NexusLogo(size: 30),
                 const SizedBox(height: 14),
-                _InfoRow('Версия', appVersion),
-                _InfoRow('Ядро', app.coreVersion),
-                _InfoRow('Платформа', app.isDesktop ? 'Windows' : 'Android'),
+                _InfoRow(tr('Версия'), appVersion),
+                _InfoRow(tr('Ядро'), app.coreVersion),
+                _InfoRow(tr('Платформа'), app.isDesktop ? 'Windows' : 'Android'),
                 const SizedBox(height: 14),
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
                   children: [
                     NeonButton(
-                      label: 'Журнал',
+                      label: tr('Журнал'),
                       icon: Icons.receipt_long_rounded,
                       secondary: true,
                       onPressed: () => _showLogs(context),
                     ),
                     NeonButton(
-                      label: 'Сбросить всё',
+                      label: tr('Отчёт для поддержки'),
+                      icon: Icons.support_agent_rounded,
+                      secondary: true,
+                      onPressed: () async {
+                        final app = AppScope.read(context);
+                        final text = await app.supportReport();
+                        await Clipboard.setData(ClipboardData(text: text));
+                        if (!context.mounted) return;
+                        toast(context, tr('Отчёт скопирован — отправьте его в поддержку. Ключей и ссылок подписок в нём нет'));
+                        if (!app.isDesktop) await AndroidSystem.shareText(text);
+                      },
+                    ),
+                    NeonButton(
+                      label: tr('Сбросить всё'),
                       icon: Icons.restart_alt_rounded,
                       secondary: true,
                       onPressed: () => _reset(context),
@@ -789,11 +857,11 @@ class SettingsScreen extends StatelessWidget {
     final app = AppScope.read(context);
     final lines = await app.core.fetchLogs();
     if (!context.mounted) return;
-    final text = lines.isEmpty ? 'Журнал пуст' : lines.join('\n');
+    final text = lines.isEmpty ? tr('Журнал пуст') : lines.join('\n');
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Журнал ядра'),
+        title: Text(tr('Журнал ядра')),
         content: SizedBox(
           width: 560,
           height: 360,
@@ -818,10 +886,10 @@ class SettingsScreen extends StatelessWidget {
               Clipboard.setData(ClipboardData(text: text));
               Navigator.pop(ctx);
             },
-            child: const Text('Скопировать'),
+            child: Text(tr('Скопировать')),
           ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть')),
+              onPressed: () => Navigator.pop(ctx), child: Text(tr('Закрыть'))),
         ],
       ),
     );
@@ -831,17 +899,17 @@ class SettingsScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Сбросить всё?'),
-        content: const Text(
-            'Будут удалены все подписки, серверы и настройки.',
+        title: Text(tr('Сбросить всё?')),
+        content: Text(
+            tr('Будут удалены все подписки, серверы и настройки.'),
             style: TextStyle(color: NX.text2)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Сбросить', style: TextStyle(color: NX.red))),
+              child: Text(tr('Сбросить'), style: TextStyle(color: NX.red))),
         ],
       ),
     );
@@ -875,7 +943,7 @@ class _CopyChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         onTap: () {
           Clipboard.setData(ClipboardData(text: text.split(' ').last));
-          toast(context, 'Скопировано: ${text.split(' ').last}');
+          toast(context, tr('Скопировано: {0}', [text.split(' ').last]));
         },
         child: Tag(text, color: NX.cyan),
       );
@@ -931,21 +999,21 @@ class _AndroidBackgroundState extends State<_AndroidBackground>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(ok ? 'Работа в фоне разрешена' : 'Система может остановить VPN',
+                Text(ok ? tr('Работа в фоне разрешена') : tr('Система может остановить VPN'),
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 14.5)),
                 const SizedBox(height: 2),
                 Text(
                     ok
-                        ? 'Экономия батареи не мешает Nexus'
-                        : 'Отключите для Nexus экономию батареи, чтобы VPN не обрывался',
+                        ? tr('Экономия батареи не мешает Nexus')
+                        : tr('Отключите для Nexus экономию батареи, чтобы VPN не обрывался'),
                     style: const TextStyle(color: NX.text2, fontSize: 12.5)),
               ],
             ),
           ),
           if (!ok)
             NeonButton(
-              label: 'Разрешить',
+              label: tr('Разрешить'),
               secondary: true,
               onPressed: AndroidSystem.requestIgnoreBattery,
             ),
@@ -957,4 +1025,47 @@ class _AndroidBackgroundState extends State<_AndroidBackground>
 
 extension on String {
   String ifEmpty(String other) => isEmpty ? other : this;
+}
+
+/// Строка-переход: значок, заголовок, пояснение, стрелка.
+class _NavRow extends StatelessWidget {
+  const _NavRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title, subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, color: NX.violet, size: 21),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14.5)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style:
+                            const TextStyle(color: NX.text2, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: NX.text3),
+            ],
+          ),
+        ),
+      );
 }

@@ -7,6 +7,7 @@ import '../share_sheet.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../../l10n.dart';
 
 class ServersScreen extends StatefulWidget {
   const ServersScreen({super.key, this.onSelected});
@@ -54,7 +55,7 @@ class _ServersScreenState extends State<ServersScreen> {
       all.add((sub.id, sub.title, _sorted(app.serversOf(sub.id))));
     }
     final manual = _sorted(app.serversOf(null));
-    if (manual.isNotEmpty) all.add(('', 'Добавлены вручную', manual));
+    if (manual.isNotEmpty) all.add(('', tr('Добавлены вручную'), manual));
 
     // При большом числе подписок сразу сворачиваем всё, кроме группы
     // с выбранным сервером, — список не превращается в простыню.
@@ -78,7 +79,7 @@ class _ServersScreenState extends State<ServersScreen> {
     final favs = app.servers.where(app.isFavorite).toList();
     final List<(String, String, List<ServerProfile>)> groups = switch (_filter) {
       null => all,
-      '★' => [('★', 'Избранное', _sorted(favs))],
+      '★' => [('★', tr('Избранное'), _sorted(favs))],
       final f => all.where((g) => g.$1 == f).toList(),
     };
     // Поиск или фильтр — показываем группы развёрнутыми.
@@ -94,35 +95,34 @@ class _ServersScreenState extends State<ServersScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             sliver: SliverToBoxAdapter(
               child: PageHeader(
-                title: 'Серверы',
+                title: tr('Серверы'),
                 subtitle: app.servers.isEmpty
                     ? null
                     : prog != null
-                        ? 'Проверка: ${prog.$1} из ${prog.$2}'
-                        : '${app.servers.length} ${plural(app.servers.length, 'локация', 'локации', 'локаций')}'
-                            '${dead > 0 ? ' · $dead не отвечают' : ''}',
+                        ? tr('Проверка: {0} из {1}', [prog.$1, prog.$2])
+                        : '${app.servers.length} ${plural(app.servers.length, tr('локация'), tr('локации'), tr('локаций'))}' '${dead > 0 ? tr(' · {0} не отвечают', [dead]) : ''}',
                 actions: [
                   NxIconButton(
                     icon: _byPing
                         ? Icons.sort_rounded
                         : Icons.format_list_bulleted_rounded,
                     tooltip: _byPing
-                        ? 'Сортировка: по задержке'
-                        : 'Сортировка: как в подписке',
+                        ? tr('Сортировка: по задержке')
+                        : tr('Сортировка: как в подписке'),
                     onPressed: app.servers.isEmpty
                         ? null
                         : () => setState(() => _byPing = !_byPing),
                   ),
                   NxIconButton(
                     icon: Icons.speed_rounded,
-                    tooltip: 'Проверить задержку',
+                    tooltip: tr('Проверить задержку'),
                     spinning: app.pingingAll,
                     onPressed: app.servers.isEmpty ? null : app.pingAll,
                   ),
                   const SizedBox(width: 8),
                   NxIconButton(
                     icon: Icons.add_rounded,
-                    tooltip: 'Добавить',
+                    tooltip: tr('Добавить'),
                     onPressed: () => showAddSheet(context),
                   ),
                 ],
@@ -155,14 +155,14 @@ class _ServersScreenState extends State<ServersScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
                       _Chip(
-                        label: 'Все',
+                        label: tr('Все'),
                         count: app.servers.length,
                         selected: _filter == null,
                         onTap: () => setState(() => _filter = null),
                       ),
                       if (favs.isNotEmpty)
                         _Chip(
-                          label: 'Избранное',
+                          label: tr('Избранное'),
                           icon: Icons.star_rounded,
                           count: favs.length,
                           selected: _filter == '★',
@@ -170,7 +170,7 @@ class _ServersScreenState extends State<ServersScreen> {
                         ),
                       if (dead > 0)
                         _Chip(
-                          label: 'Только рабочие',
+                          label: tr('Только рабочие'),
                           icon: Icons.wifi_tethering_rounded,
                           count: app.servers.length - dead,
                           selected: _onlyAlive,
@@ -194,8 +194,8 @@ class _ServersScreenState extends State<ServersScreen> {
               sliver: SliverToBoxAdapter(
                 child: TextField(
                   onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
-                  decoration: const InputDecoration(
-                    hintText: 'Поиск сервера',
+                  decoration: InputDecoration(
+                    hintText: tr('Поиск сервера'),
                     prefixIcon: Icon(Icons.search_rounded, color: NX.text3),
                   ),
                 ),
@@ -206,10 +206,10 @@ class _ServersScreenState extends State<ServersScreen> {
               hasScrollBody: false,
               child: EmptyState(
                 icon: Icons.dns_rounded,
-                title: 'Пока нет серверов',
-                text: 'Добавьте подписку из бота — серверы появятся здесь',
+                title: tr('Пока нет серверов'),
+                text: tr('Добавьте подписку из бота — серверы появятся здесь'),
                 action: NeonButton(
-                  label: 'Добавить подписку',
+                  label: tr('Добавить подписку'),
                   icon: Icons.add_rounded,
                   onPressed: () => showAddSheet(context),
                 ),
@@ -387,14 +387,12 @@ class _GroupHeader extends StatelessWidget {
             ],
             const Spacer(),
             Text(
-              '${servers.length} '
-              '${plural(servers.length, 'сервер', 'сервера', 'серверов')}'
-              '${pings.isEmpty ? '' : ' · от ${pings.first} мс'}',
+              '${servers.length} ' '${plural(servers.length, tr('сервер'), tr('сервера'), tr('серверов'))}' '${pings.isEmpty ? '' : tr(' · от {0} мс', [pings.first])}',
               style: const TextStyle(color: NX.text3, fontSize: 12),
             ),
             if (onPing != null)
               Tooltip(
-                message: 'Проверить задержку группы',
+                message: tr('Проверить задержку группы'),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: servers.any((s) => app.pinging.contains(s.id))
@@ -439,7 +437,10 @@ class _ServerTile extends StatelessWidget {
       accent: live ? NX.mint : NX.violet,
       padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
       onTap: () async {
-        await app.select(server);
+        final wasAuto = await app.select(server);
+        if (wasAuto && context.mounted) {
+          toast(context, tr('Режим «Авто» выключен — выбран «{0}»', [server.cleanName]));
+        }
         onSelected?.call();
       },
       onLongPress: () => _menu(context),
@@ -469,7 +470,7 @@ class _ServerTile extends StatelessWidget {
                   Tag(server.protocol, color: NX.cyan),
                   if (live) ...[
                     const SizedBox(width: 6),
-                    const Tag('АКТИВЕН', color: NX.mint),
+                    Tag(tr('АКТИВЕН'), color: NX.mint),
                   ],
                   const SizedBox(width: 8),
                   // Транспорт, а у безымянных серверов — ещё и адрес.
@@ -515,7 +516,7 @@ class _ServerTile extends StatelessWidget {
     final name = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Название сервера'),
+        title: Text(tr('Название сервера')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -527,13 +528,13 @@ class _ServerTile extends StatelessWidget {
           if (server.alias != null)
             TextButton(
                 onPressed: () => Navigator.pop(c, ''),
-                child: const Text('Вернуть исходное')),
+                child: Text(tr('Вернуть исходное'))),
           TextButton(
               onPressed: () => Navigator.pop(c),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           FilledButton(
               onPressed: () => Navigator.pop(c, ctrl.text),
-              child: const Text('Сохранить')),
+              child: Text(tr('Сохранить'))),
         ],
       ),
     );
@@ -575,8 +576,8 @@ class _ServerTile extends StatelessWidget {
                         : Icons.star_outline_rounded,
                     color: NX.amber),
                 title: Text(app.isFavorite(server)
-                    ? 'Убрать из избранного'
-                    : 'В избранное'),
+                    ? tr('Убрать из избранного')
+                    : tr('В избранное')),
                 onTap: () {
                   Navigator.pop(ctx);
                   app.toggleFavorite(server);
@@ -584,7 +585,7 @@ class _ServerTile extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.edit_rounded, color: NX.text2),
-                title: const Text('Переименовать'),
+                title: Text(tr('Переименовать')),
                 onTap: () {
                   Navigator.pop(ctx);
                   _rename(context);
@@ -592,7 +593,7 @@ class _ServerTile extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.speed_rounded, color: NX.cyan),
-                title: const Text('Проверить задержку'),
+                title: Text(tr('Проверить задержку')),
                 onTap: () {
                   Navigator.pop(ctx);
                   app.pingOne(server);
@@ -600,33 +601,31 @@ class _ServerTile extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.qr_code_2_rounded, color: NX.violet),
-                title: const Text('Поделиться (QR)'),
+                title: Text(tr('Поделиться (QR)')),
                 onTap: () {
                   Navigator.pop(ctx);
                   showShareSheet(
                     context,
-                    title: 'Сервер «${server.cleanName}»',
+                    title: tr('Сервер «{0}»', [server.cleanName]),
                     text: server.link,
-                    warning: 'Это ключ доступа к серверу: с ним можно '
-                        'подключаться от вашего имени. Делитесь только с теми, '
-                        'кому доверяете.',
+                    warning: tr('Это ключ доступа к серверу: с ним можно подключаться от вашего имени. Делитесь только с теми, кому доверяете.'),
                   );
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.copy_rounded, color: NX.violet),
-                title: const Text('Скопировать ключ'),
+                title: Text(tr('Скопировать ключ')),
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: server.link));
                   Navigator.pop(ctx);
-                  toast(context, 'Ключ скопирован');
+                  toast(context, tr('Ключ скопирован'));
                 },
               ),
               if (server.subscriptionId == null)
                 ListTile(
                   leading:
                       const Icon(Icons.delete_outline_rounded, color: NX.red),
-                  title: const Text('Удалить',
+                  title: Text(tr('Удалить'),
                       style: TextStyle(color: NX.red)),
                   onTap: () {
                     Navigator.pop(ctx);

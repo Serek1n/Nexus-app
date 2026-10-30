@@ -6,6 +6,7 @@ import '../../services/ru_apps.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../../l10n.dart';
 
 /// Android: выбор приложений, которые работают мимо VPN.
 class AppsScreen extends StatefulWidget {
@@ -71,8 +72,8 @@ class _AppsScreenState extends State<AppsScreen> {
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     const SizedBox(width: 4),
-                    const Expanded(
-                      child: Text('Приложения без VPN',
+                    Expanded(
+                      child: Text(tr('Приложения без VPN'),
                           style: TextStyle(
                               fontWeight: FontWeight.w800, fontSize: 20)),
                     ),
@@ -91,14 +92,13 @@ class _AppsScreenState extends State<AppsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Российские приложения напрямую',
+                            Text(tr('Российские приложения напрямую'),
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14)),
                             SizedBox(height: 2),
                             Text(
-                                'Больше ${ruBypassApps.length} приложений: банки, Госуслуги, '
-                                'VK, Яндекс, маркетплейсы. Список обновляется сам',
+                                tr('Больше {0} приложений: банки, Госуслуги, VK, Яндекс, маркетплейсы. Список обновляется сам', [ruBypassApps.length]),
                                 style:
                                     TextStyle(color: NX.text2, fontSize: 12)),
                           ],
@@ -116,11 +116,10 @@ class _AppsScreenState extends State<AppsScreen> {
                 ),
               ),
               if (st.routing != RoutingMode.smart)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
                   child: Text(
-                    'Сейчас включён режим «Весь трафик»: российские приложения '
-                    'идут через VPN. Отмеченные вручную — всегда напрямую.',
+                    tr('Сейчас включён режим «Весь трафик»: российские приложения идут через VPN. Отмеченные вручную — всегда напрямую.'),
                     style: TextStyle(color: NX.amber, fontSize: 12.5),
                   ),
                 ),
@@ -128,8 +127,8 @@ class _AppsScreenState extends State<AppsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: TextField(
                   onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
-                  decoration: const InputDecoration(
-                    hintText: 'Поиск приложения',
+                  decoration: InputDecoration(
+                    hintText: tr('Поиск приложения'),
                     prefixIcon: Icon(Icons.search_rounded, color: NX.text3),
                   ),
                 ),
@@ -138,10 +137,10 @@ class _AppsScreenState extends State<AppsScreen> {
                 child: _apps == null
                     ? const Center(child: CircularProgressIndicator())
                     : apps.isEmpty
-                        ? const EmptyState(
+                        ? EmptyState(
                             icon: Icons.apps_rounded,
-                            title: 'Ничего не найдено',
-                            text: 'Измените запрос поиска')
+                            title: tr('Ничего не найдено'),
+                            text: tr('Измените запрос поиска'))
                         : ListView.builder(
                             padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
                             itemCount: apps.length,
@@ -157,7 +156,7 @@ class _AppsScreenState extends State<AppsScreen> {
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14.5)),
                                 subtitle: Text(
-                                    auto ? 'Напрямую автоматически' : pkg,
+                                    auto ? tr('Напрямую автоматически') : pkg,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(

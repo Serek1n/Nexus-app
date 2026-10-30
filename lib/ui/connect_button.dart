@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import 'theme.dart';
+import '../l10n.dart';
 
 /// Кнопка подключения: спокойный круг; при подключении — зелёная заливка
 /// и мягкое свечение, во время подключения — бегущая дуга.
@@ -71,7 +72,7 @@ class _ConnectButtonState extends State<ConnectButton>
 
     return Semantics(
       button: true,
-      label: _on ? 'Отключить' : 'Подключить',
+      label: _on ? tr('Отключить') : tr('Подключить'),
       child: GestureDetector(
         onTapDown: (_) => setState(() => _pressed = true),
         onTapCancel: () => setState(() => _pressed = false),

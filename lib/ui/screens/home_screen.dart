@@ -11,6 +11,8 @@ import '../app_scope.dart';
 import '../connect_button.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'traffic_screen.dart';
+import '../../l10n.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.onOpenServers, this.wide = false});
@@ -67,17 +69,16 @@ class HomeScreen extends StatelessWidget {
               ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(SnackBar(
                 behavior: SnackBarBehavior.floating,
                 duration: const Duration(seconds: 8),
-                content: const Row(children: [
+                content: Row(children: [
                   Icon(Icons.battery_alert_rounded,
                       color: NX.amber, size: 20),
                   SizedBox(width: 10),
                   Expanded(
                       child: Text(
-                          'Android может отключать VPN в фоне — '
-                          'разрешите Nexus работать без ограничений')),
+                          tr('Android может отключать VPN в фоне — разрешите Nexus работать без ограничений'))),
                 ]),
                 action: SnackBarAction(
-                  label: 'Разрешить',
+                  label: tr('Разрешить'),
                   textColor: NX.violet,
                   onPressed: () async {
                     await AndroidSystem.requestIgnoreBattery();
@@ -118,14 +119,14 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(Icons.gpp_bad_rounded, color: NX.red, size: 20),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'VPN оборвался — интернет заблокирован, чтобы ничего не ушло мимо',
+                        tr('VPN оборвался — интернет заблокирован, чтобы ничего не ушло мимо'),
                         style: TextStyle(fontSize: 13, height: 1.4),
                       ),
                     ),
@@ -135,7 +136,7 @@ class HomeScreen extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 22),
                   child: TextButton(
                     onPressed: app.reconnect,
-                    child: const Text('Переподключить',
+                    child: Text(tr('Переподключить'),
                         style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
                 ),
@@ -157,7 +158,7 @@ class HomeScreen extends StatelessWidget {
         else
           NeonCard(
             onTap: () => showAddSheet(context),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(Icons.add_link_rounded, color: NX.violet),
                 SizedBox(width: 14),
@@ -165,11 +166,11 @@ class HomeScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Добавьте подписку',
+                      Text(tr('Добавьте подписку'),
                           style: TextStyle(
                               fontWeight: FontWeight.w700, fontSize: 15)),
                       SizedBox(height: 2),
-                      Text('Вставьте ссылку из бота NEXUS',
+                      Text(tr('Вставьте ссылку из бота NEXUS'),
                           style: TextStyle(color: NX.text2, fontSize: 13)),
                     ],
                   ),
@@ -225,7 +226,7 @@ class HomeScreen extends StatelessWidget {
               const Spacer(),
               NxIconButton(
                 icon: Icons.add_rounded,
-                tooltip: 'Добавить',
+                tooltip: tr('Добавить'),
                 onPressed: () => showAddSheet(context),
               ),
             ],
@@ -243,12 +244,12 @@ class HomeScreen extends StatelessWidget {
 /// Предупреждение о скором окончании подписки или трафика.
 String? _subWarning(Subscription sub) {
   final days = sub.expire?.difference(DateTime.now()).inDays;
-  if (days != null && days < 0) return 'Подписка «${sub.title}» закончилась — продлите её в боте';
+  if (days != null && days < 0) return tr('Подписка «{0}» закончилась — продлите её в боте', [sub.title]);
   if (days != null && days <= 3) {
-    return 'Подписка заканчивается через $days ${plural(days, 'день', 'дня', 'дней')} — продлите её в боте';
+    return tr('Подписка заканчивается через {0} {1} — продлите её в боте', [days, plural(days, tr('день'), tr('дня'), tr('дней'))]);
   }
   if (sub.total > 0 && sub.used / sub.total >= 0.9) {
-    return 'Использовано ${(sub.used / sub.total * 100).round()}% трафика подписки';
+    return tr('Использовано {0}% трафика подписки', [(sub.used / sub.total * 100).round()]);
   }
   return null;
 }
@@ -275,10 +276,10 @@ class _UpdateCard extends StatelessWidget {
     final progress = app.updateProgress;
     final ready = app.updateFile != null;
     final status = progress != null
-        ? 'Загрузка ${(progress * 100).round()}%'
+        ? tr('Загрузка {0}%', [(progress * 100).round()])
         : ready
-            ? 'Готово к установке'
-            : 'Доступно обновление';
+            ? tr('Готово к установке')
+            : tr('Доступно обновление');
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -353,7 +354,7 @@ class _UpdateCard extends StatelessWidget {
                           fontWeight: FontWeight.w700, fontSize: 13),
                     ),
                     onPressed: app.installAppUpdate,
-                    child: const Text('Установить'),
+                    child: Text(tr('Установить')),
                   ),
               ],
             ),
@@ -390,7 +391,7 @@ class _UpdateCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Что нового в $title',
+                Text(tr('Что нового в {0}', [title]),
                     style: const TextStyle(
                         fontSize: 17, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
@@ -447,12 +448,12 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (text, color) = blocked
-        ? ('Нет соединения', NX.red)
+        ? (tr('Нет соединения'), NX.red)
         : switch (state) {
-      ConnState.connected => ('Подключено', NX.mint),
-      ConnState.connecting => ('Подключение…', NX.violet),
-      ConnState.disconnecting => ('Отключение…', NX.text2),
-      ConnState.disconnected => ('Не подключено', NX.text3),
+      ConnState.connected => (tr('Подключено'), NX.mint),
+      ConnState.connecting => (tr('Подключение…'), NX.violet),
+      ConnState.disconnecting => (tr('Отключение…'), NX.text2),
+      ConnState.disconnected => (tr('Не подключено'), NX.text3),
     };
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -547,7 +548,7 @@ class _TimerLineState extends State<_TimerLine> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               child: lat == null
-                  ? const Text('Проверяю задержку…',
+                  ? Text(tr('Проверяю задержку…'),
                       style: TextStyle(color: NX.text3, fontSize: 12.5))
                   : Row(
                       mainAxisSize: MainAxisSize.min,
@@ -571,12 +572,12 @@ class _TimerLineState extends State<_TimerLine> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            idle ? 'Нажмите, чтобы подключиться' : '',
+            idle ? tr('Нажмите, чтобы подключиться') : '',
             style: const TextStyle(color: NX.text3, fontSize: 13.5),
           ),
           if (idle && last != null) ...[
             const SizedBox(height: 3),
-            Text('Прошлая сессия: $last',
+            Text(tr('Прошлая сессия: {0}', [last]),
                 style: const TextStyle(
                     color: NX.text3,
                     fontSize: 11.5,
@@ -620,7 +621,7 @@ class _StatsRow extends StatelessWidget {
     Widget sep() => Container(width: 1, height: 30, color: NX.stroke);
     final app = AppScope.of(context);
     String mbps(double v) =>
-        '${v >= 100 ? v.round() : v.toStringAsFixed(1)} Мбит/с';
+        tr('{0} Мбит/с', [v >= 100 ? v.round() : v.toStringAsFixed(1)]);
     // Тест скорости: нажатие на ячейку запускает замер через текущий сервер.
     final speed = Expanded(
       child: InkWell(
@@ -642,7 +643,7 @@ class _StatsRow extends StatelessWidget {
                     size: 14,
                     color: app.speedTesting ? NX.mint : NX.text3),
                 const SizedBox(width: 4),
-                Text('Скорость',
+                Text(tr('Скорость'),
                     style: TextStyle(
                         color: app.speedTesting ? NX.mint : NX.text3,
                         fontSize: 12)),
@@ -656,7 +657,7 @@ class _StatsRow extends StatelessWidget {
                     ? mbps(app.speedLive ?? 0)
                     : app.speedMbps != null
                         ? mbps(app.speedMbps!)
-                        : 'Проверить',
+                        : tr('Проверить'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -677,12 +678,21 @@ class _StatsRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
       child: Row(
         children: [
-          cell(Icons.south_rounded, 'Загрузка', fmtSpeed(stats.downloadSpeed)),
+          cell(Icons.south_rounded, tr('Загрузка'), fmtSpeed(stats.downloadSpeed)),
           sep(),
-          cell(Icons.north_rounded, 'Отдача', fmtSpeed(stats.uploadSpeed)),
+          cell(Icons.north_rounded, tr('Отдача'), fmtSpeed(stats.uploadSpeed)),
           sep(),
-          cell(Icons.swap_vert_rounded, 'Всего',
-              fmtBytes(stats.upload + stats.download)),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const TrafficScreen())),
+              child: Row(children: [
+                cell(Icons.swap_vert_rounded, tr('Всего'),
+                    fmtBytes(stats.upload + stats.download)),
+              ]),
+            ),
+          ),
           sep(),
           speed,
         ],
@@ -699,6 +709,7 @@ class _ServerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final s = app.selected!;
+    if (app.settings.autoMode) return _AutoRow(onTap: onTap);
     return NeonCard(
       onTap: onTap,
       padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
@@ -730,14 +741,14 @@ class _ServerRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Самый быстрый',
+            tooltip: tr('Самый быстрый'),
             onPressed: app.pingingAll
                 ? null
                 : () async {
                     await app.selectFastest();
                     if (context.mounted) {
                       toast(context,
-                          'Выбран: ${app.selected?.cleanName ?? '—'}');
+                          tr('Выбран: {0}', [app.selected?.cleanName ?? '—']));
                     }
                   },
             icon: app.pingingAll
@@ -746,6 +757,82 @@ class _ServerRow extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.bolt_rounded, color: NX.text2, size: 20),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: NX.text3),
+        ],
+      ),
+    );
+  }
+}
+
+/// Режим «Авто»: вместо одного сервера — пул самых быстрых.
+class _AutoRow extends StatelessWidget {
+  const _AutoRow({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final n = app.autoPool().length;
+    final sub = app.subscriptionOf(app.selected!);
+    return NeonCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(colors: [
+                NX.violet.withValues(alpha: 0.30),
+                NX.mint.withValues(alpha: 0.18),
+              ]),
+            ),
+            child: const Icon(Icons.bolt_rounded, color: NX.text, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tr('Авто'),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                const SizedBox(height: 4),
+                // Статистика ядра (и с ней результаты проверки серверов)
+                // обновляется отдельно от остального интерфейса.
+                ValueListenableBuilder<ConnStats>(
+                  valueListenable: app.statsNotifier,
+                  builder: (_, __, ___) {
+                    final cur = app.autoCurrent;
+                    final live = app.state == ConnState.connected;
+                    return Row(children: [
+                      Flexible(
+                        child: Text(
+                          cur != null
+                              ? tr('Сейчас: {0}', [cur.$1.cleanName])
+                              : tr('Самый быстрый из {0}{1}', [
+                                  live && app.activeAutoPool.isNotEmpty
+                                      ? app.activeAutoPool.length
+                                      : n,
+                                  sub == null ? '' : ' · ${sub.title}'
+                                ]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: NX.text3, fontSize: 12.5),
+                        ),
+                      ),
+                      if (live && (cur != null || app.liveLatency != null)) ...[
+                        const SizedBox(width: 10),
+                        PingBadge(ping: cur?.$2 ?? app.liveLatency),
+                      ],
+                    ]);
+                  },
+                ),
+              ],
+            ),
           ),
           const Icon(Icons.chevron_right_rounded, color: NX.text3),
         ],
@@ -780,8 +867,8 @@ class _SubscriptionStrip extends StatelessWidget {
               if (days != null)
                 Text(
                   days < 0
-                      ? 'Истекла'
-                      : 'ещё $days ${plural(days, 'день', 'дня', 'дней')}',
+                      ? tr('Истекла')
+                      : tr('ещё {0} {1}', [days, plural(days, tr('день'), tr('дня'), tr('дней'))]),
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
@@ -799,8 +886,8 @@ class _SubscriptionStrip extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             unlimited
-                ? '${fmtBytes(sub.used)} · без лимита'
-                : '${fmtBytes(sub.used)} из ${fmtBytes(sub.total)}',
+                ? tr('{0} · без лимита', [fmtBytes(sub.used)])
+                : tr('{0} из {1}', [fmtBytes(sub.used), fmtBytes(sub.total)]),
             style: const TextStyle(
                 color: NX.text3,
                 fontSize: 12,

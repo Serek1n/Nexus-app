@@ -8,6 +8,7 @@ import '../services/qr.dart';
 import 'app_scope.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Окно «Поделиться»: QR-код, копирование и системное меню «Отправить».
 /// QR можно отсканировать в Nexus на другом устройстве (Добавить →
@@ -91,8 +92,8 @@ class _ShareBody extends StatelessWidget {
           else
             Text(
                 text.length > 2000
-                    ? 'Ссылка слишком длинная для QR-кода — скопируйте её'
-                    : 'Не удалось построить QR-код — скопируйте ссылку',
+                    ? tr('Ссылка слишком длинная для QR-кода — скопируйте её')
+                    : tr('Не удалось построить QR-код — скопируйте ссылку'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: NX.text2)),
           const SizedBox(height: 16),
@@ -109,13 +110,13 @@ class _ShareBody extends StatelessWidget {
           Row(children: [
             Expanded(
               child: NeonButton(
-                label: 'Скопировать',
+                label: tr('Скопировать'),
                 icon: Icons.copy_rounded,
                 secondary: true,
                 expand: true,
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: text));
-                  if (context.mounted) toast(context, 'Скопировано');
+                  if (context.mounted) toast(context, tr('Скопировано'));
                 },
               ),
             ),
@@ -123,7 +124,7 @@ class _ShareBody extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: NeonButton(
-                  label: 'Отправить',
+                  label: tr('Отправить'),
                   icon: Icons.ios_share_rounded,
                   expand: true,
                   onPressed: () => AndroidSystem.shareText(text),

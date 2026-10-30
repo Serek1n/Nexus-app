@@ -64,9 +64,43 @@ jobs:
           echo "prerelease=$PRE" >> $GITHUB_OUTPUT
           echo "run=$RUN" >> $GITHUB_OUTPUT
 
+  # Быстрая проверка кода: ошибки видны за пару минут, с номером строки,
+  # до долгой сборки APK и Windows.
+  code:
+    name: Проверка кода
+    needs: check
+    if: needs.check.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+      - name: Зависимости
+        run: flutter pub get
+      - name: Анализ кода
+        run: |
+          set -o pipefail
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee analyze.log
+      - name: Тесты
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee test.log
+      - name: Причина ошибки
+        if: failure()
+        run: |
+          {
+            echo "## ❌ Проверка кода не прошла"
+            echo '```'
+            grep -E "error •|error -|Expected|Actual|FAILED|Some tests failed" analyze.log test.log 2>/dev/null | head -40
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
   android:
     name: Android (APK)
-    needs: check
+    needs: [check, code]
     if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
     env:
@@ -90,7 +124,7 @@ jobs:
       - name: Сгенерировать платформу Android
         run: |
           flutter create --platforms=android,windows --org $ORG --project-name nexus .
-          rm -rf test
+          rm -f test/widget_test.dart
           python3 tool/patch_platforms.py
 
       - name: Гео-базы для умной маршрутизации (с проверкой SHA-256)
@@ -281,7 +315,7 @@ jobs:
 
   windows:
     name: Windows (x64)
-    needs: check
+    needs: [check, code]
     if: needs.check.outputs.run == 'true'
     runs-on: windows-latest
     env:
@@ -299,7 +333,7 @@ jobs:
         shell: bash
         run: |
           flutter create --platforms=android,windows --org $ORG --project-name nexus .
-          rm -rf test
+          rm -f test/widget_test.dart
           python tool/patch_platforms.py
 
       - name: Зависимости и иконки

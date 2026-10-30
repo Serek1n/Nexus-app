@@ -247,6 +247,7 @@ class Subscription {
     this.supportUrl,
     this.webPageUrl,
     this.announce,
+    this.updateHours,
   });
 
   final String id;
@@ -263,6 +264,10 @@ class Subscription {
   String? webPageUrl;
   String? announce;
 
+  /// Как часто обновлять подписку (часы) — по заголовку
+  /// profile-update-interval от панели; null — по умолчанию.
+  int? updateHours;
+
   int get used => upload + download;
 
   Map<String, dynamic> toJson() => {
@@ -277,6 +282,7 @@ class Subscription {
         'supportUrl': supportUrl,
         'webPageUrl': webPageUrl,
         'announce': announce,
+        'updateHours': updateHours,
       };
 
   factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
@@ -296,6 +302,7 @@ class Subscription {
         supportUrl: j['supportUrl'] as String?,
         webPageUrl: j['webPageUrl'] as String?,
         announce: j['announce'] as String?,
+        updateHours: (j['updateHours'] as num?)?.toInt(),
       );
 }
 
@@ -323,6 +330,9 @@ class AppSettings {
     this.autoFailover = true,
     this.autoReconnect = true,
     this.blockAds = false,
+    this.antiBlock = false,
+    this.autoMode = false,
+    this.language = 'system',
     List<String>? favorites,
     this.lastAppCheck = 0,
     this.skippedBuild = 0,
@@ -379,6 +389,15 @@ class AppSettings {
   /// Блокировать рекламу и трекеры (geosite:category-ads-all).
   bool blockAds;
 
+  /// Обход блокировок: фрагментация первого пакета к серверу.
+  bool antiBlock;
+
+  /// Режим «Авто»: Nexus сам держит соединение через самый быстрый сервер.
+  bool autoMode;
+
+  /// Язык интерфейса: 'system', 'ru' или 'en'.
+  String language;
+
   /// Очищать буфер обмена после импорта ключа или подписки.
   bool clearClipboard;
 
@@ -421,6 +440,9 @@ class AppSettings {
         'autoFailover': autoFailover,
         'autoReconnect': autoReconnect,
         'blockAds': blockAds,
+        'antiBlock': antiBlock,
+        'autoMode': autoMode,
+        'language': language,
         'favorites': favorites,
         'lastAppCheck': lastAppCheck,
         'skippedBuild': skippedBuild,
@@ -454,6 +476,9 @@ class AppSettings {
         autoFailover: j['autoFailover'] as bool? ?? true,
         autoReconnect: j['autoReconnect'] as bool? ?? true,
         blockAds: j['blockAds'] as bool? ?? false,
+        antiBlock: j['antiBlock'] as bool? ?? false,
+        autoMode: j['autoMode'] as bool? ?? false,
+        language: j['language'] as String? ?? 'system',
         favorites: (j['favorites'] as List?)?.whereType<String>().toList(),
         lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
         skippedBuild: (j['skippedBuild'] as num?)?.toInt() ?? 0,

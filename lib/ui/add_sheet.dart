@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../platform/android_system.dart';
+import '../services/backup.dart';
 import 'app_scope.dart';
+import 'backup_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Окно добавления подписки / сервера.
 Future<void> showAddSheet(BuildContext context) async {
@@ -63,7 +66,7 @@ class _AddFormState extends State<_AddForm> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final t = data?.text?.trim() ?? '';
     if (t.isEmpty) {
-      setState(() => _error = 'Буфер обмена пуст');
+      setState(() => _error = tr('Буфер обмена пуст'));
       return;
     }
     _ctrl.text = t;
@@ -76,7 +79,7 @@ class _AddFormState extends State<_AddForm> {
       final code = (await AndroidSystem.scanQr())?.trim();
       if (code == null) return; // пользователь закрыл сканер
       if (code.isEmpty) {
-        setState(() => _error = 'В QR-коде нет текста');
+        setState(() => _error = tr('В QR-коде нет текста'));
         return;
       }
       _ctrl.text = code;
@@ -95,7 +98,14 @@ class _AddFormState extends State<_AddForm> {
     });
     try {
       final app = AppScope.read(context);
-      final msg = await app.importText(_ctrl.text);
+      final String msg;
+      if (Backup.looksLike(_ctrl.text)) {
+        final r = await restoreBackup(context, _ctrl.text);
+        if (r == null) return;
+        msg = r;
+      } else {
+        msg = await app.importText(_ctrl.text);
+      }
       // Ключи и ссылки подписок не оставляем в буфере обмена.
       if (app.settings.clearClipboard) {
         final clip = await Clipboard.getData(Clipboard.kTextPlain);
@@ -134,15 +144,14 @@ class _AddFormState extends State<_AddForm> {
                     borderRadius: BorderRadius.circular(4)),
               ),
             ),
-          const Text('Добавить',
+          Text(tr('Добавить'),
               style: TextStyle(
                   fontFamily: NX.display,
                   fontWeight: FontWeight.w700,
                   fontSize: 20)),
           const SizedBox(height: 6),
-          const Text(
-            'Ссылка на подписку (https://…) или ключ сервера '
-            '(vless://, vmess://, trojan://, ss://)',
+          Text(
+            tr('Ссылка на подписку (https://…) или ключ сервера (vless://, vmess://, trojan://, ss://)'),
             style: TextStyle(color: NX.text2, fontSize: 13.5, height: 1.4),
           ),
           const SizedBox(height: 18),
@@ -152,7 +161,7 @@ class _AddFormState extends State<_AddForm> {
             active: true,
             accent: NX.violet,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(Icons.content_paste_go_rounded, color: NX.violet),
                 SizedBox(width: 14),
@@ -160,11 +169,11 @@ class _AddFormState extends State<_AddForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Вставить из буфера обмена',
+                      Text(tr('Вставить из буфера обмена'),
                           style: TextStyle(
                               fontWeight: FontWeight.w700, fontSize: 15)),
                       SizedBox(height: 2),
-                      Text('Скопируйте ссылку из бота и нажмите сюда',
+                      Text(tr('Скопируйте ссылку из бота и нажмите сюда'),
                           style: TextStyle(color: NX.text2, fontSize: 12.5)),
                     ],
                   ),
@@ -179,7 +188,7 @@ class _AddFormState extends State<_AddForm> {
               onTap: _loading ? null : _scan,
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.qr_code_scanner_rounded, color: NX.violet),
                   SizedBox(width: 14),
@@ -187,11 +196,11 @@ class _AddFormState extends State<_AddForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Сканировать QR-код',
+                        Text(tr('Сканировать QR-код'),
                             style: TextStyle(
                                 fontWeight: FontWeight.w700, fontSize: 15)),
                         SizedBox(height: 2),
-                        Text('Наведите камеру на QR подписки или ключа',
+                        Text(tr('Наведите камеру на QR подписки или ключа'),
                             style:
                                 TextStyle(color: NX.text2, fontSize: 12.5)),
                       ],
@@ -203,11 +212,11 @@ class _AddFormState extends State<_AddForm> {
             ),
           ],
           const SizedBox(height: 16),
-          const Row(children: [
+          Row(children: [
             Expanded(child: Divider()),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text('или вручную',
+              child: Text(tr('или вручную'),
                   style: TextStyle(color: NX.text3, fontSize: 12)),
             ),
             Expanded(child: Divider()),
@@ -218,8 +227,8 @@ class _AddFormState extends State<_AddForm> {
             minLines: 1,
             maxLines: 4,
             style: const TextStyle(fontSize: 14),
-            decoration: const InputDecoration(
-              hintText: 'https://… или vless://…',
+            decoration: InputDecoration(
+              hintText: tr('https://… или vless://…'),
               prefixIcon: Icon(Icons.link_rounded, color: NX.text3),
             ),
             onSubmitted: (_) => _submit(),
@@ -239,7 +248,7 @@ class _AddFormState extends State<_AddForm> {
           ],
           const SizedBox(height: 18),
           NeonButton(
-            label: 'Добавить',
+            label: tr('Добавить'),
             icon: Icons.add_rounded,
             expand: true,
             loading: _loading,

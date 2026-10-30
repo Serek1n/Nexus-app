@@ -11,6 +11,7 @@ import '../models.dart';
 import 'win_admin.dart';
 import '../services/deep_links.dart';
 import '../state/app_state.dart';
+import '../l10n.dart';
 
 /// Windows: трей, сворачивание вместо закрытия, автозапуск, один экземпляр.
 class WindowsHost with TrayListener, WindowListener {
@@ -107,7 +108,7 @@ class WindowsHost with TrayListener, WindowListener {
     // Меню зависит и от списка серверов, и от режима — следим за всем сразу.
     final sig = '${app.selectedId}|${app.servers.length}|'
         '${app.servers.take(15).map((e) => e.id).join(',')}|'
-        '${app.settings.routing.name}';
+        '${app.settings.routing.name}|${app.settings.autoMode}|${L10n.lang}';
     if (!force && st == _trayState && server == _trayServer && sig == _traySig) {
       return;
     }
@@ -120,25 +121,26 @@ class WindowsHost with TrayListener, WindowListener {
       await trayManager.setIcon(
           on ? 'assets/icon/tray_on.ico' : 'assets/icon/tray_off.ico');
       final status = switch (st) {
-        ConnState.connected => 'подключено',
-        ConnState.connecting => 'подключение…',
-        ConnState.disconnecting => 'отключение…',
-        ConnState.disconnected => 'не подключено',
+        ConnState.connected => tr('подключено'),
+        ConnState.connecting => tr('подключение…'),
+        ConnState.disconnecting => tr('отключение…'),
+        ConnState.disconnected => tr('не подключено'),
       };
-      var tip = 'Nexus — $status${server != null && on ? ' · $server' : ''}';
+      final where = app.settings.autoMode ? tr('Авто') : server;
+      var tip = 'Nexus — $status${where != null && on ? ' · $where' : ''}';
       if (tip.length > 120) tip = '${tip.substring(0, 117)}…';
       await trayManager.setToolTip(tip);
       await trayManager.setContextMenu(Menu(items: [
-        MenuItem(key: 'show', label: 'Открыть Nexus'),
+        MenuItem(key: 'show', label: tr('Открыть Nexus')),
         MenuItem.separator(),
         MenuItem(
           key: 'toggle',
-          label: on || st == ConnState.connecting ? 'Отключить' : 'Подключить',
+          label: on || st == ConnState.connecting ? tr('Отключить') : tr('Подключить'),
           disabled: app.selected == null || st == ConnState.disconnecting,
         ),
         if (app.servers.length > 1)
           MenuItem.submenu(
-            label: 'Сервер',
+            label: tr('Сервер'),
             submenu: Menu(items: [
               for (final x in app.servers.take(15))
                 MenuItem.checkbox(
@@ -151,12 +153,18 @@ class WindowsHost with TrayListener, WindowListener {
             ]),
           ),
         MenuItem.checkbox(
+          key: 'auto',
+          label: tr('Режим «Авто»'),
+          checked: app.settings.autoMode,
+          disabled: app.selected == null,
+        ),
+        MenuItem.checkbox(
           key: 'smart',
-          label: 'Умный режим (РФ напрямую)',
+          label: tr('Умный режим (РФ напрямую)'),
           checked: app.settings.routing == RoutingMode.smart,
         ),
         MenuItem.separator(),
-        MenuItem(key: 'quit', label: 'Выход'),
+        MenuItem(key: 'quit', label: tr('Выход')),
       ]));
     } catch (_) {}
   }
@@ -176,6 +184,8 @@ class WindowsHost with TrayListener, WindowListener {
         app.toggle();
       case 'quit':
         quit();
+      case 'auto':
+        app.setAutoMode(!app.settings.autoMode);
       case 'smart':
         app.updateSettings((s) => s.routing =
             s.routing == RoutingMode.smart ? RoutingMode.global : RoutingMode.smart);

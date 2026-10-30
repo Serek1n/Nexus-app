@@ -9,6 +9,7 @@ import '../services/app_updater.dart';
 import 'app_scope.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Окно «Откатить версию»: список прошлых релизов.
 Future<void> showRollbackSheet(BuildContext context) => showModalBottomSheet(
@@ -51,18 +52,16 @@ class _RollbackBodyState extends State<_RollbackBody> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text('Откатить на ${r.version}?'),
-        content: const Text(
-            'Nexus установит выбранную версию и перезапустится. Подписки и '
-            'настройки сохранятся. Текущую версию автоматически предлагать '
-            'не будем — только более новые.'),
+        title: Text(tr('Откатить на {0}?', [r.version])),
+        content: Text(
+            tr('Nexus установит выбранную версию и перезапустится. Подписки и настройки сохранятся. Текущую версию автоматически предлагать не будем — только более новые.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           FilledButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Откатить')),
+              child: Text(tr('Откатить'))),
         ],
       ),
     );
@@ -101,8 +100,8 @@ class _RollbackBodyState extends State<_RollbackBody> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 4),
           child: Row(children: [
-            const Expanded(
-              child: Text('Откатить версию',
+            Expanded(
+              child: Text(tr('Откатить версию'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             IconButton(
@@ -115,11 +114,8 @@ class _RollbackBodyState extends State<_RollbackBody> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
           child: Text(
             android
-                ? 'Android не даёт поставить старую версию поверх новой. '
-                    'Скопируйте подписки, удалите Nexus, скачайте нужную '
-                    'версию со страницы релиза и вставьте подписки обратно.'
-                : 'Сейчас установлена $appVersion. Выберите версию, '
-                    'которая работала хорошо.',
+                ? tr('Android не даёт поставить старую версию поверх новой. Скопируйте подписки, удалите Nexus, скачайте нужную версию со страницы релиза и вставьте подписки обратно.')
+                : tr('Сейчас установлена {0}. Выберите версию, которая работала хорошо.', [appVersion]),
             style: const TextStyle(color: NX.text2, fontSize: 13, height: 1.4),
           ),
         ),
@@ -127,7 +123,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: NeonButton(
-              label: 'Скопировать подписки',
+              label: tr('Скопировать подписки'),
               icon: Icons.copy_rounded,
               secondary: true,
               onPressed: () async {
@@ -136,7 +132,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
                     ClipboardData(text: app.exportSubscriptions()));
                 if (context.mounted) {
                   toast(context,
-                      'Скопировано подписок: ${app.subscriptions.length}');
+                      tr('Скопировано подписок: {0}', [app.subscriptions.length]));
                 }
               },
             ),
@@ -175,9 +171,9 @@ class _RollbackBodyState extends State<_RollbackBody> {
               }
               final list = snap.data!.$2;
               if (list.isEmpty) {
-                return const Padding(
+                return Padding(
                   padding: EdgeInsets.all(24),
-                  child: Text('Более ранних версий пока нет',
+                  child: Text(tr('Более ранних версий пока нет'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: NX.text3)),
                 );
@@ -216,7 +212,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
                         const SizedBox(width: 8),
                         if (android)
                           NeonButton(
-                            label: 'Открыть',
+                            label: tr('Открыть'),
                             secondary: true,
                             onPressed: r.pageUrl.isEmpty
                                 ? null
@@ -224,7 +220,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
                           )
                         else
                           NeonButton(
-                            label: 'Откатить',
+                            label: tr('Откатить'),
                             secondary: true,
                             loading: _busy == r.build,
                             onPressed: _busy != null ? null : () => _install(r),

@@ -20,6 +20,7 @@ import 'ui/screens/settings_screen.dart';
 import 'ui/screens/subscriptions_screen.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
+import 'l10n.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,7 @@ Future<void> main(List<String> args) async {
     if (!claimed) exit(0);
     if (link != null) DeepLinks.handle(link);
     await windowManager.ensureInitialized();
-    const options = WindowOptions(
+    final options = WindowOptions(
       size: Size(1120, 720),
       minimumSize: Size(420, 640),
       center: true,
@@ -84,13 +85,19 @@ class NexusApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Смена языка пересобирает интерфейс целиком (ключ — язык). Остальные
+    // изменения состояния MaterialApp не трогают — иначе каждое обновление
+    // (пинг, прогресс) перестраивало бы всё приложение.
     return AppScope(
       state: state,
-      child: MaterialApp(
+      child: ValueListenableBuilder<String>(
+        valueListenable: state.language,
+        builder: (_, lang, __) => MaterialApp(
+        key: ValueKey(lang),
         title: 'Nexus',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        locale: const Locale('ru'),
+        theme: _theme,
+        locale: Locale(lang),
         supportedLocales: const [Locale('ru'), Locale('en')],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
@@ -99,12 +106,16 @@ class NexusApp extends StatelessWidget {
         ],
         navigatorKey: navigatorKey,
         home: const Shell(),
+        ),
       ),
     );
   }
 }
 
 final navigatorKey = GlobalKey<NavigatorState>();
+
+/// Тема создаётся один раз.
+final _theme = buildTheme();
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -114,7 +125,10 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
-  int _tab = 0;
+  // Вкладка переживает пересборку интерфейса при смене языка.
+  static int _savedTab = 0;
+  int get _tab => _savedTab;
+  set _tab(int v) => _savedTab = v;
   StreamSubscription<String>? _links;
 
   @override
@@ -144,25 +158,25 @@ class _ShellState extends State<Shell> {
     if (ctx == null) return;
     final isSub = payload.startsWith('http');
     final what = isSub
-        ? (Uri.tryParse(payload)?.host ?? 'подписку')
+        ? (Uri.tryParse(payload)?.host ?? tr('подписку'))
         : payload.split('://').first.toUpperCase();
     final ok = await showDialog<bool>(
       context: ctx,
       builder: (c) => AlertDialog(
-        title: Text(isSub ? 'Добавить подписку?' : 'Добавить сервер?'),
+        title: Text(isSub ? tr('Добавить подписку?') : tr('Добавить сервер?')),
         content: Text(
           isSub
-              ? 'Подписка с сайта $what будет добавлена в Nexus.'
-              : 'Будет добавлен сервер $what.',
+              ? tr('Подписка с сайта {0} будет добавлена в Nexus.', [what])
+              : tr('Будет добавлен сервер {0}.', [what]),
           style: const TextStyle(color: NX.text2),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           TextButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Добавить')),
+              child: Text(tr('Добавить'))),
         ],
       ),
     );
@@ -179,11 +193,11 @@ class _ShellState extends State<Shell> {
     }
   }
 
-  static const _items = [
-    (Icons.power_settings_new_rounded, 'Главная'),
-    (Icons.dns_rounded, 'Серверы'),
-    (Icons.workspace_premium_rounded, 'Подписки'),
-    (Icons.tune_rounded, 'Настройки'),
+  static List<(IconData, String)> get _items => [
+    (Icons.power_settings_new_rounded, tr('Главная')),
+    (Icons.dns_rounded, tr('Серверы')),
+    (Icons.workspace_premium_rounded, tr('Подписки')),
+    (Icons.tune_rounded, tr('Настройки')),
   ];
 
   Widget _page(bool wide) => switch (_tab) {
@@ -390,8 +404,8 @@ class _Sidebar extends StatelessWidget {
                 Expanded(
                   child: Text(
                     live
-                        ? (app.selected?.cleanName ?? 'Подключено')
-                        : 'Не подключено',
+                        ? (app.selected?.cleanName ?? tr('Подключено'))
+                        : tr('Не подключено'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -404,7 +418,7 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
           NeonButton(
-            label: 'Добавить',
+            label: tr('Добавить'),
             icon: Icons.add_rounded,
             expand: true,
             onPressed: () => showAddSheet(context),
@@ -465,7 +479,7 @@ class _TitleBar extends StatelessWidget {
       height: 38,
       child: Row(
         children: [
-          const Expanded(child: DragToMoveArea(child: SizedBox.expand())),
+          Expanded(child: DragToMoveArea(child: SizedBox.expand())),
           btn(Icons.remove_rounded, () => windowManager.minimize()),
           btn(Icons.crop_square_rounded, () async {
             if (await windowManager.isMaximized()) {

@@ -30,7 +30,18 @@ import io.flutter.plugin.common.MethodChannel
  * (постоянный VPN и блокировка соединений без VPN), защита экрана.
  */
 class MainActivity : FlutterActivity() {
+    companion object {
+        /** Канал открытого приложения: плитка и виджет переключают VPN через него. */
+        @Volatile
+        var live: MethodChannel? = null
+    }
+
     private var channel: MethodChannel? = null
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        if (live === channel) live = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
 
     // Ключ AES-256 в Android Keystore: не покидает устройство и не извлекается.
     private fun secretKey(): SecretKey {
@@ -88,6 +99,7 @@ class MainActivity : FlutterActivity() {
         pendingLink = linkOf(intent)
         pendingToggle = isToggle(intent)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/system")
+        live = channel
         channel!!
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -119,11 +131,36 @@ class MainActivity : FlutterActivity() {
 
                     "tileState" -> {
                         val m = call.arguments as? Map<*, *>
+                        NexusTile.saveLabels(this, m?.get("onLabel") as? String, m?.get("offLabel") as? String)
                         NexusTile.save(
                             this,
                             m?.get("on") as? Boolean ?: false,
                             m?.get("vpn") as? Boolean ?: true
                         )
+                        result.success(null)
+                    }
+
+                    "tileConfig" -> {
+                        // Последний конфиг — чтобы плитка и виджет подключали
+                        // без открытия приложения (хранится зашифрованным).
+                        val m = call.arguments as? Map<*, *>
+                        val cfg = m?.get("config") as? String
+                        if (cfg == null) {
+                            NexusTile.clearConfig(this)
+                        } else {
+                            NexusTile.saveConfig(
+                                this,
+                                m["remark"] as? String ?: "Nexus",
+                                cfg,
+                                (m["blocked"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                                m["vpn"] as? Boolean ?: true
+                            )
+                        }
+                        result.success(null)
+                    }
+
+                    "scheduleExpiry" -> {
+                        NexusTile.scheduleExpiry(this, call.arguments as? String ?: "[]")
                         result.success(null)
                     }
 
@@ -322,9 +359,12 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "openUrl" -> {
-                        // Только страницы релизов на GitHub.
+                        // Только https-ссылки (страница релиза, поддержка подписки),
+                        // без пробелов и управляющих символов.
                         val url = call.arguments as? String
-                        if (url == null || !url.startsWith("https://github.com/")) {
+                        if (url == null || !url.startsWith("https://") || url.length > 500 ||
+                            url.any { it.isWhitespace() || it.code < 32 }
+                        ) {
                             result.success(false)
                         } else {
                             try {

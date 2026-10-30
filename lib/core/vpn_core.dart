@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models.dart';
 import 'android_core.dart';
 import 'windows_core.dart';
+import '../l10n.dart';
 
 /// Общий интерфейс ядра для Android и Windows.
 abstract class VpnCore {
@@ -57,7 +58,7 @@ abstract class VpnCore {
 
   /// Проверяет и ставит новую версию ядра. Возвращает текст результата.
   Future<String> updateCore({bool force = false}) async =>
-      'Ядро обновляется вместе с приложением';
+      tr('Ядро обновляется вместе с приложением');
 
   /// Задержка через активное соединение (мс, -1 — нет связи).
   Future<int> connectedDelay(ServerProfile server) =>
@@ -73,6 +74,10 @@ abstract class VpnCore {
   /// «user:pass@127.0.0.1:port») — для собственных запросов Nexus
   /// (IP выхода, тест скорости, подписки). null — VPN не подключён.
   String? get activeProxy => null;
+
+  /// Режим «Авто»: задержка каждого сервера пула по последней проверке ядра
+  /// (тег nx-N → мс; -1 — не отвечает). Пусто — неизвестно.
+  Map<String, int> get autoStatus => const {};
 
   /// Предупреждение о режиме работы (например, TUN недоступен) — или null.
   String? get modeWarning => null;

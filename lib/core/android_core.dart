@@ -6,8 +6,10 @@ import 'dart:math';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
 import '../models.dart';
+import '../platform/android_system.dart';
 import '../services/ru_apps.dart';
 import 'vpn_core.dart';
+import '../l10n.dart';
 
 /// Android: ядро Xray внутри VpnService (плагин flutter_v2ray_client).
 class AndroidCore extends VpnCore {
@@ -120,7 +122,7 @@ class AndroidCore extends VpnCore {
     if (settings.androidVpnMode) {
       final ok = await _v2ray.requestPermission();
       if (!ok) {
-        throw Exception('Нет разрешения на VPN — разрешите его в системном окне');
+        throw Exception(tr('Нет разрешения на VPN — разрешите его в системном окне'));
       }
     }
     // Приложения мимо VPN: выбранные вручную + российские в умном режиме.
@@ -134,12 +136,20 @@ class AndroidCore extends VpnCore {
     // приложение тогда бесконечно ждёт подключения.
     _last = ConnState.connecting;
     _startedAt = DateTime.now();
+    final full = await _withProbe(config);
+    final blocked = settings.androidVpnMode ? bypass : const <String>[];
+    // Плитка и виджет смогут подключить этот же сервер без открытия Nexus.
+    unawaited(AndroidSystem.saveTileConfig(
+        remark: remark,
+        config: full,
+        blocked: blocked,
+        vpn: settings.androidVpnMode));
     await _v2ray.startV2Ray(
       remark: remark,
-      config: await _withProbe(config),
+      config: full,
       blockedApps: settings.androidVpnMode && bypass.isNotEmpty ? bypass : null,
       proxyOnly: !settings.androidVpnMode,
-      notificationDisconnectButtonName: 'ОТКЛЮЧИТЬ',
+      notificationDisconnectButtonName: tr('ОТКЛЮЧИТЬ'),
     );
   }
 

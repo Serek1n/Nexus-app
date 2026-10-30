@@ -13,6 +13,7 @@ import '../models.dart';
 import '../platform/win_admin.dart';
 import '../services/config_builder.dart';
 import 'vpn_core.dart';
+import '../l10n.dart';
 
 const kCoreExe = 'nexus-core.exe';
 const kApiPort = 10085;
@@ -42,6 +43,11 @@ class WindowsCore extends VpnCore {
 
   @override
   void setForeground(bool visible) => _foreground = visible;
+
+  Map<String, int> _autoStatus = const {};
+
+  @override
+  Map<String, int> get autoStatus => _proc == null ? const {} : _autoStatus;
 
   @override
   String? get activeProxy =>
@@ -150,8 +156,7 @@ class WindowsCore extends VpnCore {
     required AppSettings settings,
   }) async {
     if (!File(_corePath).existsSync()) {
-      throw Exception('Не найдено ядро $kCoreExe рядом с программой. '
-          'Переустановите Nexus из архива целиком.');
+      throw Exception(tr('Не найдено ядро {0} рядом с программой. Переустановите Nexus из архива целиком.', [kCoreExe]));
     }
     _states.add(ConnState.connecting);
     await _stopProcess();
@@ -171,26 +176,22 @@ class WindowsCore extends VpnCore {
     activeHttpPort = hp;
 
     _logs.clear();
-    _log('Запуск ядра: $remark');
+    _log(tr('Запуск ядра: {0}', [remark]));
     _tun = false;
     _modeWarning = null;
     if (settings.windowsTun) {
       if (!WinAdmin.isAdmin) {
-        _modeWarning = 'Режим TUN работает только с правами администратора — '
-            'пока Nexus работает через системный прокси. Включите TUN '
-            'в настройках ещё раз, чтобы перезапустить Nexus от администратора';
+        _modeWarning = tr('Режим TUN работает только с правами администратора — пока Nexus работает через системный прокси. Включите TUN в настройках ещё раз, чтобы перезапустить Nexus от администратора');
       } else if (!_ensureWintun()) {
-        _modeWarning = 'Нет файла wintun.dll рядом с ядром — режим TUN '
-            'недоступен, работаю через системный прокси. Переустановите Nexus';
+        _modeWarning = tr('Нет файла wintun.dll рядом с ядром — режим TUN недоступен, работаю через системный прокси. Переустановите Nexus');
       } else {
         _tun = true;
-        _log('Режим TUN: весь трафик компьютера идёт через Nexus');
+        _log(tr('Режим TUN: весь трафик компьютера идёт через Nexus'));
       }
       if (_modeWarning != null) _log(_modeWarning!);
     }
     if (sp != kSocksPort) {
-      _log('Порты $kSocksPort/$kHttpPort заняты другой программой '
-          '(например, Happ или v2rayN) — Nexus использует $sp/$hp');
+      _log(tr('Порты {0}/{1} заняты другой программой (например, Happ или v2rayN) — Nexus использует {2}/{3}', [kSocksPort, kHttpPort, sp, hp]));
     }
     try {
       // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
@@ -208,13 +209,13 @@ class WindowsCore extends VpnCore {
       await started.stdin.close();
     } catch (e) {
       _states.add(ConnState.disconnected);
-      throw Exception('Не удалось запустить ядро: $e');
+      throw Exception(tr('Не удалось запустить ядро: {0}', [e]));
     }
     final proc = _proc!;
     // Ядро завершилось само — сразу реагируем, не дожидаясь проверки порта.
     proc.exitCode.then((code) {
       if (identical(_proc, proc) && _watchdog != null) {
-        _log('Ядро завершилось (код $code)');
+        _log(tr('Ядро завершилось (код {0})', [code]));
         _exited = true;
         _tick();
       }
@@ -244,7 +245,7 @@ class WindowsCore extends VpnCore {
       _states.add(ConnState.disconnected);
       final tail = _logs.reversed.take(3).toList().reversed.join('\n');
       throw Exception(
-          'Ядро не запустилось.${tail.isEmpty ? '' : '\n$tail'}');
+          tr('Ядро не запустилось.{0}', [tail.isEmpty ? '' : '\n$tail']));
     }
 
     // В режиме TUN системный прокси не нужен: трафик и так идёт через ядро.
@@ -290,8 +291,9 @@ class WindowsCore extends VpnCore {
     } else if (_tickN % 5 == 0) {
       _failedChecks = 0;
     }
-    // Статистику запрашиваем раз в 2 секунды и только когда окно открыто.
-    if (!_foreground || _tickN.isOdd) return;
+    // Статистику запрашиваем раз в 2 секунды, когда окно открыто, и раз
+    // в 30 секунд в трее — для учёта трафика по дням.
+    if (_tickN.isOdd || (!_foreground && _tickN % 30 != 0)) return;
     final s = await _queryStats();
     if (s != null) {
       final (up, down) = s;
@@ -324,7 +326,7 @@ class WindowsCore extends VpnCore {
     try {
       if (_restarts < 3 && _lastConfig != null && _lastSettings != null) {
         _restarts++;
-        _log('Ядро перестало работать — перезапуск ($_restarts из 3)');
+        _log(tr('Ядро перестало работать — перезапуск ({0} из 3)', [_restarts]));
         _restarting = true;
         try {
           await connect(
@@ -333,7 +335,7 @@ class WindowsCore extends VpnCore {
               settings: _lastSettings!);
           return;
         } catch (e) {
-          _log('Перезапуск не удался: $e');
+          _log(tr('Перезапуск не удался: {0}', [e]));
         } finally {
           _restarting = false;
         }
@@ -341,7 +343,7 @@ class WindowsCore extends VpnCore {
       if (_lastSettings?.windowsKillSwitch == true && _proxySet) {
         // Kill switch: системный прокси остаётся на мёртвом порту —
         // трафик не пойдёт мимо VPN, пока пользователь не отключится сам.
-        _log('Ядро не работает — интернет заблокирован (kill switch)');
+        _log(tr('Ядро не работает — интернет заблокирован (kill switch)'));
         final p = _proc;
         _proc = null;
         if (p != null) Process.killPid(p.pid);
@@ -349,7 +351,7 @@ class WindowsCore extends VpnCore {
         _stats.add(const ConnStats());
         _states.add(ConnState.connected);
       } else {
-        _log('Ядро не работает — отключение');
+        _log(tr('Ядро не работает — отключение'));
         await disconnect();
       }
     } finally {
@@ -369,9 +371,25 @@ class WindowsCore extends VpnCore {
       final res = await req.close().timeout(const Duration(seconds: 2));
       final body = await res.transform(utf8.decoder).join();
       final j = jsonDecode(body) as Map<String, dynamic>;
-      final proxy = (j['stats']?['outbound']?['proxy'] as Map?) ?? const {};
-      final up = (proxy['uplink'] as num?)?.toInt() ?? 0;
-      final down = (proxy['downlink'] as num?)?.toInt() ?? 0;
+      final obs = j['observatory'];
+      if (obs is Map) {
+        _autoStatus = {
+          for (final e in obs.entries)
+            if (e.value is Map)
+              '${e.key}': (e.value['alive'] == true)
+                  ? ((e.value['delay'] as num?)?.toInt() ?? -1)
+                  : -1,
+        };
+      }
+      // Один сервер — исходящий «proxy», режим «Авто» — «nx-0», «nx-1»…
+      final all = (j['stats']?['outbound'] as Map?) ?? const {};
+      var up = 0, down = 0;
+      all.forEach((tag, v) {
+        if (v is! Map) return;
+        if (tag != 'proxy' && !'$tag'.startsWith(kAutoPrefix)) return;
+        up += (v['uplink'] as num?)?.toInt() ?? 0;
+        down += (v['downlink'] as num?)?.toInt() ?? 0;
+      });
       return (up, down);
     } catch (_) {
       return null;
@@ -793,13 +811,13 @@ class WindowsCore extends VpnCore {
         up = await _portOpen(port);
       }
       if (!up) {
-        failReason = 'ядро не запустилось';
+        failReason = tr('ядро не запустилось');
         return -1;
       }
 
       return await _warmDelay('$user:$pass@127.0.0.1:$port');
     } catch (e) {
-      failReason = e is TimeoutException ? 'сервер не ответил за 6 с' : '$e';
+      failReason = e is TimeoutException ? tr('сервер не ответил за 6 с') : '$e';
       return -1;
     } finally {
       client.close(force: true);
@@ -816,8 +834,7 @@ class WindowsCore extends VpnCore {
             .where((l) => !l.contains('core: Xray'))
             .take(3)
             .join(' | ');
-        _log('Проверка «${server.cleanName}» (${server.protocol}): '
-            '$failReason${why.isEmpty ? '' : ' — $why'}');
+        _log(tr('Проверка «{0}» ({1}): {2}{3}', [server.cleanName, server.protocol, failReason, why.isEmpty ? '' : ' — $why']));
       }
     }
   }
@@ -874,7 +891,7 @@ class WindowsCore extends VpnCore {
 
   Future<String> _versionOf(String exe) async {
     try {
-      if (!File(exe).existsSync()) return 'не найдено';
+      if (!File(exe).existsSync()) return tr('не найдено');
       final p = await Process.start(exe, ['version'],
           mode: ProcessStartMode.detachedWithStdio);
       final out = await p.stdout
@@ -922,7 +939,7 @@ class WindowsCore extends VpnCore {
       'User-Agent': 'Nexus',
     }).timeout(const Duration(minutes: 3));
     if (r.statusCode != 200) {
-      throw Exception('GitHub ответил ${r.statusCode} на $url');
+      throw Exception(tr('GitHub ответил {0} на {1}', [r.statusCode, url]));
     }
     return r.bodyBytes;
   }
@@ -934,13 +951,13 @@ class WindowsCore extends VpnCore {
       'Accept': 'application/vnd.github+json',
     }).timeout(const Duration(seconds: 20));
     if (res.statusCode != 200) {
-      throw Exception('Не удалось узнать последнюю версию (код ${res.statusCode})');
+      throw Exception(tr('Не удалось узнать последнюю версию (код {0})', [res.statusCode]));
     }
     final j = jsonDecode(res.body) as Map<String, dynamic>;
     final tag = (j['tag_name'] ?? '').toString();
     final current = await coreVersion();
     if (!force && !_newer(tag, current)) {
-      return 'Установлена последняя версия';
+      return tr('Установлена последняя версия');
     }
 
     String? url, dgstUrl;
@@ -952,7 +969,7 @@ class WindowsCore extends VpnCore {
       if (name == 'Xray-windows-64.zip.dgst') dgstUrl = link;
     }
     if (url == null || dgstUrl == null) {
-      throw Exception('В релизе $tag нет сборки для Windows');
+      throw Exception(tr('В релизе {0} нет сборки для Windows', [tag]));
     }
 
     final dir = Directory(_updDir);
@@ -967,7 +984,7 @@ class WindowsCore extends VpnCore {
         ?.toLowerCase();
     final got = sha256.convert(zipBytes).toString();
     if (want == null || want != got) {
-      throw Exception('Контрольная сумма ядра не совпала — обновление отменено');
+      throw Exception(tr('Контрольная сумма ядра не совпала — обновление отменено'));
     }
 
     final zip = ZipDecoder().decodeBytes(zipBytes);
@@ -975,7 +992,7 @@ class WindowsCore extends VpnCore {
     for (final f in zip.files) {
       if (f.isFile && f.name.toLowerCase() == 'xray.exe') exe = f;
     }
-    if (exe == null) throw Exception('В архиве нет xray.exe');
+    if (exe == null) throw Exception(tr('В архиве нет xray.exe'));
     for (final f in zip.files) {
       if (f.isFile && f.name.toLowerCase() == 'wintun.dll') {
         await File('$_updDir\\wintun.dll.new')
@@ -989,7 +1006,7 @@ class WindowsCore extends VpnCore {
     final v = await _versionOf(staged.path);
     if (!v.startsWith('Xray')) {
       await staged.delete();
-      throw Exception('Скачанное ядро не запускается');
+      throw Exception(tr('Скачанное ядро не запускается'));
     }
 
     // Свежие гео-базы для умного режима — тоже с проверкой SHA-256.
@@ -1005,16 +1022,16 @@ class WindowsCore extends VpnCore {
         if (sha256.convert(data).toString() == sum) {
           await File('$_updDir\\$g.new').writeAsBytes(data, flush: true);
         } else {
-          _log('Гео-база $g не прошла проверку и пропущена');
+          _log(tr('Гео-база {0} не прошла проверку и пропущена', [g]));
         }
       } catch (_) {}
     }
 
     if (_running) {
-      return 'Загружено $v — применится при следующем подключении';
+      return tr('Загружено {0} — применится при следующем подключении', [v]);
     }
     await _applyPendingUpdate();
-    return 'Ядро обновлено до $v';
+    return tr('Ядро обновлено до {0}', [v]);
   }
 
   /// Подменяет ядро и гео-базы скачанными файлами (только когда ядро не запущено).
@@ -1045,7 +1062,7 @@ class WindowsCore extends VpnCore {
         }
       }
     } catch (e) {
-      _log('Не удалось применить обновление ядра: $e');
+      _log(tr('Не удалось применить обновление ядра: {0}', [e]));
     }
   }
 

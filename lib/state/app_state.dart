@@ -6,8 +6,11 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../changelog.dart' show appVersion;
 import '../core/vpn_core.dart';
 import '../services/app_updater.dart';
+import '../services/backup.dart';
+import '../services/support_report.dart';
 import '../models.dart';
 import '../platform/android_system.dart';
 import '../platform/win_dpapi.dart';
@@ -15,6 +18,8 @@ import '../services/config_builder.dart';
 import '../services/net_probe.dart';
 import '../services/ru_apps.dart';
 import '../services/subscription_service.dart';
+import '../services/traffic_log.dart';
+import '../l10n.dart';
 
 /// Состояние приложения: подписки, серверы, подключение, настройки.
 class AppState extends ChangeNotifier {
@@ -53,6 +58,9 @@ class AppState extends ChangeNotifier {
   Future<void> Function()? quitApp;
 
   StreamSubscription? _stSub, _statsSub;
+
+  /// Трафик через VPN по дням.
+  final traffic = TrafficLog();
   Timer? _subTimer, _updTimer;
 
   bool get isDesktop => Platform.isWindows;
@@ -87,7 +95,11 @@ class AppState extends ChangeNotifier {
       await _prefs.setString('deviceId', did);
     }
     SubscriptionService.deviceId = did;
+    SubscriptionService.appVersion = appVersion;
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
+    L10n.apply(settings.language, PlatformDispatcher.instance.locale.languageCode);
+    language.value = L10n.lang;
+    traffic.load(_prefs);
     try {
       final subs = jsonDecode(await _readSecret('subscriptions')) as List;
       subscriptions
@@ -110,15 +122,17 @@ class AppState extends ChangeNotifier {
       unawaited(AndroidSystem.setSecureScreen(true));
     }
     selectedId = _prefs.getString('selected');
+    _syncExpiry();
 
     _stSub = core.states.listen(_onCoreState);
     _statsSub = core.stats.listen((s) {
       statsNotifier.value = s;
+      traffic.onStats(s);
     });
     try {
       await core.init();
     } catch (e) {
-      lastError = 'Ошибка инициализации ядра: $e';
+      lastError = tr('Ошибка инициализации ядра: {0}', [e]);
     }
     unawaited(refreshBattery());
     core.coreVersion().then((v) {
@@ -137,8 +151,10 @@ class AppState extends ChangeNotifier {
 
     // Пока приложение открыто — обновляем подписки раз в 6 часов.
     _subTimer = Timer.periodic(const Duration(minutes: 30), (_) {
-      final stale = DateTime.now().subtract(const Duration(hours: 6));
+      // Как просит панель (profile-update-interval), но не реже раза в 6 часов.
       for (final sub in [...subscriptions]) {
+        final h = math.min(sub.updateHours ?? 6, 6);
+        final stale = DateTime.now().subtract(Duration(hours: h));
         if (sub.updatedAt == null || sub.updatedAt!.isBefore(stale)) {
           unawaited(refresh(sub, silent: true));
         }
@@ -169,7 +185,7 @@ class AppState extends ChangeNotifier {
   Future<void> updateCore({bool silent = false}) async {
     if (coreUpdating) return;
     coreUpdating = true;
-    if (!silent) coreUpdateStatus = 'Проверяю…';
+    if (!silent) coreUpdateStatus = tr('Проверяю…');
     notifyListeners();
     try {
       final msg = await core.updateCore();
@@ -191,7 +207,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     checkingUpdate = true;
-    if (!silent) updateStatus = 'Проверяю…';
+    if (!silent) updateStatus = tr('Проверяю…');
     notifyListeners();
     try {
       final u = await AppUpdater.check();
@@ -200,14 +216,14 @@ class AppState extends ChangeNotifier {
       if (u == null) {
         appUpdate = null;
         updateFile = null;
-        updateStatus = 'Установлена последняя версия';
+        updateStatus = tr('Установлена последняя версия');
         return;
       }
       // После отката плохую версию сами не предлагаем — только по кнопке.
       if (silent && u.build <= settings.skippedBuild) {
         appUpdate = null;
         updateFile = null;
-        updateStatus = '${u.version} пропущена после отката';
+        updateStatus = tr('{0} пропущена после отката', [u.version]);
         return;
       }
       if (appUpdate?.build != u.build) updateFile = null;
@@ -250,7 +266,7 @@ class AppState extends ChangeNotifier {
   /// Текущая сборка и всё до неё больше не предлагаются автоматически.
   Future<void> rollbackTo(AppRelease r) async {
     final current = await AppUpdater.currentBuild();
-    updateStatus = 'Готовлю ${r.version}…';
+    updateStatus = tr('Готовлю {0}…', [r.version]);
     notifyListeners();
     try {
       final u = await AppUpdater.prepare(r);
@@ -278,7 +294,7 @@ class AppState extends ChangeNotifier {
     if (f == null) return;
     try {
       if (isDesktop) {
-        updateStatus = 'Устанавливаю, Nexus перезапустится…';
+        updateStatus = tr('Устанавливаю, Nexus перезапустится…');
         notifyListeners();
         if (state != ConnState.disconnected) await core.disconnect();
         await AppUpdater.install(f);
@@ -286,7 +302,7 @@ class AppState extends ChangeNotifier {
         await quitApp?.call();
       } else {
         await AppUpdater.install(f);
-        updateStatus = 'Подтвердите установку в системном окне';
+        updateStatus = tr('Подтвердите установку в системном окне');
       }
     } catch (e) {
       updateStatus = _msg(e);
@@ -324,7 +340,10 @@ class AppState extends ChangeNotifier {
   Future<void> _saveChain = Future.value();
 
   /// Дождаться записи всех изменений на диск (перед перезапуском).
-  Future<void> flushSaves() => _saveChain;
+  Future<void> flushSaves() {
+    traffic.save();
+    return _saveChain;
+  }
 
   void _save() {
     final subs = jsonEncode(subscriptions.map((e) => e.toJson()).toList());
@@ -335,6 +354,23 @@ class AppState extends ChangeNotifier {
     }).catchError((_) {});
     if (selectedId != null) _prefs.setString('selected', selectedId!);
     _prefs.setString('settings', settings.toJsonString());
+    _syncExpiry();
+  }
+
+  String _expirySig = '';
+
+  /// Android: системные напоминания за 3 дня и за день до конца подписок
+  /// (приходят, даже если Nexus закрыт).
+  void _syncExpiry() {
+    if (isDesktop) return;
+    final list = [
+      for (final s in subscriptions)
+        if (s.expire != null) (s.id, s.title, s.expire!),
+    ];
+    final sig = '${L10n.lang}:' + list.map((e) => '${e.$1}|${e.$2}|${e.$3.millisecondsSinceEpoch}').join(';');
+    if (sig == _expirySig) return;
+    _expirySig = sig;
+    unawaited(AndroidSystem.scheduleExpiry(list));
   }
 
   void updateSettings(void Function(AppSettings s) change) {
@@ -363,8 +399,10 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     core.note(liveLatency != null && liveLatency! > 0
-        ? 'Трафик через «${s.cleanName}» идёт, задержка $liveLatency мс'
-        : 'Через «${s.cleanName}» трафик не проходит — сервер не ответил');
+        ? (settings.autoMode
+            ? tr('Режим «Авто»: трафик идёт, задержка {0} мс', [liveLatency])
+            : tr('Трафик через «{0}» идёт, задержка {1} мс', [s.cleanName, liveLatency]))
+        : tr('Через «{0}» трафик не проходит — сервер не ответил', [s.cleanName]));
     if (afterConnect && liveLatency == -1) await _failover(s);
     if (afterConnect && (liveLatency ?? -1) > 0) unawaited(checkExit());
   }
@@ -394,14 +432,12 @@ class AppState extends ChangeNotifier {
     exitChecking = false;
     if (state == ConnState.connected && r != null) {
       exitInfo = r;
-      core.note('IP выхода: ${r.ip}'
-          '${r.country.isEmpty ? '' : ' (${r.country})'}');
+      core.note(tr('IP выхода: {0}{1}', [r.ip, r.country.isEmpty ? '' : ' (${r.country})']));
       final serverCc = selected?.countryCode?.toUpperCase();
       exitWarning = r.country == 'RU' && serverCc != 'RU'
-          ? 'Сайты видят ваш российский IP — трафик идёт мимо VPN. '
-              'Нажмите, чтобы переподключиться'
+          ? tr('Сайты видят ваш российский IP — трафик идёт мимо VPN. Нажмите, чтобы переподключиться')
           : null;
-      if (exitWarning != null) core.note('Внимание: трафик идёт мимо VPN');
+      if (exitWarning != null) core.note(tr('Внимание: трафик идёт мимо VPN'));
     }
     notifyListeners();
   }
@@ -410,7 +446,7 @@ class AppState extends ChangeNotifier {
   /// или null при успехе.
   Future<String?> runSpeedTest() async {
     final proxy = state == ConnState.connected ? core.activeProxy : null;
-    if (proxy == null) return 'Сначала подключитесь';
+    if (proxy == null) return tr('Сначала подключитесь');
     if (speedTesting) return null;
     speedTesting = true;
     speedLive = 0;
@@ -428,12 +464,11 @@ class AppState extends ChangeNotifier {
     speedLive = null;
     if (state == ConnState.connected && r != null) {
       speedMbps = r;
-      core.note('Тест скорости: ${r.toStringAsFixed(1)} Мбит/с '
-          'через «${selected?.cleanName ?? '—'}»');
+      core.note(tr('Тест скорости: {0} Мбит/с через «{1}»', [r.toStringAsFixed(1), selected?.cleanName ?? '—']));
     }
     notifyListeners();
-    if (state != ConnState.connected) return 'Соединение прервалось';
-    return r == null ? 'Не удалось измерить скорость' : null;
+    if (state != ConnState.connected) return tr('Соединение прервалось');
+    return r == null ? tr('Не удалось измерить скорость') : null;
   }
 
   /// Серверы, уже опробованные в текущей попытке подключения.
@@ -443,11 +478,11 @@ class AppState extends ChangeNotifier {
   /// Сервер подключился, но трафик не идёт — пробуем следующие
   /// по задержке (до 3 штук), если включено «Автовыбор при сбое».
   Future<void> _failover(ServerProfile bad) async {
-    if (!settings.autoFailover || core.blocked) return;
+    if (!settings.autoFailover || settings.autoMode || core.blocked) return;
     _failoverTried.add(bad.id);
     if (_failoverTried.length > 3) {
       failoverNote = null;
-      lastError = 'Ни один сервер не отвечает — проверьте интернет или подписку';
+      lastError = tr('Ни один сервер не отвечает — проверьте интернет или подписку');
       _wantConnected = false;
       reconnectNote = null;
       notifyListeners();
@@ -463,7 +498,7 @@ class AppState extends ChangeNotifier {
       });
     if (candidates.isEmpty) return;
     final next = candidates.first;
-    failoverNote = '«${bad.cleanName}» не отвечает — переключаюсь на «${next.cleanName}»';
+    failoverNote = tr('«{0}» не отвечает — переключаюсь на «{1}»', [bad.cleanName, next.cleanName]);
     notifyListeners();
     selectedId = next.id;
     _save();
@@ -489,7 +524,7 @@ class AppState extends ChangeNotifier {
     const steps = [2, 5, 10, 20, 30];
     final sec = steps[_retry.clamp(0, steps.length - 1)];
     _retry++;
-    reconnectNote = 'Связь пропала — переподключаюсь (попытка $_retry)…';
+    reconnectNote = tr('Связь пропала — переподключаюсь (попытка {0})…', [_retry]);
     notifyListeners();
     _retryTimer = Timer(Duration(seconds: sec), () async {
       if (!_wantConnected || state != ConnState.disconnected) return;
@@ -504,8 +539,7 @@ class AppState extends ChangeNotifier {
           await _failover(s);
         } else {
           _wantConnected = false;
-          lastError = 'Не удаётся подключиться к «${s.cleanName}». '
-              'Попробуйте другой сервер';
+          lastError = tr('Не удаётся подключиться к «{0}». Попробуйте другой сервер', [s.cleanName]);
           notifyListeners();
         }
         return;
@@ -517,8 +551,7 @@ class AppState extends ChangeNotifier {
           !await AndroidSystem.vpnPrepared()) {
         _wantConnected = false;
         reconnectNote = null;
-        lastError = 'VPN включён в другом приложении — Nexus отключился. '
-            'Нажмите «Подключить», чтобы вернуть его';
+        lastError = tr('VPN включён в другом приложении — Nexus отключился. Нажмите «Подключить», чтобы вернуть его');
         notifyListeners();
         return;
       }
@@ -613,7 +646,7 @@ class AppState extends ChangeNotifier {
     }
     final d = await core.connectedDelay(s);
     if (state != ConnState.connected) return;
-    if (d <= 0) core.note('Проверка канала: «${s.cleanName}» не ответил');
+    if (d <= 0) core.note(tr('Проверка канала: «{0}» не ответил', [s.cleanName]));
     if (d > 0) {
       _healthFails = 0;
       _deadReconnects = 0;
@@ -634,9 +667,9 @@ class AppState extends ChangeNotifier {
       return;
     }
     _healthFails = 0;
-    if (_deadReconnects == 0 || !settings.autoFailover) {
+    if (_deadReconnects == 0 || !settings.autoFailover || settings.autoMode) {
       _deadReconnects++;
-      reconnectNote = 'Канал не отвечает — переподключаюсь…';
+      reconnectNote = tr('Канал не отвечает — переподключаюсь…');
       notifyListeners();
       await reconnect();
     } else {
@@ -673,6 +706,11 @@ class AppState extends ChangeNotifier {
   }
 
   void _onCoreState(ConnState s) {
+    // VPN подняли плиткой или виджетом, пока Nexus был закрыт: держим его
+    // так же, как после нажатия «Подключить».
+    if (s == ConnState.connected && state == ConnState.disconnected) {
+      _wantConnected = true;
+    }
     if (s != ConnState.connecting) _connectGuard?.cancel();
     if (s == ConnState.connected) unawaited(refreshBattery());
     if (s == ConnState.connected && state != ConnState.connected) {
@@ -717,6 +755,7 @@ class AppState extends ChangeNotifier {
     if (s == ConnState.disconnected) {
       connectedAt = null;
       statsNotifier.value = const ConnStats();
+      traffic.sessionEnded();
     }
     if (!isDesktop &&
         (s == ConnState.connected || s == ConnState.disconnected) &&
@@ -736,6 +775,54 @@ class AppState extends ChangeNotifier {
         customProxy: settings.customProxy,
         customDirect: settings.customDirect,
         blockAds: settings.blockAds,
+        antiBlock: settings.antiBlock,
+      );
+
+  /// Серверы для режима «Авто»: подписка выбранного сервера (или все
+  /// добавленные вручную), без заведомо мёртвых, от быстрых к медленным.
+  /// Ядро периодически проверяет каждый сервер пула, а это трафик и
+  /// батарея: на телефоне — до 6 серверов раз в 5 минут (≈15 МБ в сутки),
+  /// на ПК — до 10 раз в 2 минуты.
+  List<ServerProfile> autoPool([ServerProfile? around]) {
+    final s = around ?? selected;
+    if (s == null) return const [];
+    final list = serversOf(s.subscriptionId)
+        .where((x) => x.ping == null || x.ping! > 0)
+        .toList()
+      ..sort((a, b) {
+        int k(ServerProfile x) => x.ping ?? 1 << 20;
+        return k(a).compareTo(k(b));
+      });
+    final pool = list.take(isDesktop ? 10 : 6).toList();
+    return pool.isEmpty ? [s] : pool;
+  }
+
+  /// Пул, с которым запущено текущее соединение «Авто» (nx-0, nx-1…).
+  List<ServerProfile> activeAutoPool = const [];
+
+  /// Режим «Авто»: через какой сервер идёт трафик сейчас и его задержка
+  /// (по проверке ядра; известно только на Windows). null — неизвестно.
+  (ServerProfile, int)? get autoCurrent {
+    if (!settings.autoMode || state != ConnState.connected) return null;
+    (ServerProfile, int)? best;
+    core.autoStatus.forEach((tag, ms) {
+      final i = int.tryParse(tag.replaceFirst(kAutoPrefix, ''));
+      if (ms <= 0 || i == null || i >= activeAutoPool.length) return;
+      if (best == null || ms < best!.$2) best = (activeAutoPool[i], ms);
+    });
+    return best;
+  }
+
+  String _autoConfig(ServerProfile s) => buildAutoConfig(
+        activeAutoPool = autoPool(s),
+        probeInterval: isDesktop ? '2m' : '5m',
+        routing: settings.routing,
+        desktop: isDesktop,
+        lockLocalProxy: !isDesktop && settings.androidVpnMode,
+        customProxy: settings.customProxy,
+        customDirect: settings.customDirect,
+        blockAds: settings.blockAds,
+        antiBlock: settings.antiBlock,
       );
 
   Future<void> toggle() async {
@@ -764,7 +851,7 @@ class AppState extends ChangeNotifier {
     }
     final s = selected;
     if (s == null) {
-      lastError = 'Сначала добавьте подписку или сервер';
+      lastError = tr('Сначала добавьте подписку или сервер');
       notifyListeners();
       return;
     }
@@ -777,7 +864,7 @@ class AppState extends ChangeNotifier {
     _connectGuard = Timer(const Duration(seconds: 30), () async {
       if (state != ConnState.connecting) return;
       if (!settings.autoReconnect) {
-        lastError = 'Не удалось подключиться за 30 секунд';
+        lastError = tr('Не удалось подключиться за 30 секунд');
       }
       try {
         await core.disconnect();
@@ -787,8 +874,8 @@ class AppState extends ChangeNotifier {
     });
     try {
       await core.connect(
-        remark: s.cleanName,
-        config: _configFor(s),
+        remark: settings.autoMode ? tr('Nexus · Авто') : s.cleanName,
+        config: settings.autoMode ? _autoConfig(s) : _configFor(s),
         settings: settings,
       );
     } catch (e) {
@@ -822,8 +909,12 @@ class AppState extends ChangeNotifier {
   }
 
   /// Выбор сервера; при активном соединении — переподключение.
-  Future<void> select(ServerProfile s) async {
-    if (selectedId == s.id) return;
+  /// Явный выбор сервера выключает режим «Авто» (возвращает true, если
+  /// он был включён).
+  Future<bool> select(ServerProfile s) async {
+    final wasAuto = settings.autoMode;
+    if (wasAuto) settings.autoMode = false;
+    if (selectedId == s.id && !wasAuto) return false;
     selectedId = s.id;
     _save();
     notifyListeners();
@@ -832,6 +923,30 @@ class AppState extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 400));
       await connect();
     }
+    return wasAuto;
+  }
+
+  /// Язык интерфейса ('ru'/'en') — интерфейс пересобирается только при его смене.
+  final language = ValueNotifier<String>(L10n.lang);
+
+  /// Язык интерфейса: 'system', 'ru' или 'en'.
+  void setLanguage(String v) {
+    L10n.apply(v, PlatformDispatcher.instance.locale.languageCode);
+    updateSettings((s) => s.language = v);
+    language.value = L10n.lang;
+    if (!isDesktop) {
+      unawaited(AndroidSystem.setTileState(state == ConnState.connected,
+          vpn: settings.androidVpnMode));
+    }
+  }
+
+  /// Включает или выключает режим «Авто» и переподключается.
+  Future<void> setAutoMode(bool on) async {
+    updateSettings((s) => s.autoMode = on);
+    if (on && servers.any((s) => s.ping == null)) {
+      unawaited(pingMany(autoPool()));
+    }
+    await reconnectIfActive();
   }
 
   bool isFavorite(ServerProfile s) => settings.favorites.contains(s.favKey);
@@ -985,11 +1100,11 @@ class AppState extends ChangeNotifier {
   /// список ссылок или base64-блок. Возвращает текст результата.
   Future<String> importText(String raw) async {
     final text = raw.trim();
-    if (text.isEmpty) throw Exception('Пусто — вставьте ссылку');
+    if (text.isEmpty) throw Exception(tr('Пусто — вставьте ссылку'));
 
     if (isHttpUrl(text) && !text.contains('\n')) {
       final sub = await addSubscription(text);
-      return 'Подписка «${sub.title}» добавлена: ${serversOf(sub.id).length} серв.';
+      return tr('Подписка «{0}» добавлена: {1} серв.', [sub.title, serversOf(sub.id).length]);
     }
     // Несколько ссылок подписок (перенос после переустановки).
     final lines = text
@@ -1005,13 +1120,13 @@ class AppState extends ChangeNotifier {
           ok++;
         } catch (_) {}
       }
-      if (ok == 0) throw Exception('Не удалось загрузить ни одну подписку');
-      return 'Добавлено подписок: $ok из ${lines.length}';
+      if (ok == 0) throw Exception(tr('Не удалось загрузить ни одну подписку'));
+      return tr('Добавлено подписок: {0} из {1}', [ok, lines.length]);
     }
 
     final links = extractLinks(text);
     if (links.isEmpty) {
-      throw Exception('Не найдено ни одной поддерживаемой ссылки');
+      throw Exception(tr('Не найдено ни одной поддерживаемой ссылки'));
     }
     var added = 0;
     ServerProfile? first;
@@ -1024,11 +1139,11 @@ class AppState extends ChangeNotifier {
         added++;
       }
     }
-    if (added == 0) throw Exception('Эти серверы уже добавлены');
+    if (added == 0) throw Exception(tr('Эти серверы уже добавлены'));
     if (selectedId == null && first != null) selectedId = first.id;
     _save();
     notifyListeners();
-    return 'Добавлено серверов: $added';
+    return tr('Добавлено серверов: {0}', [added]);
   }
 
   /// Загрузка подписки. Если провайдер не пускает к её серверу напрямую
@@ -1125,6 +1240,129 @@ class AppState extends ChangeNotifier {
     return norm(a) == norm(b);
   }
 
+  // ───────────────────────── отчёт для поддержки ─────────────────────────
+
+  /// Сведения о приложении и соединении без ключей и токенов —
+  /// чтобы клиент мог отправить их в поддержку одним сообщением.
+  Future<String> supportReport() async {
+    String d(DateTime? t) => t == null
+        ? '—'
+        : '${t.day.toString().padLeft(2, '0')}.${t.month.toString().padLeft(2, '0')}.${t.year} '
+            '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    final st = settings;
+    final s = selected;
+    final b = StringBuffer()
+      ..writeln('Nexus $appVersion · ${isDesktop ? 'Windows' : 'Android'} '
+          '${Platform.operatingSystemVersion}')
+      ..writeln('Xray: $coreVersion')
+      ..writeln('Время: ${d(DateTime.now())}')
+      ..writeln('Режим: ${st.routing.name}'
+          '${isDesktop ? ' · TUN ${st.windowsTun ? 'вкл' : 'выкл'} · прокси ${st.windowsSystemProxy ? 'вкл' : 'выкл'}' : ' · VPN ${st.androidVpnMode ? 'вкл' : 'только прокси'}'}'
+          ' · Авто ${st.autoMode ? 'вкл' : 'выкл'}'
+          ' · обход ${st.antiBlock ? 'вкл' : 'выкл'}'
+          ' · реклама ${st.blockAds ? 'блок' : 'нет'}'
+          ' · своих правил ${st.customProxy.length + st.customDirect.length}')
+      ..writeln('Состояние: ${state.name}'
+          '${liveLatency == null ? '' : ' · задержка $liveLatency мс'}'
+          '${core.modeWarning == null ? '' : ' · ${core.modeWarning}'}')
+      ..writeln(s == null
+          ? 'Сервер: не выбран'
+          : 'Сервер: ${s.cleanName} · ${s.protocol} ${s.transport} · ${s.host}:${s.port}'
+              '${s.ping == null ? '' : ' · пинг ${s.ping}'}');
+    if (lastError != null) b.writeln('Ошибка: $lastError');
+    b.writeln('Подписки: ${subscriptions.length}');
+    for (final x in subscriptions) {
+      b.writeln('  · ${x.title} (${Uri.tryParse(x.url)?.host ?? '?'}): '
+          'серверов ${serversOf(x.id).length}, '
+          'трафик ${x.used ~/ (1 << 20)}/${x.total == 0 ? '∞' : x.total ~/ (1 << 20)} МБ, '
+          'до ${d(x.expire)}, обновлена ${d(x.updatedAt)}');
+    }
+    final logs = await core.fetchLogs();
+    b.writeln('— журнал (последние строки) —');
+    for (final l in logs.skip(logs.length > 80 ? logs.length - 80 : 0)) {
+      b.writeln(l);
+    }
+    return redactSecrets(b.toString());
+  }
+
+  // ───────────────────────── резервная копия ─────────────────────────
+
+  /// Подписки, свои серверы и настройки одной строкой, зашифрованной паролем.
+  Future<String> exportBackup(String password) {
+    final st = jsonDecode(settings.toJsonString()) as Map<String, dynamic>
+      ..remove('lastCoreCheck')
+      ..remove('lastAppCheck')
+      ..remove('skippedBuild');
+    return Backup.encrypt({
+      'v': 1,
+      'subscriptions': [
+        for (final x in subscriptions) {'url': x.url, 'title': x.title},
+      ],
+      'servers': [
+        for (final x in servers)
+          if (x.subscriptionId == null) x.link,
+      ],
+      'settings': st,
+    }, password);
+  }
+
+  /// Восстановление из резервной копии. Существующее не удаляется —
+  /// добавляется недостающее. Возвращает текст результата.
+  Future<String> importBackup(String text, String password) async {
+    final j = await Backup.decrypt(text, password);
+    var subs = 0, srv = 0;
+    // Ограничения на случай испорченной или подсунутой копии.
+    for (final e in (j['subscriptions'] as List? ?? const []).take(50)) {
+      if (e is! Map) continue;
+      final url = e['url'];
+      if (url is! String || !isHttpUrl(url) || url.length > 2048) continue;
+      if (subscriptions.any((x) => x.url == url)) continue;
+      try {
+        await addSubscription(url);
+      } catch (_) {
+        // Нет связи с сервером подписки — сохраняем, загрузится позже.
+        final t = e['title'];
+        subscriptions.add(Subscription(
+            id: newId(),
+            url: url,
+            title: t is String && t.isNotEmpty && t.length <= 80
+                ? t
+                : titleFromUrl(url)));
+      }
+      subs++;
+    }
+    for (final l in (j['servers'] as List? ?? const []).take(1000)) {
+      if (l is! String || l.length > 8192 || servers.any((x) => x.link == l)) {
+        continue;
+      }
+      final p = profileFromLink(l);
+      if (p != null) {
+        servers.add(p);
+        srv++;
+      }
+    }
+    final st = j['settings'];
+    if (st is Map<String, dynamic>) {
+      final cur = jsonDecode(settings.toJsonString()) as Map<String, dynamic>;
+      for (final k in st.keys) {
+        if (const [
+          'lastCoreCheck', 'lastAppCheck', 'skippedBuild',
+          // Привязано к конкретному устройству.
+          'launchAtStartup', 'windowsTun',
+        ].contains(k)) {
+          continue;
+        }
+        cur[k] = st[k];
+      }
+      settings = AppSettings.fromJsonString(jsonEncode(cur));
+      _applyAliases();
+    }
+    if (selected == null && servers.isNotEmpty) selectedId = servers.first.id;
+    _save();
+    notifyListeners();
+    return tr('Восстановлено: подписок {0}, серверов {1}, настройки', [subs, srv]);
+  }
+
   Future<Subscription> addSubscription(String url) async {
     final existing = subscriptions.where((s) => s.url == url).toList();
     if (existing.isNotEmpty) {
@@ -1178,7 +1416,7 @@ class AppState extends ChangeNotifier {
       }
       _save();
     } catch (e) {
-      if (!silent) lastError = 'Обновление «${sub.title}»: ${_msg(e)}';
+      if (!silent) lastError = tr('Обновление «{0}»: {1}', [sub.title, _msg(e)]);
     } finally {
       refreshing.remove(sub.id);
       notifyListeners();
@@ -1190,6 +1428,7 @@ class AppState extends ChangeNotifier {
   }
 
   void removeSubscription(Subscription sub) {
+    if (selected?.subscriptionId == sub.id) _forgetTileConfig();
     subscriptions.removeWhere((s) => s.id == sub.id);
     servers.removeWhere((s) => s.subscriptionId == sub.id);
     if (!servers.any((s) => s.id == selectedId)) {
@@ -1199,7 +1438,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Плитка и виджет не должны подключаться к удалённому серверу.
+  void _forgetTileConfig() {
+    if (!isDesktop) unawaited(AndroidSystem.saveTileConfig());
+  }
+
   void removeServer(ServerProfile s) {
+    if (selectedId == s.id) _forgetTileConfig();
     servers.removeWhere((x) => x.id == s.id);
     if (selectedId == s.id) {
       selectedId = servers.isEmpty ? null : servers.first.id;
@@ -1221,6 +1466,12 @@ class AppState extends ChangeNotifier {
     selectedId = null;
     await _prefs.clear();
     settings = AppSettings();
+    traffic.clear();
+    if (!isDesktop) {
+      unawaited(AndroidSystem.saveTileConfig());
+      unawaited(AndroidSystem.scheduleExpiry(const []));
+      _expirySig = '';
+    }
     notifyListeners();
   }
 
@@ -1237,13 +1488,13 @@ class AppState extends ChangeNotifier {
   }
 
   static String _fmtDuration(Duration d) {
-    if (d.inHours > 0) return '${d.inHours} ч ${d.inMinutes % 60} мин';
-    if (d.inMinutes > 0) return '${d.inMinutes} мин';
-    return '${d.inSeconds} с';
+    if (d.inHours > 0) return tr('{0} ч {1} мин', [d.inHours, d.inMinutes % 60]);
+    if (d.inMinutes > 0) return tr('{0} мин', [d.inMinutes]);
+    return tr('{0} с', [d.inSeconds]);
   }
 
   static String _fmtBytes(int b) {
-    const u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    final u = [tr('Б'), tr('КБ'), tr('МБ'), tr('ГБ'), tr('ТБ')];
     var v = b.toDouble();
     var i = 0;
     while (v >= 1024 && i < u.length - 1) {
@@ -1262,6 +1513,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _stSub?.cancel();
     _statsSub?.cancel();
+    traffic.save();
     _subTimer?.cancel();
     _updTimer?.cancel();
     _retryTimer?.cancel();

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import '../l10n.dart';
 
 /// Генератор QR-кода: байтовый режим, уровень коррекции M, версии 1–40.
 /// Перенос алгоритма «QR Code generator» Project Nayuki (MIT) —
@@ -42,7 +43,7 @@ class QrCode {
     final data = utf8.encode(text);
     var ver = 1;
     for (;; ver++) {
-      if (ver > 40) throw ArgumentError('Текст слишком длинный для QR-кода');
+      if (ver > 40) throw ArgumentError(tr('Текст слишком длинный для QR-кода'));
       final ccBits = ver <= 9 ? 8 : 16;
       if (4 + ccBits + data.length * 8 <= _dataCodewords(ver) * 8) break;
     }

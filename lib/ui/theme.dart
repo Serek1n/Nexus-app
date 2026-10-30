@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n.dart';
 
 /// Палитра: строгий тёмный интерфейс, один акцент, неон — только в состоянии «подключено».
 class NX {
@@ -153,8 +154,8 @@ ThemeData buildTheme() {
 
 /// Форматирование байтов и скоростей.
 String fmtBytes(num b) {
-  if (b < 1024) return '${b.toInt()} Б';
-  const units = ['КБ', 'МБ', 'ГБ', 'ТБ'];
+  if (b < 1024) return tr('{0} Б', [b.toInt()]);
+  final units = [tr('КБ'), tr('МБ'), tr('ГБ'), tr('ТБ')];
   var v = b / 1024;
   var i = 0;
   while (v >= 1024 && i < units.length - 1) {
@@ -164,7 +165,7 @@ String fmtBytes(num b) {
   return '${v.toStringAsFixed(v >= 100 ? 0 : 1)} ${units[i]}';
 }
 
-String fmtSpeed(num bps) => '${fmtBytes(bps)}/с';
+String fmtSpeed(num bps) => tr('{0}/с', [fmtBytes(bps)]);
 
 String fmtDuration(Duration d) {
   String two(int n) => n.toString().padLeft(2, '0');
@@ -173,6 +174,8 @@ String fmtDuration(Duration d) {
 }
 
 String plural(int n, String one, String few, String many) {
+  // По-английски форм две: 1 day / 2 days.
+  if (L10n.en) return n == 1 ? one : many;
   final m10 = n % 10, m100 = n % 100;
   if (m10 == 1 && m100 != 11) return one;
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;

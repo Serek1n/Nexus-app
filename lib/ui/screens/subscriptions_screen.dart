@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models.dart';
+import '../../platform/links.dart';
 import '../add_sheet.dart';
 import '../share_sheet.dart';
 import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'home_screen.dart' show TrafficBar;
+import '../../l10n.dart';
 
 class SubscriptionsScreen extends StatelessWidget {
   const SubscriptionsScreen({super.key});
@@ -17,19 +19,27 @@ class SubscriptionsScreen extends StatelessWidget {
     final app = AppScope.of(context);
     return SafeArea(
       bottom: false,
-      child: ListView(
+      // Потянуть список вниз — обновить все подписки.
+      child: RefreshIndicator(
+        color: NX.violet,
+        backgroundColor: NX.surface2,
+        onRefresh: () => app.subscriptions.isEmpty
+            ? Future<void>.value()
+            : app.refreshAll(),
+        child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           PageHeader(
-            title: 'Подписки',
+            title: tr('Подписки'),
             subtitle: app.subscriptions.isEmpty
                 ? null
-                : 'Обновляются автоматически при запуске',
+                : tr('Обновляются автоматически при запуске'),
             actions: [
               if (app.subscriptions.isNotEmpty) ...[
                 NxIconButton(
                   icon: Icons.sync_rounded,
-                  tooltip: 'Обновить все',
+                  tooltip: tr('Обновить все'),
                   spinning: app.refreshing.isNotEmpty,
                   onPressed: () => app.refreshAll(),
                 ),
@@ -37,7 +47,7 @@ class SubscriptionsScreen extends StatelessWidget {
               ],
               NxIconButton(
                 icon: Icons.add_rounded,
-                tooltip: 'Добавить',
+                tooltip: tr('Добавить'),
                 onPressed: () => showAddSheet(context),
               ),
             ],
@@ -48,11 +58,11 @@ class SubscriptionsScreen extends StatelessWidget {
               padding: const EdgeInsets.only(top: 60),
               child: EmptyState(
                 icon: Icons.workspace_premium_rounded,
-                title: 'Нет подписок',
+                title: tr('Нет подписок'),
                 text:
-                    'Получите ссылку на подписку в Discord-боте NEXUS_VPN\nи вставьте её сюда',
+                    tr('Получите ссылку на подписку в Discord-боте NEXUS_VPN\nи вставьте её сюда'),
                 action: NeonButton(
-                  label: 'Вставить ссылку',
+                  label: tr('Вставить ссылку'),
                   icon: Icons.content_paste_rounded,
                   onPressed: () => showAddSheet(context),
                 ),
@@ -65,6 +75,7 @@ class SubscriptionsScreen extends StatelessWidget {
             ],
         ],
       ),
+      ),
     );
   }
 }
@@ -74,16 +85,16 @@ class _SubCard extends StatelessWidget {
   final Subscription sub;
 
   String _ago(DateTime? t) {
-    if (t == null) return 'ещё не обновлялась';
+    if (t == null) return tr('ещё не обновлялась');
     final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'только что';
+    if (d.inMinutes < 1) return tr('только что');
     if (d.inHours < 1) {
-      return '${d.inMinutes} ${plural(d.inMinutes, 'минуту', 'минуты', 'минут')} назад';
+      return tr('{0} {1} назад', [d.inMinutes, plural(d.inMinutes, tr('минуту'), tr('минуты'), tr('минут'))]);
     }
     if (d.inDays < 1) {
-      return '${d.inHours} ${plural(d.inHours, 'час', 'часа', 'часов')} назад';
+      return tr('{0} {1} назад', [d.inHours, plural(d.inHours, tr('час'), tr('часа'), tr('часов'))]);
     }
-    return '${d.inDays} ${plural(d.inDays, 'день', 'дня', 'дней')} назад';
+    return tr('{0} {1} назад', [d.inDays, plural(d.inDays, tr('день'), tr('дня'), tr('дней'))]);
   }
 
   String _date(DateTime d) =>
@@ -127,16 +138,15 @@ class _SubCard extends StatelessWidget {
                             fontWeight: FontWeight.w800, fontSize: 15.5)),
                     const SizedBox(height: 2),
                     Text(
-                        '$count ${plural(count, 'сервер', 'сервера', 'серверов')} · ${_ago(sub.updatedAt)}',
+                        '${count} ${plural(count, tr('сервер'), tr('сервера'), tr('серверов'))} · ${_ago(sub.updatedAt)}',
                         style:
                             const TextStyle(color: NX.text2, fontSize: 12.5)),
                     if (sub.url.startsWith('http://')) ...[
                       const SizedBox(height: 6),
-                      const Tooltip(
+                      Tooltip(
                         message:
-                            'Подписка загружается без шифрования: её могут подменить '
-                            'или подсмотреть ключи. Попросите https-ссылку.',
-                        child: Tag('HTTP · без шифрования', color: NX.amber),
+                            tr('Подписка загружается без шифрования: её могут подменить или подсмотреть ключи. Попросите https-ссылку.'),
+                        child: Tag(tr('HTTP · без шифрования'), color: NX.amber),
                       ),
                     ],
                   ],
@@ -144,7 +154,7 @@ class _SubCard extends StatelessWidget {
               ),
               NxIconButton(
                 icon: Icons.sync_rounded,
-                tooltip: 'Обновить',
+                tooltip: tr('Обновить'),
                 spinning: busy,
                 onPressed: () => app.refresh(sub),
               ),
@@ -160,28 +170,26 @@ class _SubCard extends StatelessWidget {
                     case 'share':
                       await showShareSheet(
                         context,
-                        title: 'Подписка «${sub.title}»',
+                        title: tr('Подписка «{0}»', [sub.title]),
                         text: sub.url,
-                        warning: 'По этой ссылке получают все серверы подписки '
-                            'и тратят её трафик. Делитесь только с теми, '
-                            'кому доверяете, и если владелец подписки не против.',
+                        warning: tr('По этой ссылке получают все серверы подписки и тратят её трафик. Делитесь только с теми, кому доверяете, и если владелец подписки не против.'),
                       );
                     case 'copy':
                       await Clipboard.setData(ClipboardData(text: sub.url));
-                      if (context.mounted) toast(context, 'Ссылка скопирована');
+                      if (context.mounted) toast(context, tr('Ссылка скопирована'));
                     case 'rename':
                       await _rename(context);
                     case 'delete':
                       await _delete(context);
                   }
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'share', child: Text('Поделиться (QR)')),
-                  PopupMenuItem(value: 'copy', child: Text('Скопировать ссылку')),
-                  PopupMenuItem(value: 'rename', child: Text('Переименовать')),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'share', child: Text(tr('Поделиться (QR)'))),
+                  PopupMenuItem(value: 'copy', child: Text(tr('Скопировать ссылку'))),
+                  PopupMenuItem(value: 'rename', child: Text(tr('Переименовать'))),
                   PopupMenuItem(
                       value: 'delete',
-                      child: Text('Удалить', style: TextStyle(color: NX.red))),
+                      child: Text(tr('Удалить'), style: TextStyle(color: NX.red))),
                 ],
               ),
             ],
@@ -198,7 +206,7 @@ class _SubCard extends StatelessWidget {
                         style: const TextStyle(
                             fontWeight: FontWeight.w800, fontSize: 15)),
                     Text(
-                        unlimited ? '  · безлимит' : '  из ${fmtBytes(sub.total)}',
+                        unlimited ? tr('  · безлимит') : tr('  из {0}', [fmtBytes(sub.total)]),
                         style:
                             const TextStyle(color: NX.text2, fontSize: 13)),
                     const Spacer(),
@@ -219,16 +227,16 @@ class _SubCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       sub.expire == null
-                          ? 'Бессрочно'
-                          : 'До ${_date(sub.expire!)}',
+                          ? tr('Бессрочно')
+                          : tr('До {0}', [_date(sub.expire!)]),
                       style: const TextStyle(color: NX.text2, fontSize: 12.5),
                     ),
                     const SizedBox(width: 8),
                     if (days != null)
                       Tag(
                         days < 0
-                            ? 'ИСТЕКЛА'
-                            : 'ОСТАЛОСЬ $days ${plural(days, 'ДЕНЬ', 'ДНЯ', 'ДНЕЙ')}',
+                            ? tr('ИСТЕКЛА')
+                            : tr('ОСТАЛОСЬ {0} {1}', [days, plural(days, tr('ДЕНЬ'), tr('ДНЯ'), tr('ДНЕЙ'))]),
                         color: days < 0
                             ? NX.red
                             : days <= 3
@@ -253,6 +261,27 @@ class _SubCard extends StatelessWidget {
                             const TextStyle(fontSize: 12.5, color: NX.text)),
                   ),
                 ],
+                // Ссылки от панели: поддержка и личный кабинет.
+                if ([sub.supportUrl, sub.webPageUrl]
+                    .any((u) => u != null && isSafeWebLink(u))) ...[
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 4, children: [
+                    for (final (url, icon, label) in [
+                      (sub.supportUrl, Icons.support_agent_rounded, tr('Поддержка')),
+                      (sub.webPageUrl, Icons.open_in_new_rounded, tr('Личный кабинет')),
+                    ])
+                      if (url != null && isSafeWebLink(url))
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              visualDensity: VisualDensity.compact),
+                          onPressed: () => openWebLink(url),
+                          icon: Icon(icon, size: 17, color: NX.violet),
+                          label: Text(label,
+                              style: const TextStyle(color: NX.text2, fontSize: 13)),
+                        ),
+                  ]),
+                ],
               ],
             ),
           ),
@@ -266,14 +295,14 @@ class _SubCard extends StatelessWidget {
     final res = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Название подписки'),
+        title: Text(tr('Название подписки')),
         content: TextField(controller: ctrl, autofocus: true),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+              onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: const Text('Сохранить')),
+              child: Text(tr('Сохранить'))),
         ],
       ),
     );
@@ -286,16 +315,16 @@ class _SubCard extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить подписку?'),
-        content: Text('«${sub.title}» и все её серверы будут удалены.',
+        title: Text(tr('Удалить подписку?')),
+        content: Text(tr('«{0}» и все её серверы будут удалены.', [sub.title]),
             style: const TextStyle(color: NX.text2)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(tr('Отмена'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Удалить', style: TextStyle(color: NX.red))),
+              child: Text(tr('Удалить'), style: TextStyle(color: NX.red))),
         ],
       ),
     );

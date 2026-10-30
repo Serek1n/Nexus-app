@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import 'theme.dart';
+import '../l10n.dart';
 
 /// Фон: ровный тёмный цвет и едва заметный свет сверху.
 /// Когда соединение активно, свет становится зелёным.
@@ -146,7 +147,7 @@ class PingBadge extends StatelessWidget {
     final p = ping;
     final c = NX.pingColor(p);
     final bars = NX.pingLevel(p);
-    final txt = p == null ? '— мс' : (p < 0 ? 'нет связи' : '$p мс');
+    final txt = p == null ? tr('— мс') : (p < 0 ? tr('нет связи') : tr('{0} мс', [p]));
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,

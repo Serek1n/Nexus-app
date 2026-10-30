@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
 import '../models.dart';
+import '../l10n.dart';
 
 const supportedSchemes = [
   'vless',
@@ -57,10 +58,12 @@ List<String> extractLinks(String raw) {
     final decoded = tryBase64(text);
     if (decoded != null && decoded.contains('://')) text = decoded;
   }
+  // Повторы (одна ссылка дважды) убираем, порядок сохраняем.
   return text
       .split(RegExp(r'[\r\n\s]+'))
       .map((l) => l.trim())
       .where(isShareLink)
+      .toSet()
       .toList();
 }
 
@@ -109,16 +112,14 @@ bool isTransportError(Object e) =>
 /// Понятный текст для сетевой ошибки.
 String transportErrorText(Object e) {
   if ('$e'.contains('CERTIFICATE_VERIFY_FAILED')) {
-    return 'Сертификат сервера подписки недействителен или просрочен — '
-        'сообщите владельцу подписки';
+    return tr('Сертификат сервера подписки недействителен или просрочен — сообщите владельцу подписки');
   }
   if (e is HandshakeException || e is TlsException ||
       '$e'.contains('Handshake')) {
-    return 'Не удалось установить защищённое соединение с сервером подписки — '
-        'похоже, адрес блокирует провайдер. Подключитесь к VPN и повторите';
+    return tr('Не удалось установить защищённое соединение с сервером подписки — похоже, адрес блокирует провайдер. Подключитесь к VPN и повторите');
   }
-  if (e is TimeoutException) return 'Сервер подписки не ответил вовремя';
-  return 'Сервер подписки недоступен — проверьте интернет или подключитесь к VPN';
+  if (e is TimeoutException) return tr('Сервер подписки не ответил вовремя');
+  return tr('Сервер подписки недоступен — проверьте интернет или подключитесь к VPN');
 }
 
 bool _isLoopback(String host) {
@@ -135,7 +136,43 @@ class SubscriptionService {
   /// Случайный идентификатор этой установки (задаёт AppState при запуске).
   static String? deviceId;
 
-  static const userAgent = 'v2rayNG/1.10.0 Nexus/1.0';
+  /// Версия Nexus для User-Agent (задаёт AppState). Начало «v2rayNG» —
+  /// чтобы панели отдавали обычный список ссылок.
+  static String appVersion = '';
+  static String get userAgent =>
+      'v2rayNG/1.10.0 Nexus/${appVersion.isEmpty ? '2' : appVersion}';
+
+  /// Разбор заголовка subscription-userinfo:
+  /// «upload=..; download=..; total=..; expire=..». Числа бывают дробными.
+  static void applyUserInfo(Subscription sub, String? info) {
+    if (info == null) return;
+    for (final part in info.split(';')) {
+      final kv = part.split('=');
+      if (kv.length != 2) continue;
+      final n = num.tryParse(kv[1].trim());
+      final v = n == null || n.isNaN || n.isInfinite || n < 0 ? 0 : n.toInt();
+      switch (kv[0].trim().toLowerCase()) {
+        case 'upload':
+          sub.upload = v;
+        case 'download':
+          sub.download = v;
+        case 'total':
+          sub.total = v;
+        case 'expire':
+          // Секунды; 0 — бессрочно. Явный мусор (до 2001 или после 2200
+          // года) тоже считаем «бессрочно».
+          sub.expire = v > 1000000000 && v < 7258118400
+              ? DateTime.fromMillisecondsSinceEpoch(v * 1000)
+              : null;
+      }
+    }
+  }
+
+  /// profile-update-interval: часы, от 1 до 168; иначе null.
+  static int? updateHours(String? v) {
+    final h = int.tryParse(v?.trim() ?? '');
+    return h == null || h < 1 || h > 168 ? null : h;
+  }
 
   static String? _decodeHeader(String? v) {
     if (v == null || v.isEmpty) return null;
@@ -156,7 +193,10 @@ class SubscriptionService {
   static Future<FetchResult> fetch(Subscription sub, {String? proxy}) async {
     final uri = Uri.tryParse(sub.url);
     if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
-      throw Exception('Ссылка подписки должна начинаться с https://');
+      throw Exception(tr('Ссылка подписки должна начинаться с https://'));
+    }
+    if (_isLoopback(uri.host)) {
+      throw Exception(tr('Подписка указывает на адрес этого устройства — загрузка остановлена'));
     }
     // Читаем потоком и обрываем на 8 МБ: «бесконечный» ответ сервера
     // не должен съесть память устройства.
@@ -165,41 +205,61 @@ class SubscriptionService {
     final http.Client client = proxy == null
         ? http.Client()
         : IOClient(HttpClient()..findProxy = (_) => 'PROXY $proxy');
-    late final http.StreamedResponse res;
+    late http.StreamedResponse res;
     final bytes = <int>[];
     try {
-      final req = http.Request('GET', uri)
-        ..headers['User-Agent'] = userAgent
-        ..headers['Accept'] = '*/*'
-        ..maxRedirects = 5;
-      // Идентификатор устройства для панелей с лимитом устройств (3x-ui,
-      // Remnawave): без него такая подписка отвечает 404. Это случайное
-      // число, созданное при установке Nexus, — не серийный номер.
-      if (deviceId != null) {
-        req.headers['X-HWID'] = deviceId!;
-        req.headers['X-Device-OS'] = Platform.isAndroid ? 'Android' : 'Windows';
-        req.headers['X-Device-Model'] = 'Nexus';
-        final ver = Platform.operatingSystemVersion;
-        req.headers['X-Ver-OS'] =
-            ver.length > 60 ? ver.substring(0, 60) : ver;
+      // Перенаправления проверяем сами: с https на http не идём (ссылка
+      // с ключами ушла бы открытым текстом), на адреса самого устройства —
+      // тоже. Идентификатор устройства отдаём только исходному серверу.
+      var current = uri;
+      for (var hop = 0;; hop++) {
+        final req = http.Request('GET', current)
+          ..followRedirects = false
+          ..headers['User-Agent'] = userAgent
+          ..headers['Accept'] = '*/*';
+        // Идентификатор устройства для панелей с лимитом устройств (3x-ui,
+        // Remnawave): без него такая подписка отвечает 404. Это случайное
+        // число, созданное при установке Nexus, — не серийный номер.
+        if (deviceId != null && current.host == uri.host) {
+          req.headers['X-HWID'] = deviceId!;
+          req.headers['X-Device-OS'] =
+              Platform.isAndroid ? 'Android' : 'Windows';
+          req.headers['X-Device-Model'] = 'Nexus';
+          final ver = Platform.operatingSystemVersion;
+          req.headers['X-Ver-OS'] =
+              ver.length > 60 ? ver.substring(0, 60) : ver;
+        }
+        res = await client.send(req).timeout(const Duration(seconds: 20));
+        if (!const [301, 302, 303, 307, 308].contains(res.statusCode)) break;
+        await res.stream.drain<void>().catchError((_) {});
+        final loc = res.headers['location'];
+        final next = loc == null ? null : current.resolve(loc);
+        if (next == null || hop >= 5) {
+          throw Exception(tr('Сервер подписки отвечает бесконечными перенаправлениями'));
+        }
+        if (!(next.scheme == 'https' || next.scheme == 'http') ||
+            (current.scheme == 'https' && next.scheme == 'http')) {
+          throw Exception(tr('Сервер подписки перенаправил на незащищённый адрес — загрузка остановлена'));
+        }
+        if (_isLoopback(next.host)) {
+          throw Exception(tr('Подписка указывает на адрес этого устройства — загрузка остановлена'));
+        }
+        current = next;
       }
-      res = await client.send(req).timeout(const Duration(seconds: 20));
       if (res.statusCode == 404) {
         if (res.headers['x-hwid-max-devices-reached'] == 'true') {
-          throw Exception('Лимит устройств подписки исчерпан — отключите '
-              'старое устройство в боте или попросите увеличить лимит');
+          throw Exception(tr('Лимит устройств подписки исчерпан — отключите старое устройство в боте или попросите увеличить лимит'));
         }
-        throw Exception('Подписка не найдена (404) — проверьте ссылку: '
-            'возможно, она устарела, клиент удалён или срок истёк');
+        throw Exception(tr('Подписка не найдена (404) — проверьте ссылку: возможно, она устарела, клиент удалён или срок истёк'));
       }
       if (res.statusCode != 200) {
-        throw Exception('Сервер ответил кодом ${res.statusCode}');
+        throw Exception(tr('Сервер ответил кодом {0}', [res.statusCode]));
       }
       await for (final chunk
           in res.stream.timeout(const Duration(seconds: 30))) {
         bytes.addAll(chunk);
         if (bytes.length > limit) {
-          throw Exception('Подписка слишком большая (больше 8 МБ)');
+          throw Exception(tr('Подписка слишком большая (больше 8 МБ)'));
         }
       }
     } finally {
@@ -208,7 +268,7 @@ class SubscriptionService {
     final body = utf8.decode(bytes, allowMalformed: true);
     final links = extractLinks(body);
     if (links.isEmpty) {
-      throw Exception('В подписке не найдено ни одного сервера');
+      throw Exception(tr('В подписке не найдено ни одного сервера'));
     }
 
     final servers = <ServerProfile>[];
@@ -219,29 +279,11 @@ class SubscriptionService {
       if (p != null && !_isLoopback(p.host)) servers.add(p);
     }
     if (servers.isEmpty) {
-      throw Exception('Не удалось разобрать ссылки из подписки');
+      throw Exception(tr('Не удалось разобрать ссылки из подписки'));
     }
 
-    // subscription-userinfo: upload=..; download=..; total=..; expire=..
-    final info = res.headers['subscription-userinfo'];
-    if (info != null) {
-      for (final part in info.split(';')) {
-        final kv = part.split('=');
-        if (kv.length != 2) continue;
-        final v = int.tryParse(kv[1].trim()) ?? 0;
-        switch (kv[0].trim().toLowerCase()) {
-          case 'upload':
-            sub.upload = v;
-          case 'download':
-            sub.download = v;
-          case 'total':
-            sub.total = v;
-          case 'expire':
-            sub.expire =
-                v > 0 ? DateTime.fromMillisecondsSinceEpoch(v * 1000) : null;
-        }
-      }
-    }
+    applyUserInfo(sub, res.headers['subscription-userinfo']);
+    sub.updateHours = updateHours(res.headers['profile-update-interval']);
 
     // Тексты из заголовков сервера ограничиваем по длине.
     String? cap(String? v, int n) =>

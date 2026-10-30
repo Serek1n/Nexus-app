@@ -7,6 +7,7 @@ import 'package:cryptography/cryptography.dart' as cg;
 import 'package:http/http.dart' as http;
 
 import '../platform/android_system.dart';
+import '../l10n.dart';
 
 /// Репозиторий с релизами Nexus и номер сборки (задаются в GitHub Actions).
 const kUpdateRepo = String.fromEnvironment('UPDATE_REPO');
@@ -108,17 +109,17 @@ class AppUpdater {
             headers: _headers)
         .timeout(const Duration(seconds: 20));
     if (res.statusCode == 404) {
-      throw Exception('Релизы недоступны — репозиторий закрыт или пуст');
+      throw Exception(tr('Релизы недоступны — репозиторий закрыт или пуст'));
     }
     if (res.statusCode != 200) {
-      throw Exception('GitHub ответил ${res.statusCode}');
+      throw Exception(tr('GitHub ответил {0}', [res.statusCode]));
     }
     return res;
   }
 
   /// Проверяет последний (не пробный) релиз. null — обновлений нет.
   static Future<AppUpdate?> check() async {
-    if (!configured) throw Exception('Источник обновлений не задан в сборке');
+    if (!configured) throw Exception(tr('Источник обновлений не задан в сборке'));
     final current = await currentBuild();
     final j = jsonDecode((await _api('releases/latest')).body)
         as Map<String, dynamic>;
@@ -128,7 +129,7 @@ class AppUpdater {
 
   /// Прошлые версии для отката (новые сверху, без пробных сборок).
   static Future<List<AppRelease>> history() async {
-    if (!configured) throw Exception('Источник обновлений не задан в сборке');
+    if (!configured) throw Exception(tr('Источник обновлений не задан в сборке'));
     final list = jsonDecode((await _api('releases?per_page=30')).body);
     final out = <AppRelease>[];
     for (final r in (list is List ? list : const [])) {
@@ -183,7 +184,7 @@ class AppUpdater {
     }
     final sumsUrl = assets['SHA256SUMS.txt'];
     if (fileName == null || sumsUrl == null) {
-      throw Exception('В релизе нет файла для этого устройства');
+      throw Exception(tr('В релизе нет файла для этого устройства'));
     }
 
     final sumsBytes =
@@ -191,7 +192,7 @@ class AppUpdater {
     if (kUpdatePubKey.isNotEmpty) {
       // Подпись списка контрольных сумм ключом владельца (секрет в GitHub).
       final sigUrl = assets['SHA256SUMS.txt.sig'];
-      if (sigUrl == null) throw Exception('Релиз не подписан — пропущен');
+      if (sigUrl == null) throw Exception(tr('Релиз не подписан — пропущен'));
       final sig =
           (await http.get(Uri.parse(sigUrl), headers: _headers)).bodyBytes;
       final ok = await cg.Ed25519().verify(
@@ -200,14 +201,14 @@ class AppUpdater {
             publicKey: cg.SimplePublicKey(base64.decode(kUpdatePubKey),
                 type: cg.KeyPairType.ed25519)),
       );
-      if (!ok) throw Exception('Подпись релиза неверна — обновление отклонено');
+      if (!ok) throw Exception(tr('Подпись релиза неверна — обновление отклонено'));
     }
     final sums = utf8.decode(sumsBytes, allowMalformed: true);
     final line = sums.split('\n').firstWhere(
         (l) => l.trim().endsWith(' $fileName') || l.trim().endsWith('*$fileName'),
         orElse: () => '');
     final sha = line.trim().split(RegExp(r'\s+')).first.toLowerCase();
-    if (sha.length != 64) throw Exception('Нет контрольной суммы для $fileName');
+    if (sha.length != 64) throw Exception(tr('Нет контрольной суммы для {0}', [fileName]));
 
     return AppUpdate(
       build: build,
@@ -222,7 +223,7 @@ class AppUpdater {
 
   /// Пункты «- …» из раздела «Что нового» описания релиза.
   static List<String> _notes(String body) {
-    final start = body.indexOf('Что нового');
+    final start = body.indexOf('Что нового'); // no-tr: заголовок в описании релиза
     if (start < 0) return const [];
     final out = <String>[];
     for (final line in body.substring(start).split('\n').skip(1)) {
@@ -271,7 +272,7 @@ class AppUpdater {
             ..headers['User-Agent'] = 'Nexus')
           .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) {
-        throw Exception('Загрузка не удалась (код ${resp.statusCode})');
+        throw Exception(tr('Загрузка не удалась (код {0})', [resp.statusCode]));
       }
       final total = resp.contentLength ?? 0;
       final sink = file.openWrite();
@@ -288,7 +289,7 @@ class AppUpdater {
       hasher.close();
       if (digest.value.toString() != u.sha256) {
         file.deleteSync();
-        throw Exception('Контрольная сумма не совпала — обновление отменено');
+        throw Exception(tr('Контрольная сумма не совпала — обновление отменено'));
       }
     } finally {
       client.close();
@@ -302,17 +303,14 @@ class AppUpdater {
       if (!await AndroidSystem.canInstallApk()) {
         await AndroidSystem.openInstallSettings();
         throw Exception(
-            'Разрешите Nexus устанавливать приложения и нажмите «Установить» ещё раз');
+            tr('Разрешите Nexus устанавливать приложения и нажмите «Установить» ещё раз'));
       }
       if (!await AndroidSystem.apkSameSigner(file.path)) {
         throw Exception(
-            'Эта версия подписана другим ключом, и Android не поставит её '
-            'поверх текущей. Скопируйте подписки (Откатить версию → '
-            'Скопировать подписки), удалите Nexus и установите новую версию '
-            'со страницы релиза. Дальше обновления пойдут как обычно.');
+            tr('Эта версия подписана другим ключом, и Android не поставит её поверх текущей. Скопируйте подписки (Откатить версию → Скопировать подписки), удалите Nexus и установите новую версию со страницы релиза. Дальше обновления пойдут как обычно.'));
       }
       if (!await AndroidSystem.installApk(file.path)) {
-        throw Exception('Не удалось открыть установщик');
+        throw Exception(tr('Не удалось открыть установщик'));
       }
       return;
     }
@@ -341,7 +339,7 @@ class AppUpdater {
           f.name.startsWith('/') ||
           f.name.startsWith('\\') ||
           parts.any((p) => p == '..')) {
-        throw Exception('Подозрительный путь в архиве обновления');
+        throw Exception(tr('Подозрительный путь в архиве обновления'));
       }
       final out = '${stage.path}\\${parts.where((p) => p.isNotEmpty).join('\\')}';
       if (f.isFile) {

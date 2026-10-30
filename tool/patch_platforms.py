@@ -55,6 +55,25 @@ def android():
          r'            </intent-filter>'),
         # FileProvider для установки скачанных обновлений.
         (re.compile(r"(\s*)</application>"),
+         r'\1    <receiver\n'
+         r'            android:name=".NexusWidget"\n'
+         r'            android:exported="true"\n'
+         r'            android:label="Nexus">\n'
+         r'            <intent-filter>\n'
+         r'                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n'
+         r'            </intent-filter>\n'
+         r'            <meta-data\n'
+         r'                android:name="android.appwidget.provider"\n'
+         r'                android:resource="@xml/nexus_widget_info" />\n'
+         r'        </receiver>'
+         r'\1    <receiver android:name=".NexusAlarmReceiver" android:exported="false" />'
+         r'\1    <receiver\n'
+         r'            android:name=".NexusBootReceiver"\n'
+         r'            android:exported="true">\n'
+         r'            <intent-filter>\n'
+         r'                <action android:name="android.intent.action.BOOT_COMPLETED" />\n'
+         r'            </intent-filter>\n'
+         r'        </receiver>'
          r'\1    <service\n'
          r'            android:name=".NexusTileService"\n'
          r'            android:exported="true"\n'
@@ -90,6 +109,7 @@ def android():
          r'\1<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />'
          r'\1<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />'
          r'\1<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
+         r'\1<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
          # Внутреннее разрешение: статус VPN могут присылать только
          # процессы самого Nexus (см. tool/patch_plugin.py).
          r'\1<permission android:name="${applicationId}.permission.NEXUS_INTERNAL" android:protectionLevel="signature" />'
@@ -165,6 +185,57 @@ if (keystorePropertiesFile.exists()) {
         '    <path android:fillColor="#FFFFFFFF"\n'
         '        android:pathData="M20,4m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0" />\n'
         '</vector>\n',
+        encoding="utf-8")
+
+    # Виджет на рабочий стол.
+    lay_dir = ROOT / "android/app/src/main/res/layout"
+    lay_dir.mkdir(parents=True, exist_ok=True)
+    (lay_dir / "nexus_widget.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    android:id="@+id/nexus_widget_root"\n'
+        '    android:layout_width="match_parent" android:layout_height="match_parent"\n'
+        '    android:orientation="horizontal" android:gravity="center_vertical"\n'
+        '    android:padding="12dp" android:background="@drawable/nexus_widget_bg">\n'
+        '    <ImageView android:id="@+id/nexus_widget_icon"\n'
+        '        android:layout_width="38dp" android:layout_height="38dp"\n'
+        '        android:padding="9dp" android:src="@drawable/ic_nexus_tile"\n'
+        '        android:background="@drawable/nexus_widget_dot_off" />\n'
+        '    <LinearLayout android:layout_width="0dp" android:layout_weight="1"\n'
+        '        android:layout_height="wrap_content" android:orientation="vertical"\n'
+        '        android:layout_marginStart="12dp">\n'
+        '        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"\n'
+        '            android:text="Nexus" android:textColor="#FFECECF1"\n'
+        '            android:textSize="15sp" android:textStyle="bold" />\n'
+        '        <TextView android:id="@+id/nexus_widget_state"\n'
+        '            android:layout_width="wrap_content" android:layout_height="wrap_content"\n'
+        '            android:text="Отключено" android:textColor="#FF9C9CAD" android:textSize="12sp" />\n'
+        '    </LinearLayout>\n'
+        '</LinearLayout>\n',
+        encoding="utf-8")
+    def shape(name, body):
+        (dr_dir / name).write_text(
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<shape xmlns:android="http://schemas.android.com/apk/res/android" ' + body + '</shape>\n',
+            encoding="utf-8")
+    shape("nexus_widget_bg.xml",
+          'android:shape="rectangle">\n    <solid android:color="#F215151C" />\n'
+          '    <corners android:radius="22dp" />\n'
+          '    <stroke android:width="1dp" android:color="#22FFFFFF" />\n')
+    shape("nexus_widget_dot_off.xml",
+          'android:shape="oval">\n    <solid android:color="#33FFFFFF" />\n')
+    shape("nexus_widget_dot_on.xml",
+          'android:shape="oval">\n    <solid android:color="#FF8B7CF6" />\n')
+    (xml_dir / "nexus_widget_info.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    android:minWidth="140dp" android:minHeight="50dp"\n'
+        '    android:targetCellWidth="2" android:targetCellHeight="1"\n'
+        '    android:updatePeriodMillis="1800000"\n'
+        '    android:initialLayout="@layout/nexus_widget"\n'
+        '    android:previewLayout="@layout/nexus_widget"\n'
+        '    android:resizeMode="horizontal"\n'
+        '    android:widgetCategory="home_screen" />\n',
         encoding="utf-8")
 
     # Ни облачная копия, ни перенос на новый телефон не забирают данные
