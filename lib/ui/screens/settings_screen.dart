@@ -905,7 +905,7 @@ class SettingsScreen extends StatelessWidget {
                           Text(
                               app.appUpdate != null
                                   ? tr('Доступна {0}', [app.appUpdate!.version])
-                                  : tr('Версия {0}', [appVersion]),
+                                  : tr('Версия {0}', [appVersionLabel]),
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14.5)),
@@ -1063,7 +1063,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 const NexusLogo(size: 30),
                 const SizedBox(height: 14),
-                _InfoRow(tr('Версия'), appVersion),
+                _InfoRow(tr('Версия'), appVersionLabel),
                 _InfoRow(tr('Ядро'), app.coreVersion),
                 _InfoRow(tr('Платформа'), app.isDesktop ? 'Windows' : 'Android'),
                 const SizedBox(height: 14),

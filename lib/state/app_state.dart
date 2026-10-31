@@ -6,7 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../changelog.dart' show appVersion;
+import '../changelog.dart' show appVersion, appVersionLabel;
 import '../core/vpn_core.dart';
 import '../services/app_updater.dart';
 import '../services/backup.dart';
@@ -1370,7 +1370,7 @@ class AppState extends ChangeNotifier {
     final st = settings;
     final s = selected;
     final b = StringBuffer()
-      ..writeln('Nexus $appVersion · ${isDesktop ? 'Windows' : 'Android'} '
+      ..writeln('Nexus $appVersionLabel · ${isDesktop ? 'Windows' : 'Android'} '
           '${Platform.operatingSystemVersion}')
       ..writeln('Xray: $coreVersion')
       ..writeln('Время: ${d(DateTime.now())}')
@@ -1398,7 +1398,8 @@ class AppState extends ChangeNotifier {
       b.writeln('  · ${x.title} (${Uri.tryParse(x.url)?.host ?? '?'}): '
           'серверов ${serversOf(x.id).length}, '
           'трафик ${x.used ~/ (1 << 20)}/${x.total == 0 ? '∞' : x.total ~/ (1 << 20)} МБ, '
-          'до ${d(x.expire)}, обновлена ${d(x.updatedAt)}');
+          'до ${d(x.expire)}, обновлена ${d(x.updatedAt)}'
+          '${x.error == null ? '' : ' · не обновляется: ${x.error}'}');
     }
     if (lastDiagnostics != null) {
       b
@@ -1542,8 +1543,10 @@ class AppState extends ChangeNotifier {
                 ? byName.first.id
                 : res.servers.first.id;
       }
+      sub.error = null;
       _save();
     } catch (e) {
+      sub.error = _msg(e);
       if (!silent) lastError = tr('Обновление «{0}»: {1}', [sub.title, _msg(e)]);
     } finally {
       refreshing.remove(sub.id);

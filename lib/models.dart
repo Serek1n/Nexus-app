@@ -283,6 +283,9 @@ class Subscription {
   /// profile-update-interval от панели; null — по умолчанию.
   int? updateHours;
 
+  /// Почему не удалось последнее обновление (не сохраняется).
+  String? error;
+
   int get used => upload + download;
 
   Map<String, dynamic> toJson() => {

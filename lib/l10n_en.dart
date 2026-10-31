@@ -367,6 +367,8 @@ const kEn = <String, String>{
       'No supported links found',
   'Не найдено ядро {0} рядом с программой. Переустановите Nexus из архива целиком.':
       'Core {0} not found next to the program. Reinstall Nexus from the full archive.',
+  'Не обновляется':
+      'Not updating',
   'Не подключено':
       'Not connected',
   'Не удалось загрузить ни одну подписку':

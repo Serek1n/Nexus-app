@@ -27,6 +27,8 @@ env:
   # Куда ведёт кнопка «Продлить», если панель не прислала свою ссылку
   # (например, приглашение в Discord-бота). Переменная репозитория RENEW_URL.
   RENEW_URL: ${{ vars.RENEW_URL }}
+  # Сборки из ветки beta подписываются в приложении как «beta».
+  APP_CHANNEL: ${{ github.ref_name == 'beta' && 'beta' || 'stable' }}
 
 jobs:
   check:
@@ -286,7 +288,7 @@ jobs:
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           echo "VER=$VER" >> $GITHUB_ENV
-          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL"
+          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL"
           flutter build apk $COMMON --split-per-abi 2>&1 | tee -a ci.log
           flutter build apk $COMMON 2>&1 | tee -a ci.log
           mkdir -p dist
@@ -370,7 +372,7 @@ jobs:
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           flutter build windows --release --obfuscate --split-debug-info=build/symbols \
             --build-name=$VER --build-number=$BUILD \
-            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL
 
       - name: Ядро Xray и гео-базы
         shell: pwsh

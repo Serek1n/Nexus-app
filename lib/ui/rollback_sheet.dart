@@ -115,7 +115,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
           child: Text(
             android
                 ? tr('Android не даёт поставить старую версию поверх новой. Скопируйте подписки, удалите Nexus, скачайте нужную версию со страницы релиза и вставьте подписки обратно.')
-                : tr('Сейчас установлена {0}. Выберите версию, которая работала хорошо.', [appVersion]),
+                : tr('Сейчас установлена {0}. Выберите версию, которая работала хорошо.', [appVersionLabel]),
             style: const TextStyle(color: NX.text2, fontSize: 13, height: 1.4),
           ),
         ),

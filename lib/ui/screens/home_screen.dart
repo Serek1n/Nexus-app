@@ -277,7 +277,7 @@ class _UpdateCard extends StatelessWidget {
     final app = AppScope.of(context);
     final u = app.appUpdate!;
     final newApp = u.version.replaceFirst(RegExp(r'^Nexus\s*'), '').trim();
-    final appChanged = newApp.isNotEmpty && newApp != appVersion;
+    final appChanged = newApp.isNotEmpty && newApp != appVersionLabel;
     // На Windows ядро обновляется отдельно, в релизе важна только версия Nexus.
     final xrayChanged = !app.isDesktop &&
         u.xray.isNotEmpty &&

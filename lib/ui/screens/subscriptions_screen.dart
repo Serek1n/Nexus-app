@@ -141,6 +141,14 @@ class _SubCard extends StatelessWidget {
                         '${count} ${plural(count, tr('сервер'), tr('сервера'), tr('серверов'))} · ${_ago(sub.updatedAt)}',
                         style:
                             const TextStyle(color: NX.text2, fontSize: 12.5)),
+                    if (sub.error != null) ...[
+                      const SizedBox(height: 6),
+                      Tooltip(
+                        message: sub.error!,
+                        child: Tag(tr('Не обновляется'),
+                            color: NX.red),
+                      ),
+                    ],
                     if (sub.url.startsWith('http://')) ...[
                       const SizedBox(height: 6),
                       Tooltip(

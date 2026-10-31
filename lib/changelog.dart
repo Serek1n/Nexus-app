@@ -7,6 +7,14 @@ import 'ui/theme.dart';
 /// Текущая версия приложения (передаётся сборкой).
 const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.2.0');
 
+/// Сборка из ветки beta (передаётся сборкой).
+const isBetaBuild = String.fromEnvironment('APP_CHANNEL') == 'beta';
+
+/// Версия для показа: «2.2.0» у релиза, «2.2.0 beta 133» у беты.
+const appVersionLabel = isBetaBuild
+    ? '$appVersion beta ${const int.fromEnvironment('APP_BUILD')}'
+    : appVersion;
+
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
@@ -15,6 +23,7 @@ const changelog = <(String, List<String>)>[
     'Проверка связи: найдёт, что именно не работает',
     'Выбор DNS: Cloudflare, Google, Quad9 или AdGuard без рекламы',
     'Избранные серверы на главной — переключение одним касанием',
+    'Подписка, которая не обновляется, отмечена — с причиной в подсказке',
   ]),
   ('2.1.0', [
     'Первый запуск: подсказки по шагам',
@@ -184,6 +193,7 @@ const changelogEn = <String, List<String>>{
     "Connection check: finds exactly what's broken",
     'DNS choice: Cloudflare, Google, Quad9 or ad-free AdGuard',
     'Favorite servers on the home screen — switch with one tap',
+    'A subscription that fails to update is marked, with the reason in a tooltip',
   ],
   '2.1.0': [
     'First launch: step-by-step tips',

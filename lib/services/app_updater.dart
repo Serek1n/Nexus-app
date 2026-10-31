@@ -172,11 +172,13 @@ class AppUpdater {
     final build = _buildOf(j);
     final xray = RegExp(r'xray:[ \t]*([\d.]+)').firstMatch(body)?.group(1) ?? '';
     // Из названия релиза оставляем только «Nexus 1.7.1» — без версии Xray.
-    final version = (j['name'] ?? j['tag_name'] ?? '')
+    final name = (j['name'] ?? j['tag_name'] ?? '')
         .toString()
         .split(' · ')
         .first
         .trim();
+    // Пробная сборка подписывается как «2.2.0 beta 133».
+    final version = j['prerelease'] == true ? '$name beta $build' : name;
 
     final assets = <String, String>{};
     for (final a in (j['assets'] as List? ?? [])) {
