@@ -463,7 +463,14 @@ class WindowsCore extends VpnCore {
         'desc': 'Nexus',
         'mtu': 1500,
         'gateway': ['172.19.0.1/30'],
-        'dns': ['1.1.1.1'],
+        // DNS для программ — обычный адрес выбранного сервиса.
+        'dns': [
+          ((cfg['dns'] as Map?)?['servers'] as List?)
+                  ?.whereType<String>()
+                  .where((e) => !e.contains('://'))
+                  .firstOrNull ??
+              '1.1.1.1'
+        ],
         'autoSystemRoutingTable': ['0.0.0.0/0'],
         'autoSystemWfpBlockLeak': ['dns', 'misconfigtun'],
       },

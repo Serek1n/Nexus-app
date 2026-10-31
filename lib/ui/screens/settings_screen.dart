@@ -13,6 +13,7 @@ import '../../services/config_builder.dart';
 import '../../services/traffic_log.dart';
 import '../app_scope.dart';
 import '../backup_sheet.dart';
+import 'diagnostics_screen.dart';
 import 'traffic_screen.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -341,6 +342,44 @@ class SettingsScreen extends StatelessWidget {
                 app.updateSettings((s) => s.blockAds = v);
                 await app.reconnectIfActive();
               },
+            ),
+          ),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.dns_rounded, color: NX.violet, size: 21),
+                  const SizedBox(width: 14),
+                  Text(tr('DNS'),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14.5)),
+                ]),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(left: 35),
+                  child: Text(
+                      tr('Запросы зашифрованы и идут через сервер. AdGuard дополнительно отсекает рекламу на уровне DNS'),
+                      style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(left: 35),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final e in kDnsProviders.entries)
+                      ChoiceChip(
+                        label: Text(e.value.name),
+                        selected: st.dns == e.key,
+                        onSelected: (_) async {
+                          if (st.dns == e.key) return;
+                          app.updateSettings((s) => s.dns = e.key);
+                          await app.reconnectIfActive();
+                        },
+                      ),
+                  ]),
+                ),
+              ],
             ),
           ),
           if (app.isDesktop)
@@ -972,6 +1011,14 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 4, 10, 4),
             child: Column(
               children: [
+                _NavRow(
+                  icon: Icons.network_check_rounded,
+                  title: tr('Проверка связи'),
+                  subtitle: tr('Найдёт, что не работает: интернет, сервер, сайты через VPN'),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const DiagnosticsScreen())),
+                ),
+                const Divider(height: 6),
                 _NavRow(
                   icon: Icons.bar_chart_rounded,
                   title: tr('Статистика трафика'),

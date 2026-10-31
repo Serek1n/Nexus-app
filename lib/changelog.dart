@@ -5,11 +5,17 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.1.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.2.0');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.2.0', [
+    'Android: «Постоянная VPN» больше не оставляет без интернета',
+    'Проверка связи: найдёт, что именно не работает',
+    'Выбор DNS: Cloudflare, Google, Quad9 или AdGuard без рекламы',
+    'Избранные серверы на главной — переключение одним касанием',
+  ]),
   ('2.1.0', [
     'Первый запуск: подсказки по шагам',
     'VPN сам включается в чужих сетях Wi-Fi',
@@ -173,6 +179,12 @@ const changelog = <(String, List<String>)>[
 
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
+  '2.2.0': [
+    'Android: "Always-on VPN" no longer leaves you without internet',
+    "Connection check: finds exactly what's broken",
+    'DNS choice: Cloudflare, Google, Quad9 or ad-free AdGuard',
+    'Favorite servers on the home screen — switch with one tap',
+  ],
   '2.1.0': [
     'First launch: step-by-step tips',
     'VPN turns on by itself in unknown Wi-Fi networks',

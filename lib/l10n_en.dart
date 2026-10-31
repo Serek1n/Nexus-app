@@ -9,12 +9,16 @@ const kEn = <String, String>{
       ' · {0} not responding',
   ' · от {0} мс':
       ' · from {0} ms',
+  ' — трафик идёт мимо VPN':
+      ' — traffic bypasses the VPN',
   'Android любит экономить батарею и останавливать приложения в фоне. Разрешите Nexus работать без ограничений и показывать уведомление о подключении.':
       'Android likes to save battery by stopping apps in the background. Let Nexus run without restrictions and show the connection notification.',
   'Android может отключать VPN в фоне — разрешите Nexus работать без ограничений':
       'Android may stop the VPN in the background — let Nexus run without restrictions',
   'Android не даёт поставить старую версию поверх новой. Скопируйте подписки, удалите Nexus, скачайте нужную версию со страницы релиза и вставьте подписки обратно.':
       'Android won\'t install an older version over a newer one. Copy your subscriptions, uninstall Nexus, download the version you need from the release page and paste the subscriptions back.',
+  'DNS':
+      'DNS',
   'GitHub ответил {0}':
       'GitHub responded {0}',
   'GitHub ответил {0} на {1}':
@@ -25,6 +29,8 @@ const kEn = <String, String>{
       'HTTP · locked',
   'IP выхода: {0}{1}':
       'Exit IP: {0}{1}',
+  'IP для сайтов':
+      'IP seen by websites',
   'Nexus · Авто':
       'Nexus · Auto',
   'Nexus сам держит соединение через самый быстрый сервер подписки и незаметно переходит на другой, если этот упал':
@@ -43,6 +49,8 @@ const kEn = <String, String>{
       'A VPN was turned on in another app — Nexus disconnected. Tap “Connect” to get it back',
   'VPN оборвался — интернет заблокирован, чтобы ничего не ушло мимо':
       'The VPN dropped — internet is blocked so nothing leaks around it',
+  'VPN подключён, но сайты не открываются — переподключитесь или выберите другой сервер.':
+      'The VPN is connected but websites don\'t open — reconnect or pick another server.',
   'VPN, который думает за вас':
       'A VPN that thinks for you',
   'Windows не дал прав администратора — TUN не включён':
@@ -63,14 +71,24 @@ const kEn = <String, String>{
       '{0} min',
   '{0} мс':
       '{0} ms',
+  '{0} недоступен — возможно, его блокирует провайдер':
+      '{0} is unreachable — your ISP may be blocking it',
   '{0} пропущена после отката':
       '{0} skipped after rollback',
+  '{0} работает по UDP — проверяется подключением':
+      '{0} uses UDP — checked by connecting',
   '{0} с':
       '{0} s',
   '{0} ч {1} мин':
       '{0} h {1} min',
+  '{0} через VPN':
+      '{0} via VPN',
   '{0}/с':
       '{0}/s',
+  '{0}:{1} · порт открыт · {2}':
+      '{0}:{1} · port open · {2}',
+  '{0}:{1} не отвечает — сервер выключен или заблокирован':
+      '{0}:{1} doesn\'t respond — the server is down or blocked',
   '«{0}» и все её серверы будут удалены.':
       '“{0}” and all its servers will be removed.',
   '«{0}» не отвечает — переключаюсь на «{1}»':
@@ -173,6 +191,8 @@ const kEn = <String, String>{
       'Paste link',
   'Вставьте ссылку из бота NEXUS':
       'Paste the link from the NEXUS bot',
+  'Всё работает.':
+      'Everything works.',
   'Выберите программы, которые всегда идут через VPN или напрямую':
       'Choose programs that always go via the VPN or directly',
   'Выберите сайты, которые всегда идут через VPN или напрямую':
@@ -187,6 +207,8 @@ const kEn = <String, String>{
       'Geo database {0} failed verification and was skipped',
   'Главная':
       'Home',
+  'Госуслуги не открываются':
+      'Gosuslugi doesn\'t open',
   'Готовлю {0}…':
       'Preparing {0}…',
   'Готово':
@@ -263,6 +285,8 @@ const kEn = <String, String>{
       'Close',
   'Запрет скриншотов и размытие в списке недавних приложений':
       'Blocks screenshots and blurs the app in recent apps',
+  'Запросы зашифрованы и идут через сервер. AdGuard дополнительно отсекает рекламу на уровне DNS':
+      'Queries are encrypted and go through the server. AdGuard also blocks ads at the DNS level',
   'Запуск':
       'Startup',
   'Запуск ядра: {0}':
@@ -277,6 +301,10 @@ const kEn = <String, String>{
       'Favorites',
   'Измените запрос поиска':
       'Change your search',
+  'Интернет':
+      'Internet',
+  'Интернет есть, но имена сайтов не находятся — переподключите Wi-Fi или перезагрузите роутер.':
+      'There\'s internet, but site names don\'t resolve — reconnect Wi-Fi or restart the router.',
   'Использовано {0}% трафика подписки':
       '{0}% of subscription traffic used',
   'Истекла':
@@ -323,6 +351,8 @@ const kEn = <String, String>{
       'Subscription name',
   'Название сервера':
       'Server name',
+  'Найдёт, что не работает: интернет, сервер, сайты через VPN':
+      'Finds what\'s broken: internet, server, sites via VPN',
   'Напрямую автоматически':
       'Direct automatically',
   'Настройки':
@@ -367,6 +397,8 @@ const kEn = <String, String>{
       'Wrong password',
   'Незнакомая сеть Wi-Fi «{0}» — включаю VPN':
       'Unknown Wi-Fi “{0}” — turning on the VPN',
+  'Нет интернета даже без VPN — проверьте Wi-Fi или мобильные данные.':
+      'No internet even without the VPN — check Wi-Fi or mobile data.',
   'Нет контрольной суммы для {0}':
       'No checksum for {0}',
   'Нет подписок':
@@ -547,6 +579,8 @@ const kEn = <String, String>{
       'Apps without VPN',
   'Проверить':
       'Check',
+  'Проверить ещё раз':
+      'Check again',
   'Проверить задержку':
       'Test latency',
   'Проверить задержку группы':
@@ -555,6 +589,8 @@ const kEn = <String, String>{
       'Check “{0}” ({1}): {2}{3}',
   'Проверка канала: «{0}» не ответил':
       'Connection check: “{0}” didn\'t respond',
+  'Проверка связи':
+      'Connection check',
   'Проверка: {0} из {1}':
       'Checking: {0} of {1}',
   'Проверять обновления':
@@ -607,6 +643,8 @@ const kEn = <String, String>{
       'Auto mode: traffic flows, latency {0} ms',
   'Резервная копия':
       'Backup',
+  'Результат проверки попадает в «Отчёт для поддержки».':
+      'The result is included in the "Support report".',
   'Рекламные сети и трекеры не загружаются — страницы открываются быстрее, меньше трафика. Если сайт сломался, добавьте его в «Свои правила»':
       'Ad networks and trackers don\'t load — pages open faster and use less traffic. If a site breaks, add it to “Custom rules”',
   'Релиз не подписан — пропущен':
@@ -615,12 +653,18 @@ const kEn = <String, String>{
       'Releases unavailable — the repository is private or empty',
   'Российские приложения напрямую':
       'Russian apps direct',
+  'Российские сайты напрямую':
+      'Russian sites directly',
   'Российские сайты, IP и приложения (Госуслуги, банки, VK, Яндекс) работают напрямую, без VPN; остальное — через Nexus':
       'Russian sites, IPs and apps (Gosuslugi, banks, VK, Yandex) work directly without the VPN; everything else goes through Nexus',
   'Российские — напрямую':
       'Russian — direct',
   'Сайты видят ваш российский IP — трафик идёт мимо VPN. Нажмите, чтобы переподключиться':
       'Sites see your Russian IP — traffic is bypassing the VPN. Tap to reconnect',
+  'Сайты видят российский IP — трафик идёт мимо VPN. Переподключитесь или выберите другой сервер.':
+      'Websites see a Russian IP — traffic bypasses the VPN. Reconnect or pick another server.',
+  'Сайты через VPN':
+      'Sites via VPN',
   'Самый быстрый':
       'Fastest',
   'Самый быстрый из {0}{1}':
@@ -659,8 +703,12 @@ const kEn = <String, String>{
       'Server',
   'Сервер «{0}»':
       'Server “{0}”',
+  'Сервер не отвечает — выберите другой сервер или включите «Обход блокировок».':
+      'The server doesn\'t respond — pick another server or turn on "Bypass blocking".',
   'Сервер ответил кодом {0}':
       'Server responded with code {0}',
+  'Сервер подписки':
+      'Subscription server',
   'Сервер подписки не ответил вовремя':
       'The subscription server didn\'t respond in time',
   'Сервер подписки недоступен — проверьте интернет или подключитесь к VPN':
@@ -777,6 +825,8 @@ const kEn = <String, String>{
       'Install update',
   'Установлена последняя версия':
       'The latest version is installed',
+  'Часть сайтов не открывается через этот сервер — попробуйте другой.':
+      'Some sites don\'t open through this server — try another one.',
   'Через Nexus идут все программы: Telegram, игры, всё, что не смотрит на прокси':
       'All programs go through Nexus: Telegram, games, everything that ignores the proxy',
   'Через VPN: {0} · напрямую: {1}':
@@ -839,6 +889,8 @@ const kEn = <String, String>{
       'not updated yet',
   'или вручную':
       'or manually',
+  'имена сайтов не находятся':
+      'site names don\'t resolve',
   'июль':
       'July',
   'июнь':
@@ -861,14 +913,20 @@ const kEn = <String, String>{
       'minutes',
   'не найдено':
       'not found',
+  'не открывается':
+      'doesn\'t open',
   'не подключено':
       'not connected',
+  'не удалось узнать':
+      'couldn\'t find out',
   'нет':
       'none',
   'нет связи':
       'no connection',
   'нет сервисов Google Play':
       'no Google Play services',
+  'нет соединения — проверьте Wi-Fi или мобильные данные':
+      'no connection — check Wi-Fi or mobile data',
   'ноябрь':
       'November',
   'октябрь':
@@ -879,6 +937,8 @@ const kEn = <String, String>{
       'connecting…',
   'подключено':
       'connected',
+  'подключитесь, чтобы проверить':
+      'connect to check',
   'подписку':
       'subscription',
   'сентябрь':

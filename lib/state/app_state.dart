@@ -791,6 +791,7 @@ class AppState extends ChangeNotifier {
         socksAccount: socksAccount,
         appsProxy: settings.appsProxy,
         appsDirect: settings.appsDirect,
+        dns: settings.dns,
       );
 
   /// Серверы для режима «Авто»: подписка выбранного сервера (или все
@@ -923,6 +924,7 @@ class AppState extends ChangeNotifier {
         socksAccount: socksAccount,
         appsProxy: settings.appsProxy,
         appsDirect: settings.appsDirect,
+        dns: settings.dns,
       );
 
   Future<void> toggle() async {
@@ -1355,6 +1357,9 @@ class AppState extends ChangeNotifier {
 
   // ───────────────────────── отчёт для поддержки ─────────────────────────
 
+  /// Результат последней «Проверки связи» — попадает в отчёт.
+  String? lastDiagnostics;
+
   /// Сведения о приложении и соединении без ключей и токенов —
   /// чтобы клиент мог отправить их в поддержку одним сообщением.
   Future<String> supportReport() async {
@@ -1394,6 +1399,11 @@ class AppState extends ChangeNotifier {
           'серверов ${serversOf(x.id).length}, '
           'трафик ${x.used ~/ (1 << 20)}/${x.total == 0 ? '∞' : x.total ~/ (1 << 20)} МБ, '
           'до ${d(x.expire)}, обновлена ${d(x.updatedAt)}');
+    }
+    if (lastDiagnostics != null) {
+      b
+        ..writeln('— проверка связи —')
+        ..writeln(lastDiagnostics);
     }
     final logs = await core.fetchLogs();
     b.writeln('— журнал (последние строки) —');

@@ -86,6 +86,58 @@ def patch_stop(base: pathlib.Path) -> int:
     return n
 
 
+ALWAYS_OLD = """    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent == null) {"""
+ALWAYS_NEW = """    public int onStartCommand(Intent intent, int flags, int startId) {
+        // Nexus: «Постоянная VPN» Android запускает службу сама — без команды
+        // и конфига. Раньше служба тут же останавливалась, и с «Блокировать
+        // соединения без VPN» телефон оставался без интернета. Берём
+        // последний конфиг Nexus (зашифрован ключом устройства).
+        if (intent == null || intent.getSerializableExtra("COMMAND") == null) {
+            try {
+                Class<?> nx = Class.forName(getPackageName() + ".NexusTile");
+                String saved = (String) nx.getMethod("alwaysOnConfig", android.content.Context.class)
+                        .invoke(null, this);
+                if (saved != null) {
+                    JSONObject j = new JSONObject(saved);
+                    java.util.ArrayList<String> blocked = new java.util.ArrayList<>();
+                    JSONArray arr = j.optJSONArray("blocked");
+                    if (arr != null) for (int i = 0; i < arr.length(); i++) blocked.add(arr.getString(i));
+                    AppConfigs.V2RAY_CONNECTION_MODE = AppConfigs.V2RAY_CONNECTION_MODES.VPN_TUN;
+                    AppConfigs.APPLICATION_ICON = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
+                    AppConfigs.APPLICATION_NAME = "Nexus";
+                    if (AppConfigs.NOTIFICATION_DISCONNECT_BUTTON_NAME == null) {
+                        AppConfigs.NOTIFICATION_DISCONNECT_BUTTON_NAME = "ОТКЛЮЧИТЬ";
+                    }
+                    V2rayConfig cfg = Utilities.parseV2rayJsonFile(j.optString("remark", "Nexus"),
+                            j.getString("config"), blocked.isEmpty() ? null : blocked, null);
+                    if (cfg != null) {
+                        intent = new Intent(this, V2rayVPNService.class);
+                        intent.putExtra("COMMAND", AppConfigs.V2RAY_SERVICE_COMMANDS.START_SERVICE);
+                        intent.putExtra("V2RAY_CONFIG", cfg);
+                        nx.getMethod("markStarted", android.content.Context.class).invoke(null, this);
+                        Log.i("V2rayVPNService", "Nexus: started by always-on VPN with saved config");
+                    }
+                }
+            } catch (Throwable t) {
+                Log.w("V2rayVPNService", "Nexus: no saved config for always-on VPN", t);
+            }
+        }
+        if (intent == null) {"""
+
+
+def patch_always_on(base: pathlib.Path) -> bool:
+    f = base / 'v2ray/services/V2rayVPNService.java'
+    src = f.read_text(encoding='utf-8')
+    if 'Nexus: «Постоянная VPN»' in src:
+        return True
+    if ALWAYS_OLD not in src:
+        return False
+    f.write_text(src.replace(ALWAYS_OLD, ALWAYS_NEW, 1), encoding='utf-8')
+    print('V2rayVPNService.java: запуск постоянной VPN исправлен')
+    return True
+
+
 def main() -> int:
     base = plugin_dir() / 'android/src/main/java/dev/amirzr/flutter_v2ray_client'
     total = 0
@@ -105,6 +157,9 @@ def main() -> int:
         return 1
     if patch_stop(base) < 3:
         print('Не удалось исправить остановку службы VPN — плагин изменился')
+        return 1
+    if not patch_always_on(base):
+        print('Не удалось исправить запуск постоянной VPN — плагин изменился')
         return 1
     return 0
 

@@ -162,7 +162,13 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         if (sel != null)
-          _ServerRow(onTap: onOpenServers)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ServerRow(onTap: onOpenServers),
+              const _FavoritesStrip(),
+            ],
+          )
         else
           NeonCard(
             onTap: () => showAddSheet(context),
@@ -768,6 +774,69 @@ class _ServerRow extends StatelessWidget {
           ),
           const Icon(Icons.chevron_right_rounded, color: NX.text3),
         ],
+      ),
+    );
+  }
+}
+
+/// Избранные серверы — переключение одним касанием прямо с главной.
+class _FavoritesStrip extends StatelessWidget {
+  const _FavoritesStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    if (app.settings.autoMode) return const SizedBox.shrink();
+    final favs = app.servers
+        .where((x) => app.isFavorite(x) && x.id != app.selectedId)
+        .take(8)
+        .toList();
+    if (favs.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: SizedBox(
+        height: 44,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: favs.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final x = favs[i];
+            return Material(
+              color: NX.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: NX.stroke),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  app.select(x);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    ServerAvatar(server: x, size: 30),
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(x.cleanName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                    if (x.ping != null) ...[
+                      const SizedBox(width: 8),
+                      PingBadge(ping: x.ping),
+                    ],
+                  ]),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

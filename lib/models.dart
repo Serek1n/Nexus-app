@@ -353,6 +353,7 @@ class AppSettings {
     List<String>? appsProxy,
     this.wifiAuto = false,
     this.onboarded = false,
+    this.dns = 'cloudflare',
     this.betaUpdates = false,
     List<String>? trustedWifi,
     List<String>? appsDirect,
@@ -444,6 +445,9 @@ class AppSettings {
   /// Экран первого запуска пройден или пропущен.
   bool onboarded;
 
+  /// DNS: cloudflare, google, quad9 или adguard (с блокировкой рекламы).
+  String dns;
+
   /// Получать бета-версии (пробные сборки) раньше остальных.
   bool betaUpdates;
   List<String> trustedWifi;
@@ -501,6 +505,7 @@ class AppSettings {
         'appsDirect': appsDirect,
         'wifiAuto': wifiAuto,
         'onboarded': onboarded,
+        'dns': dns,
         'betaUpdates': betaUpdates,
         'trustedWifi': trustedWifi,
         'socksUser': socksUser,
@@ -547,6 +552,7 @@ class AppSettings {
         appsDirect: (j['appsDirect'] as List?)?.whereType<String>().toList(),
         wifiAuto: j['wifiAuto'] as bool? ?? false,
         onboarded: j['onboarded'] as bool? ?? false,
+        dns: j['dns'] as String? ?? 'cloudflare',
         betaUpdates: j['betaUpdates'] as bool? ?? false,
         trustedWifi: (j['trustedWifi'] as List?)?.whereType<String>().toList(),
         socksUser: j['socksUser'] as String? ?? '',

@@ -42,6 +42,7 @@ String buildXrayConfig(
   String? socksAccount,
   List<String> appsProxy = const [],
   List<String> appsDirect = const [],
+  String dns = 'cloudflare',
 }) {
   // WireGuard плагин не разбирает: берём общий каркас конфига от
   // любой ссылки и подставляем исходящий WireGuard.
@@ -173,11 +174,11 @@ String buildXrayConfig(
   // DNS-over-HTTPS: запросы Xray зашифрованы и идут через сервер —
   // провайдер не видит и не может подменить ответы. Адреса — IP, поэтому
   // отдельный DNS для начального подключения не нужен.
+  final d = kDnsProviders[dns] ?? kDnsProviders['cloudflare']!;
   cfg['dns'] = {
-    'servers': [
-      'https://1.1.1.1/dns-query',
-      'https://8.8.8.8/dns-query',
-    ],
+    // Сначала DNS-over-HTTPS; обычный адрес того же сервиса — запасной и
+    // для приложений внутри VPN (их запросы тоже идут через сервер).
+    'servers': ['https://${d.ip}/dns-query', d.ip],
     'queryStrategy': 'UseIPv4',
   };
 
@@ -362,6 +363,15 @@ Map<String, dynamic>? wireguardOutbound(String link) {
   };
 }
 
+/// DNS-сервисы: название и адрес (DoH по адресу — без отдельного DNS
+/// для начального подключения).
+const kDnsProviders = <String, ({String name, String ip})>{
+  'cloudflare': (name: 'Cloudflare', ip: '1.1.1.1'),
+  'google': (name: 'Google', ip: '8.8.8.8'),
+  'quad9': (name: 'Quad9', ip: '9.9.9.9'),
+  'adguard': (name: 'AdGuard', ip: '94.140.14.14'),
+};
+
 /// Режим «Авто»: несколько серверов в одном ядре. Xray сам раз в
 /// [probeInterval] проверяет каждый (observatory) и отправляет новые соединения через
 /// самый быстрый живой сервер (balancer leastPing). Упал сервер — трафик
@@ -382,6 +392,7 @@ String buildAutoConfig(
   String? socksAccount,
   List<String> appsProxy = const [],
   List<String> appsDirect = const [],
+  String dns = 'cloudflare',
 }) {
   Map<String, dynamic>? base;
   final proxies = <Map<String, dynamic>>[];
@@ -401,6 +412,7 @@ String buildAutoConfig(
         socksAccount: socksAccount,
         appsProxy: appsProxy,
         appsDirect: appsDirect,
+        dns: dns,
       )) as Map<String, dynamic>;
     } catch (_) {
       continue;

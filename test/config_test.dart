@@ -35,10 +35,13 @@ Map<String, dynamic> _out(Map<String, dynamic> c, String tag) =>
         .firstWhere((o) => o['tag'] == tag);
 
 void main() {
-  test('DNS — только зашифрованный (DoH)', () {
+  test('DNS: сначала зашифрованный (DoH), выбранный сервис', () {
     final dns = _cfg(_vless)['dns'] as Map;
-    expect(dns['servers'],
-        everyElement(startsWith('https://')));
+    expect((dns['servers'] as List).first, 'https://1.1.1.1/dns-query');
+    final ag = jsonDecode(buildXrayConfig(_vless,
+            routing: RoutingMode.smart, desktop: true, dns: 'adguard'))
+        as Map<String, dynamic>;
+    expect(ag['dns']['servers'], ['https://94.140.14.14/dns-query', '94.140.14.14']);
   });
 
   test('Нет sockopt.domainStrategy (иначе «нет связи» у серверов с доменом)', () {

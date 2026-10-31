@@ -169,6 +169,29 @@ object NexusTile {
         }
     }
 
+    /**
+     * Для «Постоянной VPN» Android: система сама запускает службу VPN (после
+     * перезагрузки, при обрыве) — без приложения и без конфига. Служба плагина
+     * (см. tool/patch_plugin.py) берёт отсюда последний конфиг режима VPN.
+     * null — конфига нет или последний режим был «только прокси».
+     */
+    @JvmStatic
+    fun alwaysOnConfig(ctx: Context): String? {
+        val enc = prefs(ctx).getString("cfg", null) ?: return null
+        return try {
+            val j = JSONObject(decrypt(enc))
+            if (!j.optBoolean("vpn", true)) null else j.toString()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Служба VPN поднялась сама (постоянная VPN) — плитка и виджет «вкл». */
+    @JvmStatic
+    fun markStarted(ctx: Context) {
+        prefs(ctx).edit().putBoolean("on", true).putBoolean("vpn", true).apply()
+    }
+
     fun clearConfig(ctx: Context) {
         prefs(ctx).edit().remove("cfg").apply()
     }
