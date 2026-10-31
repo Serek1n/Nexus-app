@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
 import '../models.dart';
+import 'config_builder.dart';
+import 'formats.dart';
 import '../l10n.dart';
 
 const supportedSchemes = [
@@ -18,6 +20,8 @@ const supportedSchemes = [
   'socks',
   'hysteria2',
   'hy2',
+  'wireguard',
+  'wg',
 ];
 
 String newId() {
@@ -54,6 +58,9 @@ String? tryBase64(String s) {
 /// (тело подписки в base64 или обычным списком, вставка из буфера).
 List<String> extractLinks(String raw) {
   var text = raw.trim();
+  // sing-box (JSON) и Clash / Mihomo (YAML) — переводим в обычные ссылки.
+  final converted = convertSubscription(text);
+  if (converted.isNotEmpty) return converted.toSet().toList();
   if (!text.contains('://')) {
     final decoded = tryBase64(text);
     if (decoded != null && decoded.contains('://')) text = decoded;
@@ -69,6 +76,22 @@ List<String> extractLinks(String raw) {
 
 /// Превращает ссылку в профиль. Возвращает null, если ссылку не удалось разобрать.
 ServerProfile? profileFromLink(String link, {String? subscriptionId}) {
+  if (isWireguardLink(link)) {
+    if (wireguardOutbound(link) == null) return null;
+    final u = Uri.tryParse(link.trim().replaceFirst(
+        RegExp(r'^wg://', caseSensitive: false), 'wireguard://'));
+    if (u == null) return null;
+    final frag = Uri.decodeComponent(u.fragment).trim();
+    return ServerProfile(
+      id: newId(),
+      link: link,
+      name: frag.isEmpty ? '${u.host}:${u.hasPort ? u.port : 51820}' : frag,
+      protocol: 'WireGuard',
+      host: u.host,
+      port: u.hasPort ? u.port : 51820,
+      subscriptionId: subscriptionId,
+    );
+  }
   try {
     final parsed = V2ray.parseFromURL(link);
     // Проверяем, что конфиг вообще собирается.

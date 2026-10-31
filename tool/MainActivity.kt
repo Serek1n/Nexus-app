@@ -159,6 +159,40 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "tileLabels" -> {
+                        val m = call.arguments as? Map<*, *>
+                        NexusTile.saveLabels(this, m?.get("onLabel") as? String, m?.get("offLabel") as? String)
+                        NexusTile.refreshViews(this)
+                        result.success(null)
+                    }
+
+                    "wifiInfo" -> {
+                        // Имя сети и адрес точки доступа: Android отдаёт их только
+                        // при разрешении на геолокацию, иначе «<unknown ssid>».
+                        val info = try {
+                            val wm = applicationContext.getSystemService(WIFI_SERVICE)
+                                as android.net.wifi.WifiManager
+                            @Suppress("DEPRECATION")
+                            val ci = wm.connectionInfo
+                            val s = ci?.ssid
+                            if (s == null || s == "<unknown ssid>" || s.isBlank()) null
+                            else mapOf("ssid" to s.trim('"'), "bssid" to ci.bssid)
+                        } catch (e: Exception) {
+                            null
+                        }
+                        result.success(info)
+                    }
+
+                    "requestLocation" -> {
+                        if (Build.VERSION.SDK_INT >= 23 &&
+                            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 7002)
+                        }
+                        result.success(null)
+                    }
+
                     "scheduleExpiry" -> {
                         NexusTile.scheduleExpiry(this, call.arguments as? String ?: "[]")
                         result.success(null)

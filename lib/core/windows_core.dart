@@ -40,6 +40,13 @@ class WindowsCore extends VpnCore {
 
   /// Порт API статистики выбирается случайно при каждом подключении.
   int _apiPort = kApiPort;
+  String _apiAuth = '';
+
+  /// «логин:пароль@» HTTP-прокси в режиме TUN, иначе пусто.
+  String _httpAuth = '';
+
+  @override
+  bool get httpLocked => _proc != null && _httpAuth.isNotEmpty;
 
   @override
   void setForeground(bool visible) => _foreground = visible;
@@ -51,7 +58,7 @@ class WindowsCore extends VpnCore {
 
   @override
   String? get activeProxy =>
-      _proc != null && !_blocked ? '127.0.0.1:$activeHttpPort' : null;
+      _proc != null && !_blocked ? '${_httpAuth}127.0.0.1:$activeHttpPort' : null;
 
   String get _exeDir => File(Platform.resolvedExecutable).parent.path;
 
@@ -115,12 +122,46 @@ class WindowsCore extends VpnCore {
       if (ib['tag'] == 'http-in') ib['port'] = _httpPort;
     }
     if (_tun) _addTun(cfg);
+    // В режиме TUN системный прокси не нужен: все программы и так идут
+    // через Nexus. Тогда HTTP-прокси закрываем случайным паролем (новым при
+    // каждом подключении) — им пользуется только сам Nexus для проверок.
+    _httpAuth = '';
+    if (_tun) {
+      final r = math.Random.secure();
+      String tok() => List.generate(
+          20, (_) => 'abcdefghijkmnpqrstuvwxyz23456789'[r.nextInt(32)]).join();
+      final u = tok(), p = tok();
+      for (final ib in (cfg['inbounds'] as List? ?? [])) {
+        if (ib is Map<String, dynamic> && ib['tag'] == 'http-in') {
+          ib['settings'] = {
+            'accounts': [
+              {'user': u, 'pass': p},
+            ],
+          };
+        }
+      }
+      _httpAuth = '$u:$p@';
+    }
     cfg['stats'] = <String, dynamic>{};
-    // Статистика по HTTP (/debug/vars) — без запуска отдельного процесса.
-    cfg['metrics'] = {
-      'tag': 'metrics',
-      'listen': '127.0.0.1:$_apiPort',
-    };
+    // Статистика по HTTP (/debug/vars) — через отдельный вход с паролем,
+    // новым при каждом подключении: другие программы её не прочитают.
+    final r = math.Random.secure();
+    String tok() => List.generate(
+        20, (_) => 'abcdefghijkmnpqrstuvwxyz23456789'[r.nextInt(32)]).join();
+    final user = tok(), pass = tok();
+    _apiAuth = '$user:$pass';
+    (cfg['inbounds'] as List).add({
+      'tag': 'nexus-api',
+      'listen': '127.0.0.1',
+      'port': _apiPort,
+      'protocol': 'http',
+      'settings': {
+        'accounts': [
+          {'user': user, 'pass': pass},
+        ],
+      },
+    });
+    addPrivateMetrics(cfg, 'nexus-api');
     cfg['policy'] = {
       'system': {
         'statsOutboundUplink': true,
@@ -359,28 +400,19 @@ class WindowsCore extends VpnCore {
     }
   }
 
-  final _http = HttpClient()
+  late final _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 1)
-    ..findProxy = (_) => 'DIRECT';
+    ..findProxy = (_) => 'PROXY $_apiAuth@127.0.0.1:$_apiPort';
 
   Future<(int, int)?> _queryStats() async {
     if (_blocked) return null;
     try {
       final req = await _http
-          .getUrl(Uri.parse('http://127.0.0.1:$_apiPort/debug/vars'));
+          .getUrl(Uri.parse('http://$kMetricsHost/debug/vars'));
       final res = await req.close().timeout(const Duration(seconds: 2));
       final body = await res.transform(utf8.decoder).join();
       final j = jsonDecode(body) as Map<String, dynamic>;
-      final obs = j['observatory'];
-      if (obs is Map) {
-        _autoStatus = {
-          for (final e in obs.entries)
-            if (e.value is Map)
-              '${e.key}': (e.value['alive'] == true)
-                  ? ((e.value['delay'] as num?)?.toInt() ?? -1)
-                  : -1,
-        };
-      }
+      _autoStatus = parseObservatory(j['observatory']);
       // Один сервер — исходящий «proxy», режим «Авто» — «nx-0», «nx-1»…
       final all = (j['stats']?['outbound'] as Map?) ?? const {};
       var up = 0, down = 0;
@@ -843,7 +875,7 @@ class WindowsCore extends VpnCore {
   @override
   Future<int> connectedDelay(ServerProfile server) async {
     try {
-      return await _warmDelay('127.0.0.1:$_httpPort',
+      return await _warmDelay('${_httpAuth}127.0.0.1:$_httpPort',
           timeout: const Duration(seconds: 8));
     } catch (_) {
       return -1;

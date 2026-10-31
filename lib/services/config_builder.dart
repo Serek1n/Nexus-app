@@ -39,10 +39,27 @@ String buildXrayConfig(
   List<String> customDirect = const [],
   bool blockAds = false,
   bool antiBlock = false,
+  String? socksAccount,
+  List<String> appsProxy = const [],
+  List<String> appsDirect = const [],
 }) {
-  final parsed = V2ray.parseFromURL(server.link);
+  // WireGuard плагин не разбирает: берём общий каркас конфига от
+  // любой ссылки и подставляем исходящий WireGuard.
+  final wg = isWireguardLink(server.link) ? wireguardOutbound(server.link) : null;
+  if (isWireguardLink(server.link) && wg == null) {
+    throw Exception('Неполная ссылка WireGuard');
+  }
+  final parsed = V2ray.parseFromURL(wg == null
+      ? server.link
+      : 'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1?security=none#wg');
   final cfg =
       jsonDecode(parsed.getFullConfiguration()) as Map<String, dynamic>;
+  if (wg != null) {
+    cfg['outbounds'] = [
+      wg,
+      ...(cfg['outbounds'] as List).where((o) => !(o is Map && o['tag'] == 'proxy')),
+    ];
+  }
 
   // Журнал посещённых сайтов (access log) не ведём: в «Журнале» Nexus
   // остаются только ошибки и предупреждения ядра.
@@ -55,7 +72,20 @@ String buildXrayConfig(
         'port': kSocksPort,
         'listen': '127.0.0.1',
         'protocol': 'socks',
-        'settings': {'auth': 'noauth', 'udp': true},
+        // С паролем — пользоваться прокси смогут только программы,
+        // которым его дали (Telegram получает его кнопкой в настройках).
+        'settings': socksAccount == null || !socksAccount.contains(':')
+            ? {'auth': 'noauth', 'udp': true}
+            : {
+                'auth': 'password',
+                'udp': true,
+                'accounts': [
+                  {
+                    'user': socksAccount.split(':').first,
+                    'pass': socksAccount.substring(socksAccount.indexOf(':') + 1),
+                  },
+                ],
+              },
         'sniffing': {
           'enabled': true,
           'destOverride': ['http', 'tls', 'quic'],
@@ -96,6 +126,21 @@ String buildXrayConfig(
             {'user': _randomToken(), 'pass': _randomToken()},
           ];
           settings['udp'] = false;
+          ib['settings'] = settings;
+        } else if (socksAccount != null &&
+            socksAccount.contains(':') &&
+            ib['protocol'] == 'socks') {
+          // Режим «только прокси» с паролем: приложения, которым дали
+          // логин и пароль, пользуются им, остальные — нет.
+          final settings =
+              (ib['settings'] as Map?)?.cast<String, dynamic>() ?? {};
+          settings['auth'] = 'password';
+          settings['accounts'] = [
+            {
+              'user': socksAccount.split(':').first,
+              'pass': socksAccount.substring(socksAccount.indexOf(':') + 1),
+            },
+          ];
           ib['settings'] = settings;
         }
       }
@@ -162,6 +207,31 @@ String buildXrayConfig(
   custom(customDirect, 'direct');
   custom(customProxy, 'proxy');
 
+  // Windows: программы через VPN или напрямую (по имени процесса).
+  // Ядро сравнивает имена с учётом регистра, а пользователь пишет как
+  // придётся — добавляем частые варианты написания.
+  List<String> variants(List<String> names) => {
+        for (final n in names) ...[
+          n,
+          n.toLowerCase(),
+          if (n.isNotEmpty) n[0].toUpperCase() + n.substring(1).toLowerCase(),
+        ],
+      }.toList();
+  if (desktop && appsDirect.isNotEmpty) {
+    rules.add({
+      'type': 'field',
+      'process': variants(appsDirect),
+      'outboundTag': 'direct',
+    });
+  }
+  if (desktop && appsProxy.isNotEmpty) {
+    rules.add({
+      'type': 'field',
+      'process': variants(appsProxy),
+      'outboundTag': 'proxy',
+    });
+  }
+
   // Реклама и трекеры — в «чёрную дыру». Свои правила выше, поэтому
   // нужный сайт можно вернуть, добавив его в «Свои правила».
   if (blockAds) {
@@ -224,6 +294,74 @@ String buildXrayConfig(
   return jsonEncode(cfg);
 }
 
+bool isWireguardLink(String link) {
+  final l = link.trimLeft().toLowerCase();
+  return l.startsWith('wireguard://') || l.startsWith('wg://');
+}
+
+/// Ссылка WireGuard (формат v2rayN / Hiddify):
+/// wireguard://<закрытый ключ>@адрес:порт?publickey=…&address=10.0.0.2/32
+/// &reserved=1,2,3&mtu=1280&presharedkey=…#название.
+/// null — в ссылке нет обязательного (ключей, адреса).
+Map<String, dynamic>? wireguardOutbound(String link) {
+  final Uri u;
+  try {
+    u = Uri.parse(link.trim().replaceFirst(
+        RegExp(r'^wg://', caseSensitive: false), 'wireguard://'));
+  } catch (_) {
+    return null;
+  }
+  final q = {
+    for (final e in u.queryParameters.entries) e.key.toLowerCase(): e.value.trim()
+  };
+  final secret = Uri.decodeComponent(u.userInfo).trim();
+  final pub = q['publickey'] ?? q['public_key'] ?? q['peer'] ?? q['pk'];
+  final addr = (q['address'] ?? q['ip'] ?? '')
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .map((e) => e.contains('/') ? e : (e.contains(':') ? '$e/128' : '$e/32'))
+      .toList();
+  if (secret.isEmpty || pub == null || pub.isEmpty || u.host.isEmpty || addr.isEmpty) {
+    return null;
+  }
+  final port = u.hasPort ? u.port : 51820;
+  final host = u.host.contains(':') ? '[${u.host}]' : u.host;
+  final reserved = (q['reserved'] ?? '')
+      .split(',')
+      .map((e) => int.tryParse(e.trim()))
+      .whereType<int>()
+      .where((v) => v >= 0 && v < 256)
+      .toList();
+  final mtu = int.tryParse(q['mtu'] ?? '');
+  final psk = q['presharedkey'] ?? q['pre_shared_key'] ?? q['psk'];
+  return {
+    'tag': 'proxy',
+    'protocol': 'wireguard',
+    'settings': {
+      // Без системного TUN-интерфейса: работает одинаково на Android и
+      // Windows и не требует прав.
+      'noKernelTun': true,
+      'secretKey': secret,
+      'address': addr,
+      'peers': [
+        {
+          'publicKey': pub,
+          'endpoint': '$host:$port',
+          if (psk != null && psk.isNotEmpty) 'preSharedKey': psk,
+          'keepAlive': 25,
+        },
+      ],
+      if (mtu != null && mtu >= 576 && mtu <= 1500) 'mtu': mtu,
+      if (reserved.length == 3) 'reserved': reserved,
+      // Для плагина Android: он ищет адрес сервера в settings.servers.
+      'servers': [
+        {'address': u.host, 'port': port},
+      ],
+    },
+  };
+}
+
 /// Режим «Авто»: несколько серверов в одном ядре. Xray сам раз в
 /// [probeInterval] проверяет каждый (observatory) и отправляет новые соединения через
 /// самый быстрый живой сервер (balancer leastPing). Упал сервер — трафик
@@ -241,6 +379,9 @@ String buildAutoConfig(
   bool blockAds = false,
   bool antiBlock = false,
   String probeInterval = '2m',
+  String? socksAccount,
+  List<String> appsProxy = const [],
+  List<String> appsDirect = const [],
 }) {
   Map<String, dynamic>? base;
   final proxies = <Map<String, dynamic>>[];
@@ -257,6 +398,9 @@ String buildAutoConfig(
         customDirect: customDirect,
         blockAds: blockAds,
         antiBlock: antiBlock,
+        socksAccount: socksAccount,
+        appsProxy: appsProxy,
+        appsDirect: appsDirect,
       )) as Map<String, dynamic>;
     } catch (_) {
       continue;
@@ -310,6 +454,41 @@ String buildAutoConfig(
   return jsonEncode(base);
 }
 
+/// Статистика ядра (/debug/vars) без открытого порта: метрики доступны
+/// только через вход [inboundTag] с паролем по адресу http://nexus-metrics/.
+/// Раньше метрики слушали отдельный порт без пароля — любая программа на
+/// устройстве могла читать статистику и профилировщик ядра.
+void addPrivateMetrics(Map<String, dynamic> cfg, String inboundTag) {
+  cfg['metrics'] = {'tag': kMetricsTag};
+  final r = (cfg['routing'] as Map?)?.cast<String, dynamic>() ??
+      <String, dynamic>{};
+  final rules = ((r['rules'] as List?) ?? []).cast<dynamic>().toList();
+  rules.insert(0, {
+    'type': 'field',
+    'inboundTag': [inboundTag],
+    'domain': ['full:$kMetricsHost'],
+    'outboundTag': kMetricsTag,
+  });
+  r['rules'] = rules;
+  cfg['routing'] = r;
+}
+
+const kMetricsTag = 'nexus-metrics';
+const kMetricsHost = 'nexus-metrics';
+
+/// Разбор результатов проверки серверов «Авто» из /debug/vars:
+/// тег → задержка в мс (-1 — не отвечает).
+Map<String, int> parseObservatory(Object? obs) {
+  if (obs is! Map) return const {};
+  return {
+    for (final e in obs.entries)
+      if (e.value is Map)
+        '${e.key}': ((e.value as Map)['alive'] == true)
+            ? (((e.value as Map)['delay'] as num?)?.toInt() ?? -1)
+            : -1,
+  };
+}
+
 /// Префикс тегов серверов в режиме «Авто».
 const kAutoPrefix = 'nx-';
 
@@ -321,7 +500,8 @@ const kAutoPrefix = 'nx-';
 void _addFragment(Map<String, dynamic> cfg) {
   for (final ob in (cfg['outbounds'] as List? ?? [])) {
     if (ob is! Map<String, dynamic> || ob['tag'] != 'proxy') continue;
-    if (ob['protocol'] == 'hysteria') continue;
+    // Hysteria2 и WireGuard работают по UDP — им это не нужно.
+    if (ob['protocol'] == 'hysteria' || ob['protocol'] == 'wireguard') continue;
     final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{};
     if (const ['kcp', 'mkcp', 'quic', 'hysteria'].contains(ss['network'])) {

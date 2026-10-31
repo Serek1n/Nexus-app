@@ -123,4 +123,55 @@ void main() {
       expect(rules.last['balancerTag'], 'auto');
     });
   });
+
+  test('WireGuard: исходящий и адрес для плагина Android', () {
+    final c = _cfg(_s(
+        'wireguard://cHJpdmF0ZQ%3D%3D@1.2.3.4:2408?publickey=cHVi'
+        '&address=172.16.0.2&reserved=1,2,3#WARP', 'wg'), antiBlock: true);
+    final ob = _out(c, 'proxy');
+    expect(ob['protocol'], 'wireguard');
+    expect(ob['settings']['address'], ['172.16.0.2/32']);
+    expect((ob['settings']['servers'] as List).first['address'], '1.2.3.4');
+    expect(ob['streamSettings']?['finalmask'], isNull);
+  });
+
+  test('SOCKS с паролем и программы (Windows)', () {
+    final c = jsonDecode(buildXrayConfig(_vless,
+        routing: RoutingMode.smart,
+        desktop: true,
+        socksAccount: 'nexus:pw',
+        appsDirect: ['steam.exe'])) as Map<String, dynamic>;
+    final socks = (c['inbounds'] as List).first as Map;
+    expect(socks['settings']['auth'], 'password');
+    final rules = (c['routing']['rules'] as List).cast<Map>();
+    expect(rules.any((r) => (r['process'] as List?)?.contains('steam.exe') ?? false),
+        isTrue);
+  });
+
+  test('Метрики ядра — только через вход с паролем', () {
+    final c = <String, dynamic>{'routing': {'rules': []}};
+    addPrivateMetrics(c, 'nexus-api');
+    expect(c['metrics'], {'tag': 'nexus-metrics'});
+    final r = (c['routing']['rules'] as List).first as Map;
+    expect(r['inboundTag'], ['nexus-api']);
+    expect(parseObservatory({
+      'nx-0': {'alive': true, 'delay': 120},
+      'nx-1': {'alive': false, 'delay': 99999999},
+    }), {'nx-0': 120, 'nx-1': -1});
+  });
+
+  test('Android: режим прокси с паролем, режим VPN — случайный пароль', () {
+    Map socks(Map<String, dynamic> c) => (c['inbounds'] as List)
+        .cast<Map>()
+        .firstWhere((i) => i['protocol'] == 'socks');
+    final proxyOnly = jsonDecode(buildXrayConfig(_vless,
+        routing: RoutingMode.smart, desktop: false, socksAccount: 'nexus:pw'))
+        as Map<String, dynamic>;
+    expect(socks(proxyOnly)['settings']['accounts'],
+        [{'user': 'nexus', 'pass': 'pw'}]);
+    final vpn = jsonDecode(buildXrayConfig(_vless,
+        routing: RoutingMode.smart, desktop: false, lockLocalProxy: true))
+        as Map<String, dynamic>;
+    expect(socks(vpn)['settings']['auth'], 'password');
+  });
 }

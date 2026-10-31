@@ -117,14 +117,23 @@ class AppUpdater {
     return res;
   }
 
-  /// Проверяет последний (не пробный) релиз. null — обновлений нет.
-  static Future<AppUpdate?> check() async {
+  /// Проверяет последний релиз. null — обновлений нет.
+  /// [beta] — учитывать и пробные сборки (ветка beta), если они новее.
+  static Future<AppUpdate?> check({bool beta = false}) async {
     if (!configured) throw Exception(tr('Источник обновлений не задан в сборке'));
     final current = await currentBuild();
-    final j = jsonDecode((await _api('releases/latest')).body)
+    Map<String, dynamic>? best;
+    if (beta) {
+      final list = jsonDecode((await _api('releases?per_page=15')).body);
+      for (final r in (list is List ? list : const [])) {
+        if (r is! Map<String, dynamic> || r['draft'] == true) continue;
+        if (best == null || _buildOf(r) > _buildOf(best)) best = r;
+      }
+    }
+    best ??= jsonDecode((await _api('releases/latest')).body)
         as Map<String, dynamic>;
-    if (_buildOf(j) <= current) return null;
-    return _fromRelease(j);
+    if (_buildOf(best) <= current) return null;
+    return _fromRelease(best);
   }
 
   /// Прошлые версии для отката (новые сверху, без пробных сборок).

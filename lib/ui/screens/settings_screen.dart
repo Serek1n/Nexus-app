@@ -7,6 +7,7 @@ import '../../changelog.dart';
 import '../../models.dart';
 import '../../services/app_updater.dart';
 import '../../platform/android_system.dart';
+import '../../platform/wifi.dart';
 import '../../platform/windows_host.dart';
 import '../../services/config_builder.dart';
 import '../../services/traffic_log.dart';
@@ -90,6 +91,77 @@ class SettingsScreen extends StatelessWidget {
     app.updateSettings((s) {
       s.customProxy = p;
       s.customDirect = d;
+    });
+    await app.reconnectIfActive();
+    if (context.mounted) {
+      toast(context, tr('Сохранено: через VPN {0}, напрямую {1}', [p.length, d.length]));
+    }
+  }
+
+  /// Windows: программы через VPN или напрямую (по имени процесса).
+  Future<void> _editApps(BuildContext context) async {
+    final app = AppScope.read(context);
+    final viaVpn = TextEditingController(text: app.settings.appsProxy.join('\n'));
+    final direct = TextEditingController(text: app.settings.appsDirect.join('\n'));
+    InputDecoration deco(String hint) => InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: NX.text3, fontSize: 13),
+        );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(tr('Программы')),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    tr('По одной программе в строке — имя файла, как в Диспетчере задач (Discord.exe). Лучше всего работает в режиме TUN.'),
+                    style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                const SizedBox(height: 14),
+                Text(tr('Всегда через VPN'),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: viaVpn,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: deco('Discord.exe\nTelegram.exe'),
+                ),
+                const SizedBox(height: 14),
+                Text(tr('Всегда напрямую'),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: direct,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: deco('steam.exe\nqbittorrent.exe'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: Text(tr('Отмена'))),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: Text(tr('Сохранить'))),
+        ],
+      ),
+    );
+    final p = parseProcessList(viaVpn.text), d = parseProcessList(direct.text);
+    viaVpn.dispose();
+    direct.dispose();
+    if (ok != true) return;
+    app.updateSettings((s) {
+      s.appsProxy = p;
+      s.appsDirect = d;
     });
     await app.reconnectIfActive();
     if (context.mounted) {
@@ -271,6 +343,35 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
           ),
+          if (app.isDesktop)
+            NeonCard(
+              onTap: () => _editApps(context),
+              child: Row(
+                children: [
+                  const Icon(Icons.apps_rounded, color: NX.violet, size: 21),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(tr('Программы'),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        const SizedBox(height: 2),
+                        Text(
+                          st.appsProxy.isEmpty && st.appsDirect.isEmpty
+                              ? tr('Выберите программы, которые всегда идут через VPN или напрямую')
+                              : tr('Через VPN: {0} · напрямую: {1}',
+                                  [st.appsProxy.length, st.appsDirect.length]),
+                          style: const TextStyle(color: NX.text2, fontSize: 12.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: NX.text3),
+                ],
+              ),
+            ),
           if (!app.isDesktop)
             NeonCard(
               onTap: () => Navigator.of(context).push(
@@ -334,6 +435,13 @@ class SettingsScreen extends StatelessWidget {
                     (v) => _toggleTun(context, v),
                   ),
                   const Divider(height: 14),
+                  switchRow(
+                    Icons.password_rounded,
+                    tr('SOCKS-прокси с паролем'),
+                    tr('Другие программы на компьютере не смогут незаметно пользоваться вашим VPN. Telegram получит пароль кнопкой ниже'),
+                    st.socksAuth,
+                    (v) => app.setSocksAuth(v),
+                  ),                  const Divider(height: 14),
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
@@ -347,9 +455,16 @@ class SettingsScreen extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14.5)),
                         ),
-                        _CopyChip('HTTP 127.0.0.1:$activeHttpPort'),
+                        app.core.httpLocked
+                            ? Tooltip(
+                                message: tr('В режиме TUN системный прокси не нужен — HTTP-прокси закрыт паролем, им пользуется только Nexus'),
+                                child: Tag(tr('HTTP · закрыт'), color: NX.text3),
+                              )
+                            : _CopyChip('HTTP 127.0.0.1:$activeHttpPort'),
                         const SizedBox(width: 6),
-                        _CopyChip('SOCKS 127.0.0.1:$activeSocksPort'),
+                        _CopyChip(app.socksAccount == null
+                            ? 'SOCKS 127.0.0.1:$activeSocksPort'
+                            : 'SOCKS ${app.socksAccount}@127.0.0.1:$activeSocksPort'),
                       ],
                     ),
                   ),
@@ -359,8 +474,10 @@ class SettingsScreen extends StatelessWidget {
                   InkWell(
                     borderRadius: BorderRadius.circular(10),
                     onTap: () async {
+                      final acc = app.socksAccount;
                       final url = 'tg://socks?server=127.0.0.1'
-                          '&port=$activeSocksPort';
+                          '&port=$activeSocksPort'
+                          '${acc == null ? '' : '&user=${Uri.encodeComponent(acc.split(':').first)}&pass=${Uri.encodeComponent(acc.substring(acc.indexOf(':') + 1))}'}';
                       try {
                         await Process.start(
                             'rundll32', ['url.dll,FileProtocolHandler', url]);
@@ -404,7 +521,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                ] else
+                ] else ...[
                   switchRow(
                     Icons.vpn_lock_rounded,
                     tr('Режим VPN'),
@@ -417,6 +534,28 @@ class SettingsScreen extends StatelessWidget {
                       await app.reconnectIfActive();
                     },
                   ),
+                  // Режим «только прокси»: им может пользоваться любое приложение
+                  // на телефоне — по желанию закрываем паролем.
+                  if (!st.androidVpnMode) ...[
+                    const Divider(height: 14),
+                    switchRow(
+                      Icons.password_rounded,
+                      tr('SOCKS-прокси с паролем'),
+                      tr('Пользоваться прокси смогут только приложения, которым вы дали логин и пароль'),
+                      st.socksAuth,
+                      (v) => app.setSocksAuth(v),
+                    ),
+                    if (app.socksAccount != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8, left: 35),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _CopyChip(
+                              'SOCKS ${app.socksAccount}@127.0.0.1:10807'),
+                        ),
+                      ),
+                  ],
+                ],
               ],
             ),
           ),
@@ -442,6 +581,62 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             ]),
+          ),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                switchRow(
+                  Icons.wifi_lock_rounded,
+                  tr('Включать VPN в чужих Wi-Fi'),
+                  app.isDesktop
+                      ? tr('В кафе, отеле, аэропорту Nexus подключится сам. Домашние сети отметьте доверенными')
+                      : tr('В кафе, отеле, аэропорту Nexus подключится сам, пока он запущен. Android сообщает имя сети только с разрешением на геолокацию'),
+                  st.wifiAuto,
+                  (v) => app.setWifiAuto(v),
+                ),
+                if (st.wifiAuto) ...[
+                  const Divider(height: 14),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 4, 6, 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(tr('Доверенные сети:'),
+                            style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                        if (st.trustedWifi.isEmpty)
+                          Text(tr('нет'),
+                              style: const TextStyle(color: NX.text3, fontSize: 12.5)),
+                        for (final w in st.trustedWifi)
+                          InputChip(
+                            label: Text(trustedLabel(w)),
+                            onDeleted: () => app.toggleTrustedWifi(w),
+                          ),
+                        if (app.currentWifiNet != null &&
+                            !app.currentWifiNet!.trustedBy(st.trustedWifi))
+                          ActionChip(
+                            avatar: const Icon(Icons.add_rounded, size: 18),
+                            label: Text(tr('Доверять «{0}»',
+                                [app.currentWifiNet!.ssid])),
+                            onPressed: () =>
+                                app.toggleTrustedWifi(app.currentWifiNet!.key),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 0, 6, 8),
+                    child: Text(
+                      tr('Сеть узнаётся по имени и роутеру: чужая сеть с тем же именем доверенной не станет. Если дома несколько роутеров, добавьте каждый.'),
+                      style: const TextStyle(color: NX.text3, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
           SectionTitle(tr('Работа в фоне')),
           NeonCard(
@@ -756,6 +951,17 @@ class SettingsScreen extends StatelessWidget {
                     tr('Сообщать о новой версии; скачивание — по кнопке «Установить»'),
                     st.autoUpdateApp,
                     (v) => app.updateSettings((s) => s.autoUpdateApp = v),
+                  ),
+                  const Divider(height: 14),
+                  switchRow(
+                    Icons.science_rounded,
+                    tr('Бета-версии'),
+                    tr('Получать пробные сборки раньше остальных. Если что-то сломается — «Откатить версию»'),
+                    st.betaUpdates,
+                    (v) {
+                      app.updateSettings((s) => s.betaUpdates = v);
+                      app.checkAppUpdate();
+                    },
                   ),
                 ],
               ],

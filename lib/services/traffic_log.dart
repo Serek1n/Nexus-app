@@ -31,6 +31,13 @@ class TrafficLog {
         }
       });
     } catch (_) {}
+    // Последние показания счётчиков: если Nexus перезапустился, пока VPN
+    // работал, сессия продолжается — уже учтённое не считаем второй раз.
+    final last = prefs.getStringList('${_key}Last');
+    if (last != null && last.length == 2) {
+      _lastUp = int.tryParse(last[0]) ?? 0;
+      _lastDown = int.tryParse(last[1]) ?? 0;
+    }
   }
 
   /// Новые показания счётчиков ядра (накопительные за сессию).
@@ -59,6 +66,7 @@ class TrafficLog {
   }
 
   void save() {
+    _prefs?.setStringList('${_key}Last', ['$_lastUp', '$_lastDown']);
     if (!_dirty || _prefs == null) return;
     _dirty = false;
     _savedAt = DateTime.now();

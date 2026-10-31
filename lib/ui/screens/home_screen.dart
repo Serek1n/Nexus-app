@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../changelog.dart';
 import '../../models.dart';
 import '../../platform/android_system.dart';
+import '../../platform/links.dart';
 import '../add_sheet.dart';
 import '../app_scope.dart';
 import '../connect_button.dart';
@@ -150,7 +151,14 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         if (sub != null && _subWarning(sub) != null) ...[
-          _Notice(text: _subWarning(sub)!),
+          _Notice(
+            text: _subWarning(sub)!,
+            // Нажатие — сразу продлить (кабинет, поддержка или бот).
+            onTap: renewUrlFor(sub.webPageUrl, sub.supportUrl) == null
+                ? null
+                : () => openWebLink(
+                    renewUrlFor(sub.webPageUrl, sub.supportUrl)!),
+          ),
           const SizedBox(height: 10),
         ],
         if (sel != null)

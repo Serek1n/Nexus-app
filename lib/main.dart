@@ -15,6 +15,7 @@ import 'state/app_state.dart';
 import 'ui/add_sheet.dart';
 import 'ui/app_scope.dart';
 import 'ui/screens/home_screen.dart';
+import 'ui/screens/onboarding_screen.dart';
 import 'ui/screens/servers_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'ui/screens/subscriptions_screen.dart';
@@ -124,7 +125,7 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> {
+class _ShellState extends State<Shell> with WidgetsBindingObserver {
   // Вкладка переживает пересборку интерфейса при смене языка.
   static int _savedTab = 0;
   int get _tab => _savedTab;
@@ -134,6 +135,7 @@ class _ShellState extends State<Shell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _links = DeepLinks.stream.listen(_onLink);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = navigatorKey.currentContext;
@@ -147,8 +149,17 @@ class _ShellState extends State<Shell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _links?.cancel();
     super.dispose();
+  }
+
+  /// Android: приложение свёрнуто — ядро не опрашиваем лишний раз
+  /// (батарея). На Windows видимость окна отслеживает WindowsHost.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (!Platform.isAndroid) return;
+    AppScope.read(context).setWindowVisible(s == AppLifecycleState.resumed);
   }
 
   /// Ссылка nexus:// — добавляем только после явного подтверждения,
@@ -214,6 +225,18 @@ class _ShellState extends State<Shell> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
+    // Экран первого запуска — пока его не прошли до конца или не пропустили
+    // (добавленная подписка его не закрывает: впереди ещё шаг про фон).
+    if (app.ready && !app.settings.onboarded) {
+      // На Windows окно без системной рамки — оставляем свою полосу заголовка.
+      return Scaffold(
+        backgroundColor: NX.bg,
+        body: Column(children: [
+          if (Platform.isWindows) const _TitleBar(),
+          const Expanded(child: OnboardingScreen()),
+        ]),
+      );
+    }
     final live = app.state == ConnState.connected;
     final wide = MediaQuery.sizeOf(context).width >= 860;
 

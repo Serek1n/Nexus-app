@@ -13,6 +13,8 @@ import '../services/backup.dart';
 import '../services/support_report.dart';
 import '../models.dart';
 import '../platform/android_system.dart';
+import '../platform/links.dart';
+import '../platform/wifi.dart';
 import '../platform/win_dpapi.dart';
 import '../services/config_builder.dart';
 import '../services/net_probe.dart';
@@ -65,6 +67,10 @@ class AppState extends ChangeNotifier {
 
   bool get isDesktop => Platform.isWindows;
 
+  /// Сохранённые данные загружены (до этого интерфейс не знает, есть ли
+  /// у пользователя подписки).
+  bool ready = false;
+
   ServerProfile? get selected {
     for (final s in servers) {
       if (s.id == selectedId) return s;
@@ -99,6 +105,7 @@ class AppState extends ChangeNotifier {
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     L10n.apply(settings.language, PlatformDispatcher.instance.locale.languageCode);
     language.value = L10n.lang;
+    if (!isDesktop) unawaited(AndroidSystem.setTileLabels());
     traffic.load(_prefs);
     try {
       final subs = jsonDecode(await _readSecret('subscriptions')) as List;
@@ -122,6 +129,9 @@ class AppState extends ChangeNotifier {
       unawaited(AndroidSystem.setSecureScreen(true));
     }
     selectedId = _prefs.getString('selected');
+    // Уже пользуется Nexus (обновился) — экран первого запуска не нужен.
+    if (servers.isNotEmpty && !settings.onboarded) settings.onboarded = true;
+    ready = true;
     _syncExpiry();
 
     _stSub = core.states.listen(_onCoreState);
@@ -135,6 +145,7 @@ class AppState extends ChangeNotifier {
       lastError = tr('Ошибка инициализации ядра: {0}', [e]);
     }
     unawaited(refreshBattery());
+    _startWifiWatch();
     core.coreVersion().then((v) {
       coreVersion = v;
       notifyListeners();
@@ -210,7 +221,7 @@ class AppState extends ChangeNotifier {
     if (!silent) updateStatus = tr('Проверяю…');
     notifyListeners();
     try {
-      final u = await AppUpdater.check();
+      final u = await AppUpdater.check(beta: settings.betaUpdates);
       settings.lastAppCheck = DateTime.now().millisecondsSinceEpoch;
       _save();
       if (u == null) {
@@ -365,9 +376,10 @@ class AppState extends ChangeNotifier {
     if (isDesktop) return;
     final list = [
       for (final s in subscriptions)
-        if (s.expire != null) (s.id, s.title, s.expire!),
+        if (s.expire != null)
+          (s.id, s.title, s.expire!, renewUrlFor(s.webPageUrl, s.supportUrl)),
     ];
-    final sig = '${L10n.lang}:' + list.map((e) => '${e.$1}|${e.$2}|${e.$3.millisecondsSinceEpoch}').join(';');
+    final sig = '${L10n.lang}:${list.map((e) => '${e.$1}|${e.$2}|${e.$3.millisecondsSinceEpoch}|${e.$4}').join(';')}';
     if (sig == _expirySig) return;
     _expirySig = sig;
     unawaited(AndroidSystem.scheduleExpiry(list));
@@ -776,6 +788,9 @@ class AppState extends ChangeNotifier {
         customDirect: settings.customDirect,
         blockAds: settings.blockAds,
         antiBlock: settings.antiBlock,
+        socksAccount: socksAccount,
+        appsProxy: settings.appsProxy,
+        appsDirect: settings.appsDirect,
       );
 
   /// Серверы для режима «Авто»: подписка выбранного сервера (или все
@@ -788,6 +803,7 @@ class AppState extends ChangeNotifier {
     if (s == null) return const [];
     final list = serversOf(s.subscriptionId)
         .where((x) => x.ping == null || x.ping! > 0)
+        .where((x) => !settings.autoExclude.contains(x.aliasKey))
         .toList()
       ..sort((a, b) {
         int k(ServerProfile x) => x.ping ?? 1 << 20;
@@ -797,11 +813,92 @@ class AppState extends ChangeNotifier {
     return pool.isEmpty ? [s] : pool;
   }
 
+  // ─────────────────── незнакомые сети Wi-Fi ───────────────────
+
+  Timer? _wifiTimer;
+  String? _lastWifi;
+
+  /// Текущая сеть Wi-Fi (по последней проверке) — для кнопки «доверять».
+  WifiNet? currentWifiNet;
+
+  /// Раз в 15 секунд смотрим, к какой сети Wi-Fi подключено устройство.
+  /// Новая сеть не из списка доверенных и VPN выключен — подключаемся.
+  /// Если в этой сети VPN отключили вручную — не спорим до смены сети.
+  void _startWifiWatch() {
+    _wifiTimer?.cancel();
+    if (!settings.wifiAuto) return;
+    var busy = false;
+    Future<void> check() async {
+      // Предыдущая проверка ещё идёт (netsh завис) — не накладываем.
+      if (busy) return;
+      busy = true;
+      final WifiNet? net;
+      try {
+        net = await currentWifi();
+      } finally {
+        busy = false;
+      }
+      currentWifiNet = net;
+      // Смена сети — это смена имени или точки доступа.
+      if (net?.key == _lastWifi) return;
+      _lastWifi = net?.key;
+      notifyListeners();
+      if (net == null || net.trustedBy(settings.trustedWifi)) return;
+      if (state != ConnState.disconnected || selected == null) return;
+      core.note(tr('Незнакомая сеть Wi-Fi «{0}» — включаю VPN', [net.ssid]));
+      reconnectNote =
+          tr('Незнакомая сеть Wi-Fi «{0}» — включаю VPN', [net.ssid]);
+      await connect();
+    }
+
+    _wifiTimer =
+        Timer.periodic(const Duration(seconds: 15), (_) => check());
+    unawaited(check());
+  }
+
+  Future<void> setWifiAuto(bool on) async {
+    if (on && !isDesktop) await AndroidSystem.requestLocation();
+    updateSettings((s) => s.wifiAuto = on);
+    _lastWifi = null;
+    _startWifiWatch();
+  }
+
+  /// Добавить или убрать запись доверенной сети («имя|точка доступа»).
+  void toggleTrustedWifi(String entry) => updateSettings((s) {
+        s.trustedWifi = s.trustedWifi.contains(entry)
+            ? s.trustedWifi.where((x) => x != entry).toList()
+            : [...s.trustedWifi, entry];
+      });
+
+  /// Windows: «логин:пароль» локального SOCKS-прокси или null (без пароля).
+  String? get socksAccount => settings.socksAuth &&
+          settings.socksUser.isNotEmpty &&
+          // Android: только режим «прокси» — в режиме VPN SOCKS и так закрыт
+          // случайным паролем.
+          (isDesktop || !settings.androidVpnMode)
+      ? '${settings.socksUser}:${settings.socksPass}'
+      : null;
+
+  /// Включает или выключает пароль на локальном SOCKS (Windows).
+  Future<void> setSocksAuth(bool on) async {
+    updateSettings((s) {
+      s.socksAuth = on;
+      if (on && s.socksUser.isEmpty) {
+        final r = math.Random.secure();
+        String tok(int n) => List.generate(
+            n, (_) => 'abcdefghijkmnpqrstuvwxyz23456789'[r.nextInt(32)]).join();
+        s.socksUser = 'nexus';
+        s.socksPass = tok(16);
+      }
+    });
+    await reconnectIfActive();
+  }
+
   /// Пул, с которым запущено текущее соединение «Авто» (nx-0, nx-1…).
   List<ServerProfile> activeAutoPool = const [];
 
   /// Режим «Авто»: через какой сервер идёт трафик сейчас и его задержка
-  /// (по проверке ядра; известно только на Windows). null — неизвестно.
+  /// (по проверке ядра). null — неизвестно.
   (ServerProfile, int)? get autoCurrent {
     if (!settings.autoMode || state != ConnState.connected) return null;
     (ServerProfile, int)? best;
@@ -823,6 +920,9 @@ class AppState extends ChangeNotifier {
         customDirect: settings.customDirect,
         blockAds: settings.blockAds,
         antiBlock: settings.antiBlock,
+        socksAccount: socksAccount,
+        appsProxy: settings.appsProxy,
+        appsDirect: settings.appsDirect,
       );
 
   Future<void> toggle() async {
@@ -938,6 +1038,19 @@ class AppState extends ChangeNotifier {
       unawaited(AndroidSystem.setTileState(state == ConnState.connected,
           vpn: settings.androidVpnMode));
     }
+  }
+
+  bool isAutoExcluded(ServerProfile s) =>
+      settings.autoExclude.contains(s.aliasKey);
+
+  /// Не использовать сервер в режиме «Авто» (или вернуть его).
+  Future<void> toggleAutoExclude(ServerProfile s) async {
+    updateSettings((st) {
+      st.autoExclude = isAutoExcluded(s)
+          ? st.autoExclude.where((k) => k != s.aliasKey).toList()
+          : [...st.autoExclude, s.aliasKey];
+    });
+    if (settings.autoMode) await reconnectIfActive();
   }
 
   /// Включает или выключает режим «Авто» и переподключается.
@@ -1261,7 +1374,12 @@ class AppState extends ChangeNotifier {
           ' · Авто ${st.autoMode ? 'вкл' : 'выкл'}'
           ' · обход ${st.antiBlock ? 'вкл' : 'выкл'}'
           ' · реклама ${st.blockAds ? 'блок' : 'нет'}'
-          ' · своих правил ${st.customProxy.length + st.customDirect.length}')
+          ' · своих правил ${st.customProxy.length + st.customDirect.length}'
+          ' · Wi-Fi авто ${st.wifiAuto ? 'вкл (доверенных ${st.trustedWifi.length})' : 'выкл'}'
+          ' · SOCKS-пароль ${st.socksAuth ? 'вкл' : 'выкл'}'
+          ' · исключено из «Авто» ${st.autoExclude.length}'
+          ' · бета ${st.betaUpdates ? 'вкл' : 'выкл'}'
+          '${isDesktop ? ' · программ ${st.appsProxy.length + st.appsDirect.length}' : ''}')
       ..writeln('Состояние: ${state.name}'
           '${liveLatency == null ? '' : ' · задержка $liveLatency мс'}'
           '${core.modeWarning == null ? '' : ' · ${core.modeWarning}'}')
@@ -1513,6 +1631,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _stSub?.cancel();
     _statsSub?.cancel();
+    _wifiTimer?.cancel();
     traffic.save();
     _subTimer?.cancel();
     _updTimer?.cancel();

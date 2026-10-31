@@ -54,18 +54,37 @@ class AndroidSystem {
       });
 
   /// Напоминания о конце подписок: [subs] — (id, название, срок).
-  static Future<void> scheduleExpiry(List<(String, String, DateTime)> subs) =>
+  static Future<void> scheduleExpiry(
+          List<(String, String, DateTime, String?)> subs) =>
       _call('scheduleExpiry', jsonEncode([
-        for (final (id, title, exp) in subs)
+        for (final (id, title, exp, url) in subs)
           {
             'id': id,
             'title': title,
             'expire': exp.millisecondsSinceEpoch,
+            // Кнопка «Продлить» в уведомлении.
+            'url': url ?? '',
+            'renew': tr('Продлить'),
             // Тексты уведомлений на языке интерфейса.
             'm3': tr('Подписка «{0}» закончится через 3 дня — продлите её в боте', [title]),
             'm1': tr('Подписка «{0}» закончится завтра — продлите её в боте', [title]),
           },
       ]));
+
+  /// Текущая сеть Wi-Fi: {ssid, bssid} или null (не Wi-Fi / нет разрешения).
+  static Future<Map<String, String?>?> wifiInfo() async {
+    final m = await _call<Map<dynamic, dynamic>>('wifiInfo');
+    return m?.map((k, v) => MapEntry('$k', v?.toString()));
+  }
+
+  /// Разрешение на геолокацию — без него Android не сообщает имя Wi-Fi.
+  static Future<void> requestLocation() => _call('requestLocation');
+
+  /// Подписи плитки и виджета на языке интерфейса (без смены состояния).
+  static Future<void> setTileLabels() => _call('tileLabels', {
+        'onLabel': tr('Подключено'),
+        'offLabel': tr('Отключено'),
+      });
 
   /// Состояние для плитки в шторке.
   static Future<void> setTileState(bool on, {required bool vpn}) =>

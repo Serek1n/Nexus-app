@@ -5,11 +5,24 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.0.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.1.0');
 
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.1.0', [
+    'Первый запуск: подсказки по шагам',
+    'VPN сам включается в чужих сетях Wi-Fi',
+    'Кнопка «Продлить» — сразу в бота или кабинет',
+    'Серверы можно исключить из режима «Авто»',
+    'Android: видно, какой сервер выбрал «Авто»',
+    'WireGuard и подписки в форматах sing-box и Clash',
+    'Windows: программы через VPN или напрямую',
+    'SOCKS-прокси с паролем (Windows и Android в режиме прокси)',
+    'Бета-версии для желающих',
+    'Статистика ядра закрыта паролем',
+    'Трафик больше не считается дважды',
+  ]),
   ('2.0.0', [
     'Режим «Авто»: всегда самый быстрый сервер, без обрывов',
     'Обход блокировок: Nexus сложнее распознать',
@@ -158,9 +171,39 @@ const changelog = <(String, List<String>)>[
   ]),
 ];
 
-/// Пункты для указанной версии (пусто, если версии нет в списке).
-List<String> notesFor(String version) =>
-    changelog.where((e) => e.$1 == version).firstOrNull?.$2 ?? const [];
+/// Английский текст изменений последних версий (у старых — русский).
+const changelogEn = <String, List<String>>{
+  '2.1.0': [
+    'First launch: step-by-step tips',
+    'VPN turns on by itself in unknown Wi-Fi networks',
+    '“Renew” button — straight to the bot or your account',
+    'Servers can be excluded from Auto mode',
+    'Android: see which server Auto picked',
+    'WireGuard and sing-box / Clash subscriptions',
+    'Windows: choose programs that go via VPN or direct',
+    'Password-protected SOCKS proxy (Windows, Android proxy mode)',
+    'Beta versions for those who want them',
+    'Core statistics are password-protected',
+    'Traffic is no longer counted twice',
+  ],
+  '2.0.0': [
+    'Auto mode: always the fastest server, no drops',
+    'Bypass blocking: Nexus is harder to detect',
+    'Encrypted DNS only (DNS-over-HTTPS)',
+    'Traffic statistics by day and month',
+    'Password-protected backup of subscriptions and settings',
+    'English interface',
+    'Android: tile and widget connect without opening Nexus',
+    'Android: reminder 3 days and 1 day before the subscription ends',
+    'Windows: Auto in the tray menu and current server on Home',
+  ],
+};
+
+/// Пункты для указанной версии на языке интерфейса (пусто — нет версии).
+List<String> notesFor(String version) {
+  final ru = changelog.where((e) => e.$1 == version).firstOrNull?.$2 ?? const [];
+  return L10n.en ? (changelogEn[version] ?? ru) : ru;
+}
 
 /// Показывает «Что нового» один раз после обновления.
 Future<void> showWhatsNewIfUpdated(BuildContext context) async {
@@ -240,7 +283,7 @@ void showChangelog(BuildContext context, {bool onlyCurrent = false}) {
                             ],
                           ]),
                         ),
-                      ChangeList(notes),
+                      ChangeList(L10n.en ? (changelogEn[ver] ?? notes) : notes),
                     ],
                   ],
                 ),

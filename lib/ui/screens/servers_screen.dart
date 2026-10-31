@@ -457,6 +457,12 @@ class _ServerTile extends StatelessWidget {
                     const Icon(Icons.star_rounded, size: 16, color: NX.amber),
                     const SizedBox(width: 4),
                   ],
+                  // Исключён из режима «Авто».
+                  if (app.settings.autoMode && app.isAutoExcluded(server)) ...[
+                    const Icon(Icons.do_not_disturb_on_outlined,
+                        size: 15, color: NX.text3),
+                    const SizedBox(width: 4),
+                  ],
                   Flexible(
                     child: Text(server.cleanName,
                         maxLines: 1,
@@ -581,6 +587,20 @@ class _ServerTile extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(ctx);
                   app.toggleFavorite(server);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                    app.isAutoExcluded(server)
+                        ? Icons.bolt_rounded
+                        : Icons.do_not_disturb_on_outlined,
+                    color: NX.text2),
+                title: Text(app.isAutoExcluded(server)
+                    ? tr('Вернуть в режим «Авто»')
+                    : tr('Не использовать в режиме «Авто»')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  app.toggleAutoExclude(server);
                 },
               ),
               ListTile(

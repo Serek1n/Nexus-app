@@ -245,7 +245,7 @@ object NexusTile {
         // Отменяем прежние напоминания.
         val old = p.getInt("alarms", 0)
         for (code in 0 until old) {
-            am.cancel(alarmIntent(ctx, code, "", 0, ""))
+            am.cancel(alarmIntent(ctx, code, "", 0, "", "", ""))
         }
         val arr = try {
             JSONArray(p.getString("expiry", "[]"))
@@ -264,24 +264,34 @@ object NexusTile {
                 val at = expire - d * day
                 if (at <= now) continue
                 val msg = o.optString(if (d == 1) "m1" else "m3", "")
-                am.set(AlarmManager.RTC, at, alarmIntent(ctx, code, title, d, msg))
+                val url = o.optString("url", "")
+                val renew = o.optString("renew", "Продлить")
+                am.set(AlarmManager.RTC, at, alarmIntent(ctx, code, title, d, msg, url, renew))
                 code++
             }
         }
         p.edit().putInt("alarms", code).apply()
     }
 
-    private fun alarmIntent(ctx: Context, code: Int, title: String, days: Int, msg: String): PendingIntent =
+    private fun alarmIntent(
+        ctx: Context, code: Int, title: String, days: Int, msg: String,
+        url: String, renew: String
+    ): PendingIntent =
         PendingIntent.getBroadcast(
             ctx, 1000 + code,
             Intent(ctx, NexusAlarmReceiver::class.java)
                 .putExtra("title", title)
                 .putExtra("days", days)
-                .putExtra("msg", msg),
+                .putExtra("msg", msg)
+                .putExtra("url", url)
+                .putExtra("renew", renew),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-    fun notifyExpiry(ctx: Context, title: String, days: Int, msg: String?) {
+    fun notifyExpiry(
+        ctx: Context, title: String, days: Int, msg: String?,
+        url: String? = null, renew: String? = null
+    ) {
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
             nm.createNotificationChannel(
@@ -299,13 +309,26 @@ object NexusTile {
         @Suppress("DEPRECATION")
         val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(ctx, CHANNEL)
         else android.app.Notification.Builder(ctx)
-        val n = b.setSmallIcon(ctx.resources.getIdentifier("ic_nexus_tile", "drawable", ctx.packageName))
+        b.setSmallIcon(ctx.resources.getIdentifier("ic_nexus_tile", "drawable", ctx.packageName))
             .setContentTitle("Nexus")
             .setContentText(text)
             .setStyle(android.app.Notification.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
-            .build()
+        // «Продлить» — сразу в бота или личный кабинет (только https).
+        if (url != null && url.startsWith("https://") && url.length <= 500 &&
+            url.none { it.isWhitespace() || it.code < 32 }
+        ) {
+            val renewPi = PendingIntent.getActivity(
+                ctx, 10 + (title.hashCode() and 0xffff),
+                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            @Suppress("DEPRECATION")
+            b.addAction(0, renew ?: "Продлить", renewPi)
+        }
+        val n = b.build()
         try {
             nm.notify(title.hashCode(), n)
         } catch (e: SecurityException) {
@@ -426,7 +449,8 @@ class NexusAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         NexusTile.notifyExpiry(
             ctx, intent.getStringExtra("title") ?: "Подписка", intent.getIntExtra("days", 1),
-            intent.getStringExtra("msg")
+            intent.getStringExtra("msg"), intent.getStringExtra("url"),
+            intent.getStringExtra("renew")
         )
     }
 }

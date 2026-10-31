@@ -218,6 +218,21 @@ List<String> parseRuleList(String text) {
   return out.toList();
 }
 
+/// Разбор списка программ Windows: по одной в строке, «Discord.exe»,
+/// «chrome» или полный путь — остаётся имя файла.
+List<String> parseProcessList(String text) {
+  final out = <String>{};
+  for (var t in text.split(RegExp(r'[\r\n,;]+'))) {
+    t = t.trim().replaceAll('"', '');
+    if (t.isEmpty) continue;
+    t = t.split(RegExp(r'[\\/]')).last.trim();
+    if (!t.toLowerCase().endsWith('.exe')) t = '$t.exe';
+    if (RegExp(r'^[\w .()+-]{1,60}\.exe$', unicode: true).hasMatch(t)) out.add(t);
+    if (out.length >= 50) break;
+  }
+  return out.toList();
+}
+
 /// Название подписки по её адресу, если сервер его не прислал:
 /// github.com/user/repo/... → «repo», иначе — домен.
 String titleFromUrl(String url) {
@@ -333,6 +348,16 @@ class AppSettings {
     this.antiBlock = false,
     this.autoMode = false,
     this.language = 'system',
+    this.socksAuth = false,
+    List<String>? autoExclude,
+    List<String>? appsProxy,
+    this.wifiAuto = false,
+    this.onboarded = false,
+    this.betaUpdates = false,
+    List<String>? trustedWifi,
+    List<String>? appsDirect,
+    this.socksUser = '',
+    this.socksPass = '',
     List<String>? favorites,
     this.lastAppCheck = 0,
     this.skippedBuild = 0,
@@ -344,7 +369,11 @@ class AppSettings {
         favorites = favorites ?? [],
         aliases = aliases ?? {},
         customProxy = customProxy ?? [],
-        customDirect = customDirect ?? [];
+        customDirect = customDirect ?? [],
+        autoExclude = autoExclude ?? [],
+        appsProxy = appsProxy ?? [],
+        appsDirect = appsDirect ?? [],
+        trustedWifi = trustedWifi ?? [];
 
   RoutingMode routing;
 
@@ -398,6 +427,29 @@ class AppSettings {
   /// Язык интерфейса: 'system', 'ru' или 'en'.
   String language;
 
+  /// Windows: локальный SOCKS-прокси с логином и паролем.
+  bool socksAuth;
+
+  /// Серверы («адрес:порт»), которые режим «Авто» не использует.
+  List<String> autoExclude;
+
+  /// Windows: программы (имена процессов), которые всегда идут через VPN
+  /// или всегда напрямую.
+  List<String> appsProxy;
+  List<String> appsDirect;
+
+  /// Включать VPN в незнакомых сетях Wi-Fi (кроме [trustedWifi]).
+  bool wifiAuto;
+
+  /// Экран первого запуска пройден или пропущен.
+  bool onboarded;
+
+  /// Получать бета-версии (пробные сборки) раньше остальных.
+  bool betaUpdates;
+  List<String> trustedWifi;
+  String socksUser;
+  String socksPass;
+
   /// Очищать буфер обмена после импорта ключа или подписки.
   bool clearClipboard;
 
@@ -443,6 +495,16 @@ class AppSettings {
         'antiBlock': antiBlock,
         'autoMode': autoMode,
         'language': language,
+        'socksAuth': socksAuth,
+        'autoExclude': autoExclude,
+        'appsProxy': appsProxy,
+        'appsDirect': appsDirect,
+        'wifiAuto': wifiAuto,
+        'onboarded': onboarded,
+        'betaUpdates': betaUpdates,
+        'trustedWifi': trustedWifi,
+        'socksUser': socksUser,
+        'socksPass': socksPass,
         'favorites': favorites,
         'lastAppCheck': lastAppCheck,
         'skippedBuild': skippedBuild,
@@ -479,6 +541,16 @@ class AppSettings {
         antiBlock: j['antiBlock'] as bool? ?? false,
         autoMode: j['autoMode'] as bool? ?? false,
         language: j['language'] as String? ?? 'system',
+        socksAuth: j['socksAuth'] as bool? ?? false,
+        autoExclude: (j['autoExclude'] as List?)?.whereType<String>().toList(),
+        appsProxy: (j['appsProxy'] as List?)?.whereType<String>().toList(),
+        appsDirect: (j['appsDirect'] as List?)?.whereType<String>().toList(),
+        wifiAuto: j['wifiAuto'] as bool? ?? false,
+        onboarded: j['onboarded'] as bool? ?? false,
+        betaUpdates: j['betaUpdates'] as bool? ?? false,
+        trustedWifi: (j['trustedWifi'] as List?)?.whereType<String>().toList(),
+        socksUser: j['socksUser'] as String? ?? '',
+        socksPass: j['socksPass'] as String? ?? '',
         favorites: (j['favorites'] as List?)?.whereType<String>().toList(),
         lastAppCheck: (j['lastAppCheck'] as num?)?.toInt() ?? 0,
         skippedBuild: (j['skippedBuild'] as num?)?.toInt() ?? 0,

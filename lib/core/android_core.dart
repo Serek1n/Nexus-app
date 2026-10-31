@@ -7,6 +7,7 @@ import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 
 import '../models.dart';
 import '../platform/android_system.dart';
+import '../services/config_builder.dart';
 import '../services/ru_apps.dart';
 import 'vpn_core.dart';
 import '../l10n.dart';
@@ -18,6 +19,7 @@ class AndroidCore extends VpnCore {
   final List<String> _logs = [];
   late final V2ray _v2ray = V2ray(onStatusChanged: _onStatus);
   ConnState _last = ConnState.disconnected;
+  ConnStats _lastStats = const ConnStats();
   DateTime? _startedAt;
 
   /// Служебный вход ядра для запросов самого Nexus (Nexus исключён из
@@ -28,6 +30,58 @@ class AndroidCore extends VpnCore {
 
   @override
   String? get activeProxy => _last == ConnState.connected ? _probe : null;
+
+  bool _hasAuto = false;
+  bool _foreground = true;
+  Timer? _autoTimer;
+  Future<void> Function()? _pollNow;
+
+  @override
+  void setForeground(bool visible) {
+    final back = visible && !_foreground;
+    _foreground = visible;
+    // Вернулись в приложение — сразу свежие данные «Авто».
+    if (back) _pollNow?.call();
+  }
+  Map<String, int> _autoStatus = const {};
+
+  @override
+  Map<String, int> get autoStatus =>
+      _last == ConnState.connected ? _autoStatus : const {};
+
+  /// Режим «Авто»: раз в 20 секунд узнаём у ядра задержку серверов пула —
+  /// чтобы показать, через какой сервер сейчас идёт трафик.
+  void _startAutoPolling() {
+    _autoTimer?.cancel();
+    _autoStatus = const {};
+    if (!_hasAuto) return;
+    Future<void> poll() async {
+      final p = activeProxy;
+      // Свёрнутому приложению показывать нечего — не будим ядро.
+      if (p == null || !_foreground) return;
+      final c = HttpClient()
+        ..findProxy = ((_) => 'PROXY $p')
+        ..connectionTimeout = const Duration(seconds: 3);
+      try {
+        final req = await c
+            .getUrl(Uri.parse('http://$kMetricsHost/debug/vars'))
+            .timeout(const Duration(seconds: 4));
+        final res = await req.close().timeout(const Duration(seconds: 4));
+        final body = await res.transform(utf8.decoder).join();
+        _autoStatus = parseObservatory(
+            (jsonDecode(body) as Map<String, dynamic>)['observatory']);
+        // Повод перерисовать строку «Авто» на главной.
+        _stats.add(_lastStats);
+      } catch (_) {
+      } finally {
+        c.close(force: true);
+      }
+    }
+
+    _pollNow = poll;
+    _autoTimer = Timer.periodic(const Duration(seconds: 20), (_) => poll());
+    Future.delayed(const Duration(seconds: 6), poll);
+  }
 
   static String _token() {
     final r = Random.secure();
@@ -56,6 +110,9 @@ class AndroidCore extends VpnCore {
         },
       });
       cfg['inbounds'] = inbounds;
+      // Результаты проверки серверов «Авто» — через этот же вход с паролем.
+      addPrivateMetrics(cfg, 'nexus-probe');
+      _hasAuto = cfg['observatory'] != null;
       _probe = '$user:$pass@127.0.0.1:$port';
       return jsonEncode(cfg);
     } catch (_) {
@@ -88,12 +145,16 @@ class AndroidCore extends VpnCore {
       _last = mapped;
       _states.add(mapped);
     }
-    _stats.add(ConnStats(
+    _lastStats = ConnStats(
       uploadSpeed: s.uploadSpeed,
       downloadSpeed: s.downloadSpeed,
       upload: s.upload,
       download: s.download,
-    ));
+    );
+    _stats.add(_lastStats);
+    if (mapped == ConnState.connected && _autoTimer == null && _hasAuto) {
+      _startAutoPolling();
+    }
   }
 
   @override
@@ -161,6 +222,9 @@ class AndroidCore extends VpnCore {
       // Плагин не всегда присылает «DISCONNECTED» — сообщаем сами.
       _startedAt = null;
       _probe = null;
+      _autoTimer?.cancel();
+      _autoTimer = null;
+      _autoStatus = const {};
       if (_last != ConnState.disconnected) {
         _last = ConnState.disconnected;
         _states.add(ConnState.disconnected);

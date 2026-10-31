@@ -27,3 +27,15 @@ Future<bool> openWebLink(String url) async {
   }
   return false;
 }
+
+/// Ссылка продления по умолчанию (задаётся при сборке: RENEW_URL).
+const kRenewUrl = String.fromEnvironment('RENEW_URL');
+
+/// Куда вести клиента продлевать подписку: личный кабинет или поддержка
+/// из панели, иначе — ссылка из сборки (бот). null — некуда.
+String? renewUrlFor(String? webPage, String? support) {
+  for (final u in [webPage, support, kRenewUrl]) {
+    if (u != null && isSafeWebLink(u)) return u;
+  }
+  return null;
+}

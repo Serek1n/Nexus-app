@@ -75,6 +75,10 @@ abstract class VpnCore {
   /// (IP выхода, тест скорости, подписки). null — VPN не подключён.
   String? get activeProxy => null;
 
+  /// HTTP-прокси закрыт паролем (Windows, режим TUN) — показывать его
+  /// адрес пользователю незачем.
+  bool get httpLocked => false;
+
   /// Режим «Авто»: задержка каждого сервера пула по последней проверке ядра
   /// (тег nx-N → мс; -1 — не отвечает). Пусто — неизвестно.
   Map<String, int> get autoStatus => const {};

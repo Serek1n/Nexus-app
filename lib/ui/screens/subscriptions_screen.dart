@@ -261,11 +261,24 @@ class _SubCard extends StatelessWidget {
                             const TextStyle(fontSize: 12.5, color: NX.text)),
                   ),
                 ],
-                // Ссылки от панели: поддержка и личный кабинет.
-                if ([sub.supportUrl, sub.webPageUrl]
-                    .any((u) => u != null && isSafeWebLink(u))) ...[
+                // Продлить и ссылки от панели: поддержка, личный кабинет.
+                if (renewUrlFor(sub.webPageUrl, sub.supportUrl) != null) ...[
                   const SizedBox(height: 8),
-                  Wrap(spacing: 4, children: [
+                  Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                          backgroundColor: NX.violet.withValues(
+                              alpha: (days != null && days <= 7) ? 0.22 : 0.10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          visualDensity: VisualDensity.compact),
+                      onPressed: () => openWebLink(
+                          renewUrlFor(sub.webPageUrl, sub.supportUrl)!),
+                      icon: const Icon(Icons.autorenew_rounded,
+                          size: 17, color: NX.violet),
+                      label: Text(tr('Продлить'),
+                          style: const TextStyle(
+                              color: NX.text, fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
                     for (final (url, icon, label) in [
                       (sub.supportUrl, Icons.support_agent_rounded, tr('Поддержка')),
                       (sub.webPageUrl, Icons.open_in_new_rounded, tr('Личный кабинет')),
