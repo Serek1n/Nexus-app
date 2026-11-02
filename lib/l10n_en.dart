@@ -281,6 +281,8 @@ const kEn = <String, String>{
       'Downloading {0}%',
   'Загрузка не удалась (код {0})':
       'Download failed (code {0})',
+  'Загрузка остановилась — проверьте интернет и повторите':
+      'The download stalled — check your internet and try again',
   'Закрыть':
       'Close',
   'Запрет скриншотов и размытие в списке недавних приложений':
@@ -385,6 +387,8 @@ const kEn = <String, String>{
       'Couldn\'t build a QR code — copy the link',
   'Не удалось применить обновление ядра: {0}':
       'Couldn\'t apply the core update: {0}',
+  'Не удалось проверить файлы релиза':
+      'Couldn\'t verify the release files',
   'Не удалось разобрать ни один сервер подписки':
       'Couldn\'t parse any server in the subscription',
   'Не удалось разобрать ссылки из подписки':
@@ -781,6 +785,8 @@ const kEn = <String, String>{
       'Save the string in your notes or send it to yourself. To restore: “Add” → paste it → enter the password. Without the password the backup can\'t be opened — it can\'t be recovered.',
   'Сохранить':
       'Save',
+  'Ссылка без шифрования: её могут подменить по дороге. Добавляйте, только если доверяете источнику.':
+      'This link isn\'t encrypted: it could be tampered with on the way. Add it only if you trust the source.',
   'Ссылка на подписку (https://…) или ключ сервера (vless://, vmess://, trojan://, ss://)':
       'Subscription link (https://…) or server key (vless://, vmess://, trojan://, ss://)',
   'Ссылка подписки должна начинаться с https://':

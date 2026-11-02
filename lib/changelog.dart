@@ -24,6 +24,11 @@ const changelog = <(String, List<String>)>[
     'Выбор DNS: Cloudflare, Google, Quad9 или AdGuard без рекламы',
     'Избранные серверы на главной — переключение одним касанием',
     'Подписка, которая не обновляется, отмечена — с причиной в подсказке',
+    'Ядро Xray 26.10.31 на Android и Windows',
+    'Повторные нажатия «Подключить» больше не запускают ядро дважды',
+    'В фоне Nexus реже будит телефон — меньше расход батареи',
+    'Обновление приложения не зависает при обрыве загрузки',
+    'Защита ссылок nexus://: видно адрес сервера, предупреждение о ссылках без шифрования',
   ]),
   ('2.1.0', [
     'Первый запуск: подсказки по шагам',
@@ -194,6 +199,11 @@ const changelogEn = <String, List<String>>{
     'DNS choice: Cloudflare, Google, Quad9 or ad-free AdGuard',
     'Favorite servers on the home screen — switch with one tap',
     'A subscription that fails to update is marked, with the reason in a tooltip',
+    'Xray core 26.10.31 on Android and Windows',
+    'Repeated "Connect" taps no longer start the core twice',
+    'Nexus wakes the phone less often in the background — better battery life',
+    'App updates no longer hang when a download stalls',
+    'Safer nexus:// links: server address shown, warning for unencrypted links',
   ],
   '2.1.0': [
     'First launch: step-by-step tips',

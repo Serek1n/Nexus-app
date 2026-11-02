@@ -198,14 +198,13 @@ class AppUpdater {
       throw Exception(tr('В релизе нет файла для этого устройства'));
     }
 
-    final sumsBytes =
-        (await http.get(Uri.parse(sumsUrl), headers: _headers)).bodyBytes;
+    final sumsBytes = await _small(sumsUrl);
     if (kUpdatePubKey.isNotEmpty) {
       // Подпись списка контрольных сумм ключом владельца (секрет в GitHub).
       final sigUrl = assets['SHA256SUMS.txt.sig'];
       if (sigUrl == null) throw Exception(tr('Релиз не подписан — пропущен'));
-      final sig =
-          (await http.get(Uri.parse(sigUrl), headers: _headers)).bodyBytes;
+      final sig = await _small(sigUrl);
+      if (sig.length != 64) throw Exception(tr('Подпись релиза неверна — обновление отклонено'));
       final ok = await cg.Ed25519().verify(
         sumsBytes,
         signature: cg.Signature(sig,
@@ -230,6 +229,18 @@ class AppUpdater {
       sha256: sha,
       notes: _notes(body),
     );
+  }
+
+  /// Небольшой служебный файл релиза (суммы, подпись): с таймаутом
+  /// и ограничением размера — чтобы подменённый ответ не завесил проверку.
+  static Future<List<int>> _small(String url) async {
+    final res = await http
+        .get(Uri.parse(url), headers: _headers)
+        .timeout(const Duration(seconds: 20));
+    if (res.statusCode != 200 || res.bodyBytes.length > 64 * 1024) {
+      throw Exception(tr('Не удалось проверить файлы релиза'));
+    }
+    return res.bodyBytes;
   }
 
   /// Пункты «- …» из раздела «Что нового» описания релиза.
@@ -290,7 +301,12 @@ class AppUpdater {
       final digest = _DigestSink();
       final hasher = sha256.startChunkedConversion(digest);
       var got = 0;
-      await for (final chunk in resp.stream) {
+      // Загрузка застряла (нет данных минуту) — обрываем, а не ждём вечно.
+      await for (final chunk in resp.stream.timeout(const Duration(seconds: 60),
+          onTimeout: (s) {
+        s.addError(Exception(tr('Загрузка остановилась — проверьте интернет и повторите')));
+        s.close();
+      })) {
         sink.add(chunk);
         hasher.add(chunk);
         got += chunk.length;

@@ -40,14 +40,22 @@ class DeepLinks {
       if (value == null && uri.host == 'add') {
         // nexus://add/<url> — всё после «add/» как есть.
         final i = s.indexOf('add/');
-        if (i >= 0) value = Uri.decodeComponent(s.substring(i + 4));
+        if (i >= 0) {
+          try {
+            value = Uri.decodeComponent(s.substring(i + 4));
+          } catch (_) {
+            return null; // битая %-последовательность
+          }
+        }
       }
     }
     if (value == null || value.isEmpty) return null;
+    // Переводы строк и управляющие символы в ссылке — признак подмены.
+    if (value.codeUnits.any((c) => c < 0x20 || c == 0x7f)) return null;
     final lower = value.toLowerCase();
     const allowed = [
       'https://', 'http://', 'vless://', 'vmess://', 'trojan://',
-      'ss://', 'socks://', 'hysteria2://', 'hy2://',
+      'ss://', 'socks://', 'hysteria2://', 'hy2://', 'wireguard://', 'wg://',
     ];
     return allowed.any(lower.startsWith) ? value : null;
   }

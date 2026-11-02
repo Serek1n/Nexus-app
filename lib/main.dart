@@ -170,16 +170,37 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final isSub = payload.startsWith('http');
     final what = isSub
         ? (Uri.tryParse(payload)?.host ?? tr('подписку'))
-        : payload.split('://').first.toUpperCase();
+        : () {
+            // Протокол и адрес сервера — видно, куда пойдёт трафик.
+            final proto = payload.split('://').first.toUpperCase();
+            String host = '';
+            try {
+              host = Uri.parse(payload).host;
+            } catch (_) {}
+            return host.isEmpty ? proto : '$proto · $host';
+          }();
     final ok = await showDialog<bool>(
       context: ctx,
       builder: (c) => AlertDialog(
         title: Text(isSub ? tr('Добавить подписку?') : tr('Добавить сервер?')),
-        content: Text(
-          isSub
-              ? tr('Подписка с сайта {0} будет добавлена в Nexus.', [what])
-              : tr('Будет добавлен сервер {0}.', [what]),
-          style: const TextStyle(color: NX.text2),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isSub
+                  ? tr('Подписка с сайта {0} будет добавлена в Nexus.', [what])
+                  : tr('Будет добавлен сервер {0}.', [what]),
+              style: const TextStyle(color: NX.text2),
+            ),
+            if (payload.toLowerCase().startsWith('http://')) ...[
+              const SizedBox(height: 12),
+              Text(
+                tr('Ссылка без шифрования: её могут подменить по дороге. Добавляйте, только если доверяете источнику.'),
+                style: const TextStyle(color: NX.amber, fontSize: 13),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(

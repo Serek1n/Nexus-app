@@ -28,6 +28,10 @@ void main() {
       expect(DeepLinks.parse('https://evil.com'), isNull);
       expect(DeepLinks.parse('nexus://toggle'), isNull);
       expect(DeepLinks.parse('nexus://add/${'a' * 9000}'), isNull);
+      expect(DeepLinks.parse('nexus://add/https://x.com/%E0%A4%A'), isNull);
+      expect(DeepLinks.parse('nexus://add/https://x.com/a%0Ab'), isNull);
+      expect(DeepLinks.parse('nexus://add/wireguard://k@1.2.3.4:51820'),
+          'wireguard://k@1.2.3.4:51820');
     });
   });
 

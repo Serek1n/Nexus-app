@@ -621,8 +621,15 @@ class AppState extends ChangeNotifier {
     _scheduleHealth(const Duration(seconds: 45));
     _networkSignature().then((v) => _netSig = v);
     _lastNetTick = DateTime.now();
+    var tick = 0;
     _netTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (state != ConnState.connected) return;
+      // Приложение свёрнуто — сеть проверяем раз в 15 с, а не 5: меньше
+      // будим процессор, переключение сети всё равно ловится быстро.
+      if (!windowVisible && (tick++ % 3) != 0) {
+        _lastNetTick = DateTime.now();
+        return;
+      }
       // Большой разрыв между тиками — компьютер/телефон спал: проверяем канал.
       final now = DateTime.now();
       final slept = now.difference(_lastNetTick).inSeconds > 20;
@@ -937,7 +944,24 @@ class AppState extends ChangeNotifier {
 
   bool _askedNotifications = false;
 
-  Future<void> connect({bool keepFailover = false, bool auto = false}) async {
+  /// Подключение уже идёт — повторные нажатия (кнопка, плитка, трей,
+  /// автоподключение в Wi-Fi) не запускают ядро второй раз. Внутренние
+  /// переподключения и смена сервера при сбое проходят всегда.
+  bool _connectBusy = false;
+
+  Future<void> connect(
+      {bool keepFailover = false, bool auto = false, bool force = false}) async {
+    final internal = keepFailover || auto || force;
+    if (!internal && (_connectBusy || state == ConnState.connecting)) return;
+    _connectBusy = true;
+    try {
+      await _connect(keepFailover: keepFailover, auto: auto);
+    } finally {
+      _connectBusy = false;
+    }
+  }
+
+  Future<void> _connect({required bool keepFailover, required bool auto}) async {
     _wantConnected = true;
     if (!auto) {
       _retry = 0;
@@ -1023,7 +1047,7 @@ class AppState extends ChangeNotifier {
     if (state == ConnState.connected) {
       await core.disconnect();
       await Future.delayed(const Duration(milliseconds: 400));
-      await connect();
+      await connect(force: true);
     }
     return wasAuto;
   }
@@ -1076,7 +1100,7 @@ class AppState extends ChangeNotifier {
   Future<void> reconnect() async {
     await core.disconnect();
     await Future.delayed(const Duration(milliseconds: 300));
-    await connect();
+    await connect(force: true);
   }
 
   /// Перезапуск соединения после смены настроек маршрутизации.
@@ -1084,7 +1108,7 @@ class AppState extends ChangeNotifier {
     if (state != ConnState.connected) return;
     await core.disconnect();
     await Future.delayed(const Duration(milliseconds: 400));
-    await connect();
+    await connect(force: true);
   }
 
   // ─────────────────────────────── пинг ───────────────────────────────
