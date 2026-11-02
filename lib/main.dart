@@ -73,7 +73,8 @@ Future<void> main(List<String> args) async {
     unawaited(state.connect());
   }
   unawaited(AndroidSystem.listenLinks(DeepLinks.handle,
-      onToggle: () => unawaited(state.toggle())));
+      onToggle: () => unawaited(state.toggle()),
+      onTimerStop: state.onStopTimer));
   if (Platform.isWindows) {
     state.setWindowVisible(!startHidden);
     await WindowsHost(state).init();

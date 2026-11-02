@@ -540,6 +540,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     _retryTimer = Timer(Duration(seconds: sec), () async {
       if (!_wantConnected || state != ConnState.disconnected) return;
+      // Сети нет совсем (самолёт, подвал, метро) — не тратим попытки и
+      // батарею: ждём, пока появится, и сразу подключаемся.
+      if ((await _networkSignature()).isEmpty) {
+        _retry = 0;
+        reconnectNote = tr('Нет сети — подключусь, как только появится интернет');
+        notifyListeners();
+        _waitNetwork();
+        return;
+      }
       // Сервер так и не подключился за 4 попытки, а сеть есть —
       // не крутим бесконечно: другой сервер или понятная ошибка.
       final s = selected;
@@ -567,6 +576,18 @@ class AppState extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      await connect(keepFailover: true, auto: true);
+    });
+  }
+
+  /// Ждёт появления сети (проверка раз в 5 с) и переподключается.
+  void _waitNetwork() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 5), () async {
+      if (!_wantConnected || state != ConnState.disconnected) return;
+      if ((await _networkSignature()).isEmpty) return _waitNetwork();
+      reconnectNote = tr('Сеть появилась — подключаюсь…');
+      notifyListeners();
       await connect(keepFailover: true, auto: true);
     });
   }
@@ -851,7 +872,17 @@ class AppState extends ChangeNotifier {
       if (net?.key == _lastWifi) return;
       _lastWifi = net?.key;
       notifyListeners();
-      if (net == null || net.trustedBy(settings.trustedWifi)) return;
+      if (net == null) return;
+      if (net.trustedBy(settings.trustedWifi)) {
+        // Пришли домой — VPN не нужен (если пользователь так настроил).
+        // Срабатывает только при входе в сеть: включённый вручную VPN
+        // в этой же сети не трогаем.
+        if (settings.wifiTrustedOff && state == ConnState.connected) {
+          core.note(tr('Доверенная сеть «{0}» — отключаю VPN', [net.ssid]));
+          await disconnect();
+        }
+        return;
+      }
       if (state != ConnState.disconnected || selected == null) return;
       core.note(tr('Незнакомая сеть Wi-Fi «{0}» — включаю VPN', [net.ssid]));
       reconnectNote =
@@ -859,8 +890,12 @@ class AppState extends ChangeNotifier {
       await connect();
     }
 
-    _wifiTimer =
-        Timer.periodic(const Duration(seconds: 15), (_) => check());
+    // Свёрнутое приложение проверяет сеть вдвое реже — бережём батарею.
+    var tick = 0;
+    _wifiTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!windowVisible && (tick++ % 2) != 0) return;
+      check();
+    });
     unawaited(check());
   }
 
@@ -1015,8 +1050,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Таймер отключения: когда VPN выключится сам (null — не задан).
+  DateTime? stopAt;
+  Timer? _stopTimer;
+
+  /// Включает таймер на [d] или отменяет его (null).
+  void setStopTimer(Duration? d) {
+    _stopTimer?.cancel();
+    _stopTimer = null;
+    stopAt = d == null ? null : DateTime.now().add(d);
+    if (d != null) _stopTimer = Timer(d, onStopTimer);
+    if (!isDesktop) unawaited(AndroidSystem.setStopTimer(stopAt));
+    notifyListeners();
+  }
+
+  /// Время вышло (свой таймер или системный будильник Android).
+  void onStopTimer() {
+    if (stopAt == null && state == ConnState.disconnected) return;
+    core.note(tr('Таймер: VPN отключён'));
+    unawaited(disconnect());
+  }
+
   Future<void> disconnect() async {
     _wantConnected = false;
+    if (stopAt != null) setStopTimer(null);
     _connectGuard?.cancel();
     _retryTimer?.cancel();
     _stopHealth();
@@ -1675,6 +1732,7 @@ class AppState extends ChangeNotifier {
     _retryTimer?.cancel();
     _connectGuard?.cancel();
     _notifyTimer?.cancel();
+    _stopTimer?.cancel();
     _stopHealth();
     core.dispose();
     super.dispose();

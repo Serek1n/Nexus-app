@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../models.dart';
 import '../add_sheet.dart';
@@ -8,6 +7,7 @@ import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import '../../l10n.dart';
+import '../../platform/secure_clipboard.dart';
 
 class ServersScreen extends StatefulWidget {
   const ServersScreen({super.key, this.onSelected});
@@ -636,9 +636,9 @@ class _ServerTile extends StatelessWidget {
                 leading: const Icon(Icons.copy_rounded, color: NX.violet),
                 title: Text(tr('Скопировать ключ')),
                 onTap: () {
-                  Clipboard.setData(ClipboardData(text: server.link));
+                  copySecret(server.link);
                   Navigator.pop(ctx);
-                  toast(context, tr('Ключ скопирован'));
+                  toast(context, tr('Ключ скопирован · буфер очистится через 2 мин'));
                 },
               ),
               if (server.subscriptionId == null)

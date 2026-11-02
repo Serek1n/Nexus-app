@@ -1,6 +1,11 @@
 package __PACKAGE__
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.PersistableBundle
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -190,6 +195,29 @@ class MainActivity : FlutterActivity() {
                         ) {
                             requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 7002)
                         }
+                        result.success(null)
+                    }
+
+                    "copySecret" -> {
+                        // Ключ помечается как секрет: Android 13+ не показывает
+                        // его в превью буфера, клавиатуры не сохраняют в историю.
+                        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Nexus", call.arguments as? String ?: "")
+                        if (Build.VERSION.SDK_INT >= 24) {
+                            clip.description.extras = PersistableBundle().apply {
+                                putBoolean(
+                                    if (Build.VERSION.SDK_INT >= 33) ClipDescription.EXTRA_IS_SENSITIVE
+                                    else "android.content.extra.IS_SENSITIVE",
+                                    true
+                                )
+                            }
+                        }
+                        cm.setPrimaryClip(clip)
+                        result.success(true)
+                    }
+
+                    "stopTimer" -> {
+                        NexusTile.scheduleStop(this, (call.arguments as? Number)?.toLong() ?: 0L)
                         result.success(null)
                     }
 

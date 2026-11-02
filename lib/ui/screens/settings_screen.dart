@@ -21,6 +21,7 @@ import '../../platform/win_admin.dart';
 import '../rollback_sheet.dart';
 import 'apps_screen.dart';
 import '../../l10n.dart';
+import '../../platform/secure_clipboard.dart';
 
 
 class SettingsScreen extends StatelessWidget {
@@ -637,6 +638,14 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 if (st.wifiAuto) ...[
                   const Divider(height: 14),
+                  switchRow(
+                    Icons.home_rounded,
+                    tr('Отключать VPN в доверенных сетях'),
+                    tr('Дома VPN выключается сам, в чужой сети — снова включается'),
+                    st.wifiTrustedOff,
+                    (v) => app.updateSettings((s) => s.wifiTrustedOff = v),
+                  ),
+                  const Divider(height: 14),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 4, 6, 8),
                     child: Wrap(
@@ -1195,7 +1204,7 @@ class _CopyChip extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: () {
-          Clipboard.setData(ClipboardData(text: text.split(' ').last));
+          copySecret(text.split(' ').last);
           toast(context, tr('Скопировано: {0}', [text.split(' ').last]));
         },
         child: Tag(text, color: NX.cyan),

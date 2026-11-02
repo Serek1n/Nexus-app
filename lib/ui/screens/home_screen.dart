@@ -7,6 +7,7 @@ import '../../changelog.dart';
 import '../../models.dart';
 import '../../platform/android_system.dart';
 import '../../platform/links.dart';
+import '../../state/app_state.dart';
 import '../add_sheet.dart';
 import '../app_scope.dart';
 import '../connect_button.dart';
@@ -46,6 +47,7 @@ class HomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         _TimerLine(state: app.state, since: app.connectedAt),
+        if (app.state == ConnState.connected) const _StopTimerChip(),
       ],
     );
 
@@ -774,6 +776,83 @@ class _ServerRow extends StatelessWidget {
           ),
           const Icon(Icons.chevron_right_rounded, color: NX.text3),
         ],
+      ),
+    );
+  }
+}
+
+/// Таймер отключения: «Отключить через…» или «Отключится в 23:40 ✕».
+class _StopTimerChip extends StatelessWidget {
+  const _StopTimerChip();
+
+  static const _options = [15, 30, 60, 120, 240, 480];
+
+  static String _label(int m) => m < 60
+      ? tr('{0} мин', [m])
+      : tr('{0} ч', [m ~/ 60]);
+
+  Future<void> _pick(BuildContext context, AppState app) async {
+    final m = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(tr('Отключить VPN через'),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 17)),
+              const SizedBox(height: 4),
+              Text(
+                  tr('Сработает, даже если закрыть Nexus'),
+                  style: const TextStyle(color: NX.text2, fontSize: 13)),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final o in _options)
+                    ChoiceChip(
+                      label: Text(_label(o)),
+                      selected: false,
+                      onSelected: (_) => Navigator.pop(c, o),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (m != null) app.setStopTimer(Duration(minutes: m));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final at = app.stopAt;
+    if (at == null) {
+      return TextButton.icon(
+        onPressed: () => _pick(context, app),
+        style: TextButton.styleFrom(foregroundColor: NX.text3),
+        icon: const Icon(Icons.timer_outlined, size: 17),
+        label: Text(tr('Отключить через…'),
+            style: const TextStyle(fontSize: 12.5)),
+      );
+    }
+    final hh = at.hour.toString().padLeft(2, '0');
+    final mm = at.minute.toString().padLeft(2, '0');
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: InputChip(
+        avatar: const Icon(Icons.timer_rounded, size: 17, color: NX.violet),
+        label: Text(tr('Отключится в {0}', ['$hh:$mm'])),
+        onPressed: () => _pick(context, app),
+        onDeleted: () => app.setStopTimer(null),
+        deleteButtonTooltipMessage: tr('Отменить таймер'),
       ),
     );
   }

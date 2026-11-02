@@ -5,7 +5,7 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.2.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.3.0');
 
 /// Сборка из ветки beta (передаётся сборкой).
 const isBetaBuild = String.fromEnvironment('APP_CHANNEL') == 'beta';
@@ -18,6 +18,13 @@ const appVersionLabel = isBetaBuild
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.3.0', [
+    'Таймер: «Отключить через 15 мин … 8 ч» — сработает, даже если закрыть Nexus',
+    'Дома VPN выключается сам: «Отключать VPN в доверенных сетях»',
+    'Нет сети — Nexus ждёт её и подключается сразу, как только интернет появится',
+    'Скопированные ключи и подписки через 2 минуты пропадают из буфера, Android не показывает их в подсказках клавиатуры',
+    'В фоне Nexus реже проверяет Wi-Fi — меньше расход батареи',
+  ]),
   ('2.2.0', [
     'Android: «Постоянная VPN» больше не оставляет без интернета',
     'Проверка связи: найдёт, что именно не работает',
@@ -193,6 +200,13 @@ const changelog = <(String, List<String>)>[
 
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
+  '2.3.0': [
+    'Timer: "Turn off in 15 min … 8 h" — works even if Nexus is closed',
+    'The VPN turns off at home by itself: "Turn VPN off in trusted networks"',
+    'No network — Nexus waits and connects as soon as the internet is back',
+    'Copied keys and subscriptions disappear from the clipboard after 2 minutes; Android hides them from keyboard suggestions',
+    'In the background Nexus checks Wi-Fi less often — better battery life',
+  ],
   '2.2.0': [
     'Android: "Always-on VPN" no longer leaves you without internet',
     "Connection check: finds exactly what's broken",

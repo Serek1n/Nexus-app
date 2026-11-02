@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../changelog.dart';
 import '../platform/android_system.dart';
@@ -10,6 +9,7 @@ import 'app_scope.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
+import '../platform/secure_clipboard.dart';
 
 /// Окно «Откатить версию»: список прошлых релизов.
 Future<void> showRollbackSheet(BuildContext context) => showModalBottomSheet(
@@ -128,8 +128,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
               secondary: true,
               onPressed: () async {
                 final app = AppScope.read(context);
-                await Clipboard.setData(
-                    ClipboardData(text: app.exportSubscriptions()));
+                await copySecret(app.exportSubscriptions());
                 if (context.mounted) {
                   toast(context,
                       tr('Скопировано подписок: {0}', [app.subscriptions.length]));

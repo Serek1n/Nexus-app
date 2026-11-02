@@ -40,6 +40,7 @@ import javax.crypto.spec.GCMParameterSpec
  */
 object NexusTile {
     private const val PREFS = "nexus_tile"
+    const val ACTION_STOP = "nexus.action.STOP_TIMER"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -200,6 +201,57 @@ object NexusTile {
      * Переключает VPN без открытия окна. false — нужно приложение
      * (нет конфига, нет разрешения на VPN, система не дала запустить службу).
      */
+    /** Выключает VPN без приложения (плитка, таймер). */
+    fun stopNow(ctx: Context): Boolean {
+        if (!isOn(ctx)) return false
+        val vpnMode = prefs(ctx).getBoolean("vpn", true)
+        return try {
+            V2rayController.changeConnectionMode(
+                if (vpnMode) AppConfigs.V2RAY_CONNECTION_MODES.VPN_TUN
+                else AppConfigs.V2RAY_CONNECTION_MODES.PROXY_ONLY
+            )
+            V2rayController.StopV2ray(ctx)
+            save(ctx, false, vpnMode)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun stopIntent(ctx: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx, 900,
+            Intent(ctx, NexusAlarmReceiver::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+    /** Таймер отключения: [at] — время в мс, 0 — отменить. */
+    fun scheduleStop(ctx: Context, at: Long) {
+        val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pi = stopIntent(ctx)
+        am.cancel(pi)
+        if (at <= System.currentTimeMillis()) return
+        // Неточный будильник: точные требуют отдельного разрешения, а
+        // минута-другая для таймера не важна.
+        if (Build.VERSION.SDK_INT >= 23) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        } else {
+            am.set(AlarmManager.RTC_WAKEUP, at, pi)
+        }
+    }
+
+    /** Сработал таймер: приложение открыто — отключает оно, иначе сами. */
+    fun onStopTimer(ctx: Context) {
+        MainActivity.live?.let {
+            try {
+                it.invokeMethod("timerStop", null)
+                return
+            } catch (e: Exception) {
+            }
+        }
+        stopNow(ctx)
+    }
+
     fun toggle(ctx: Context): Boolean {
         // Приложение открыто — переключает оно: там проверка канала и
         // автопереподключение.
@@ -211,21 +263,8 @@ object NexusTile {
             }
         }
         val p = prefs(ctx)
-        val vpnMode = p.getBoolean("vpn", true)
         AppConfigs.NOTIFICATION_DISCONNECT_BUTTON_NAME = "ОТКЛЮЧИТЬ"
-        if (isOn(ctx)) {
-            return try {
-                V2rayController.changeConnectionMode(
-                    if (vpnMode) AppConfigs.V2RAY_CONNECTION_MODES.VPN_TUN
-                    else AppConfigs.V2RAY_CONNECTION_MODES.PROXY_ONLY
-                )
-                V2rayController.StopV2ray(ctx)
-                save(ctx, false, vpnMode)
-                true
-            } catch (e: Exception) {
-                false
-            }
-        }
+        if (isOn(ctx)) return stopNow(ctx)
         val enc = p.getString("cfg", null) ?: return false
         return try {
             val j = JSONObject(decrypt(enc))
@@ -470,6 +509,10 @@ class NexusWidget : AppWidgetProvider() {
 /** Напоминание о конце подписки (по будильнику AlarmManager). */
 class NexusAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action == NexusTile.ACTION_STOP) {
+            NexusTile.onStopTimer(ctx)
+            return
+        }
         NexusTile.notifyExpiry(
             ctx, intent.getStringExtra("title") ?: "Подписка", intent.getIntExtra("days", 1),
             intent.getStringExtra("msg"), intent.getStringExtra("url"),

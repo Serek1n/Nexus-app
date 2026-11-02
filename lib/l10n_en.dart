@@ -79,6 +79,8 @@ const kEn = <String, String>{
       '{0} uses UDP — checked by connecting',
   '{0} с':
       '{0} s',
+  '{0} ч':
+      '{0} h',
   '{0} ч {1} мин':
       '{0} h {1} min',
   '{0} через VPN':
@@ -249,10 +251,14 @@ const kEn = <String, String>{
       'Add a subscription',
   'Добавьте подписку из бота — серверы появятся здесь':
       'Add a subscription from the bot — servers will appear here',
+  'Доверенная сеть «{0}» — отключаю VPN':
+      'Trusted network "{0}" — turning the VPN off',
   'Доверенные сети:':
       'Trusted networks:',
   'Доверять «{0}»':
       'Trust “{0}”',
+  'Дома VPN выключается сам, в чужой сети — снова включается':
+      'At home the VPN turns off by itself, in other networks it turns back on',
   'Доступна {0}':
       '{0} available',
   'Доступно обновление':
@@ -319,8 +325,8 @@ const kEn = <String, String>{
       'System default',
   'Канал не отвечает — переподключаюсь…':
       'Connection not responding — reconnecting…',
-  'Ключ скопирован':
-      'Key copied',
+  'Ключ скопирован · буфер очистится через 2 мин':
+      'Key copied · clipboard clears in 2 min',
   'Ключи зашифрованы, реклама и трекеры блокируются':
       'Keys are encrypted, ads and trackers are blocked',
   'Кнопка «закрыть» прячет окно, VPN продолжает работать. Выйти можно из меню значка в трее':
@@ -411,6 +417,8 @@ const kEn = <String, String>{
       'No subscriptions',
   'Нет разрешения на VPN — разрешите его в системном окне':
       'No VPN permission — allow it in the system dialog',
+  'Нет сети — подключусь, как только появится интернет':
+      'No network — I\'ll connect as soon as the internet is back',
   'Нет соединения':
       'No connection',
   'Нет файла wintun.dll рядом с ядром — режим TUN недоступен, работаю через системный прокси. Переустановите Nexus':
@@ -457,20 +465,30 @@ const kEn = <String, String>{
       'Roll back version',
   'Откатить на {0}?':
       'Roll back to {0}?',
+  'Отключать VPN в доверенных сетях':
+      'Turn VPN off in trusted networks',
   'Отключение…':
       'Disconnecting…',
   'Отключено':
       'Disconnected',
   'Отключите для Nexus экономию батареи, чтобы VPN не обрывался':
       'Turn off battery saving for Nexus so the VPN doesn\'t drop',
+  'Отключится в {0}':
+      'Turns off at {0}',
   'Отключить':
       'Disconnect',
+  'Отключить VPN через':
+      'Turn VPN off in',
+  'Отключить через…':
+      'Turn off in…',
   'Открыть':
       'Open',
   'Открыть Nexus':
       'Open Nexus',
   'Отмена':
       'Cancel',
+  'Отменить таймер':
+      'Cancel timer',
   'Отправить':
       'Send',
   'Отчёт для поддержки':
@@ -727,6 +745,8 @@ const kEn = <String, String>{
       'Servers',
   'Сертификат сервера подписки недействителен или просрочен — сообщите владельцу подписки':
       'The subscription server certificate is invalid or expired — tell the subscription owner',
+  'Сеть появилась — подключаюсь…':
+      'Network is back — connecting…',
   'Сеть узнаётся по имени и роутеру: чужая сеть с тем же именем доверенной не станет. Если дома несколько роутеров, добавьте каждый.':
       'A network is recognized by name and router: a stranger\'s network with the same name won\'t be trusted. If you have several routers at home, add each one.',
   'Система может остановить VPN':
@@ -745,6 +765,8 @@ const kEn = <String, String>{
       'Downloaded and verified — ready to install',
   'Скопировано':
       'Copied',
+  'Скопировано · буфер очистится через 2 мин':
+      'Copied · clipboard clears in 2 min',
   'Скопировано подписок: {0}':
       'Subscriptions copied: {0}',
   'Скопировано: {0}':
@@ -785,14 +807,16 @@ const kEn = <String, String>{
       'Save the string in your notes or send it to yourself. To restore: “Add” → paste it → enter the password. Without the password the backup can\'t be opened — it can\'t be recovered.',
   'Сохранить':
       'Save',
+  'Сработает, даже если закрыть Nexus':
+      'Works even if Nexus is closed',
   'Ссылка без шифрования: её могут подменить по дороге. Добавляйте, только если доверяете источнику.':
       'This link isn\'t encrypted: it could be tampered with on the way. Add it only if you trust the source.',
   'Ссылка на подписку (https://…) или ключ сервера (vless://, vmess://, trojan://, ss://)':
       'Subscription link (https://…) or server key (vless://, vmess://, trojan://, ss://)',
   'Ссылка подписки должна начинаться с https://':
       'A subscription link must start with https://',
-  'Ссылка скопирована':
-      'Link copied',
+  'Ссылка скопирована · буфер очистится через 2 мин':
+      'Link copied · clipboard clears in 2 min',
   'Ссылка слишком длинная для QR-кода — скопируйте её':
       'The link is too long for a QR code — copy it',
   'Ссылку на подписку выдаёт бот NEXUS_VPN. Скопируйте её и нажмите кнопку — или отсканируйте QR-код.':
@@ -803,6 +827,8 @@ const kEn = <String, String>{
       'Only VPN traffic is counted; the data is stored on this device. Your carrier or provider may count differently.',
   'ТБ':
       'TB',
+  'Таймер: VPN отключён':
+      'Timer: VPN turned off',
   'Текст слишком длинный для QR-кода':
       'The text is too long for a QR code',
   'Тест скорости: {0} Мбит/с через «{1}»':

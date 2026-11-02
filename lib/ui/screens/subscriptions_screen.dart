@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../models.dart';
 import '../../platform/links.dart';
@@ -10,6 +9,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'home_screen.dart' show TrafficBar;
 import '../../l10n.dart';
+import '../../platform/secure_clipboard.dart';
 
 class SubscriptionsScreen extends StatelessWidget {
   const SubscriptionsScreen({super.key});
@@ -183,8 +183,8 @@ class _SubCard extends StatelessWidget {
                         warning: tr('По этой ссылке получают все серверы подписки и тратят её трафик. Делитесь только с теми, кому доверяете, и если владелец подписки не против.'),
                       );
                     case 'copy':
-                      await Clipboard.setData(ClipboardData(text: sub.url));
-                      if (context.mounted) toast(context, tr('Ссылка скопирована'));
+                      await copySecret(sub.url);
+                      if (context.mounted) toast(context, tr('Ссылка скопирована · буфер очистится через 2 мин'));
                     case 'rename':
                       await _rename(context);
                     case 'delete':

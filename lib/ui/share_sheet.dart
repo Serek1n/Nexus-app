@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../platform/android_system.dart';
 import '../services/qr.dart';
@@ -9,6 +8,7 @@ import 'app_scope.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
+import '../platform/secure_clipboard.dart';
 
 /// Окно «Поделиться»: QR-код, копирование и системное меню «Отправить».
 /// QR можно отсканировать в Nexus на другом устройстве (Добавить →
@@ -115,8 +115,10 @@ class _ShareBody extends StatelessWidget {
                 secondary: true,
                 expand: true,
                 onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: text));
-                  if (context.mounted) toast(context, tr('Скопировано'));
+                  await copySecret(text);
+                  if (context.mounted) {
+                    toast(context, tr('Скопировано · буфер очистится через 2 мин'));
+                  }
                 },
               ),
             ),
