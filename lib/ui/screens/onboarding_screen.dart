@@ -56,7 +56,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ]),
       );
 
-  Widget _step(String n, String title, String text, List<Widget> body) =>
+  Widget _step(String n, String title, String text, List<Widget> body,
+          {Widget? top}) =>
       SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(26, 24, 26, 24),
         child: ConstrainedBox(
@@ -64,6 +65,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (top != null) ...[top, const SizedBox(height: 28)],
               Text(n,
                   style: const TextStyle(
                       color: NX.violet,
@@ -106,7 +108,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           expand: true,
           onPressed: () => _go(1),
         ),
-      ]),
+      ],
+          // Знак Nexus с мягким свечением — первый экран не пустой сверху.
+          top: Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: NX.glow(NX.violet, strength: 1.4),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Image.asset('assets/icon/logo_mark.png',
+                  filterQuality: FilterQuality.medium),
+            ),
+          )),
       _step('1 / ${_count - 1}', tr('Добавьте подписку'),
           tr('Ссылку на подписку выдаёт бот NEXUS_VPN. Скопируйте её и нажмите кнопку — или отсканируйте QR-код.'),
           [

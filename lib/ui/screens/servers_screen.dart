@@ -363,29 +363,36 @@ class _GroupHeader extends StatelessWidget {
               ),
               const SizedBox(width: 4),
             ],
-            Flexible(
-              child: Text(title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: NX.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700)),
-            ),
-            if (hasActive) ...[
-              const SizedBox(width: 8),
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: app.state == ConnState.connected
-                      ? NX.mint
-                      : NX.violet,
+            // Название с точкой занимает всё свободное место — счётчик и
+            // кнопка всегда прижаты к правому краю (раньше Flexible + Spacer
+            // делили место пополам, и на ПК справа оставалась дыра).
+            Expanded(
+              child: Row(children: [
+                Flexible(
+                  child: Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: NX.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
                 ),
-              ),
-            ],
-            const Spacer(),
+                if (hasActive) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: app.state == ConnState.connected
+                          ? NX.mint
+                          : NX.violet,
+                    ),
+                  ),
+                ],
+              ]),
+            ),
+            const SizedBox(width: 8),
             Text(
               '${servers.length} ' '${plural(servers.length, tr('сервер'), tr('сервера'), tr('серверов'))}' '${pings.isEmpty ? '' : tr(' · от {0} мс', [pings.first])}',
               style: const TextStyle(color: NX.text3, fontSize: 12),

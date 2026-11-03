@@ -24,6 +24,9 @@ const changelog = <(String, List<String>)>[
     'Нет сети — Nexus ждёт её и подключается сразу, как только интернет появится',
     'Скопированные ключи и подписки через 2 минуты пропадают из буфера, Android не показывает их в подсказках клавиатуры',
     'В фоне Nexus реже проверяет Wi-Fi — меньше расход батареи',
+    'Дизайн: единый стиль переключателей и кнопок выбора, ровные отступы в настройках',
+    'Избранные серверы на главной больше не обрезаются, у безлимитной подписки — своя полоса',
+    'Красная кнопка «Сбросить всё», знак Nexus на первом экране, на ПК выровнены заголовки списка серверов',
   ]),
   ('2.2.0', [
     'Android: «Постоянная VPN» больше не оставляет без интернета',
@@ -206,6 +209,9 @@ const changelogEn = <String, List<String>>{
     'No network — Nexus waits and connects as soon as the internet is back',
     'Copied keys and subscriptions disappear from the clipboard after 2 minutes; Android hides them from keyboard suggestions',
     'In the background Nexus checks Wi-Fi less often — better battery life',
+    'Design: one style for switches and choice buttons, even spacing in settings',
+    'Favorite servers on the home screen are no longer cut off; unlimited subscriptions get their own bar',
+    'Red "Reset everything" button, Nexus mark on the first screen, aligned server list headers on PC',
   ],
   '2.2.0': [
     'Android: "Always-on VPN" no longer leaves you without internet',

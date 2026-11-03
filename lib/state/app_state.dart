@@ -27,6 +27,14 @@ import '../l10n.dart';
 class AppState extends ChangeNotifier {
   AppState() : core = VpnCore.create();
 
+  /// Для снимков экрана и тестов: своё ядро вместо настоящего.
+  @visibleForTesting
+  AppState.withCore(this.core);
+
+  /// Для снимков экрана: показать интерфейс ПК на любой системе.
+  @visibleForTesting
+  static bool? debugDesktop;
+
   final VpnCore core;
   late SharedPreferences _prefs;
 
@@ -65,7 +73,7 @@ class AppState extends ChangeNotifier {
   final traffic = TrafficLog();
   Timer? _subTimer, _updTimer;
 
-  bool get isDesktop => Platform.isWindows;
+  bool get isDesktop => debugDesktop ?? Platform.isWindows;
 
   /// Сохранённые данные загружены (до этого интерфейс не знает, есть ли
   /// у пользователя подписки).

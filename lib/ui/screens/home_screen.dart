@@ -794,10 +794,18 @@ class _StopTimerChip extends StatelessWidget {
   Future<void> _pick(BuildContext context, AppState app) async {
     final m = await showModalBottomSheet<int>(
       context: context,
-      showDragHandle: true,
-      builder: (c) => SafeArea(
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (c) => Container(
+        // Как у остальных окон: тёмная поверхность и скруглённый верх.
+        decoration: const BoxDecoration(
+          color: NX.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          border: Border(top: BorderSide(color: NX.strokeStrong)),
+        ),
+        child: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -824,6 +832,7 @@ class _StopTimerChip extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -862,6 +871,44 @@ class _StopTimerChip extends StatelessWidget {
 class _FavoritesStrip extends StatelessWidget {
   const _FavoritesStrip();
 
+  Widget _chip(AppState app, ServerProfile x, {bool expand = false}) {
+    final name = Text(x.cleanName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13));
+    return Material(
+      color: NX.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: NX.stroke),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          app.select(x);
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            ServerAvatar(server: x, size: 30),
+            const SizedBox(width: 8),
+            if (expand)
+              Expanded(child: name)
+            else
+              ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: name),
+            if (x.ping != null) ...[
+              const SizedBox(width: 6),
+              PingBadge(ping: x.ping),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
@@ -871,50 +918,36 @@ class _FavoritesStrip extends StatelessWidget {
         .take(8)
         .toList();
     if (favs.isEmpty) return const SizedBox.shrink();
+    // Один-два сервера — делят ширину поровну, ничего не обрезается.
+    if (favs.length <= 2) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(children: [
+          for (var i = 0; i < favs.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(child: _chip(app, favs[i], expand: true)),
+          ],
+        ]),
+      );
+    }
+    // Больше — лента с плавным краем справа: видно, что её можно листать.
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: SizedBox(
         height: 44,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: favs.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (_, i) {
-            final x = favs[i];
-            return Material(
-              color: NX.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: NX.stroke),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  app.select(x);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    ServerAvatar(server: x, size: 30),
-                    const SizedBox(width: 8),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      child: Text(x.cleanName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 13)),
-                    ),
-                    if (x.ping != null) ...[
-                      const SizedBox(width: 8),
-                      PingBadge(ping: x.ping),
-                    ],
-                  ]),
-                ),
-              ),
-            );
-          },
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (r) => const LinearGradient(
+            colors: [Colors.white, Colors.white, Colors.transparent],
+            stops: [0, 0.88, 1],
+          ).createShader(r),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(right: 24),
+            itemCount: favs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => _chip(app, favs[i]),
+          ),
         ),
       ),
     );
@@ -1064,7 +1097,7 @@ class TrafficBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final f = fraction;
     final color = f == null
-        ? NX.text3.withValues(alpha: 0.4)
+        ? NX.text3
         : f > 0.9
             ? NX.red
             : f > 0.75
@@ -1077,10 +1110,22 @@ class TrafficBar extends StatelessWidget {
         child: Stack(
           children: [
             Container(color: NX.surface2),
-            FractionallySizedBox(
-              widthFactor: f ?? 1,
-              child: Container(color: color),
-            ),
+            if (f == null)
+              // Безлимит — спокойная бирюзовая полоса, а не «заполненная до
+              // конца» серая, которую легко принять за исчерпанный трафик.
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    NX.mint.withValues(alpha: 0.35),
+                    NX.cyan.withValues(alpha: 0.15),
+                  ]),
+                ),
+              )
+            else
+              FractionallySizedBox(
+                widthFactor: f,
+                child: Container(color: color),
+              ),
           ],
         ),
       ),

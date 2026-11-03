@@ -1,0 +1,50 @@
+# Снимки экранов для проверки дизайна. Ничего не публикует — только
+# картинки в артефактах сборки. Запуск: вкладка Actions → «Снимки экранов»
+# → Run workflow, или push в ветку screens.
+name: Снимки экранов
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [screens]
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    name: Снимки экранов
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+      - name: Зависимости
+        run: flutter pub get
+      - name: Снимки
+        run: |
+          export MATERIAL_FONTS="$(dirname "$(dirname "$(which flutter)")")/bin/cache/artifacts/material_fonts"
+          ls "$MATERIAL_FONTS" || true
+          flutter test tool/screens/screens_test.dart --update-goldens
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: screens
+          path: tool/screens/out/*.png
+          retention-days: 7
+      # Картинки — в отдельную ветку screens-out (артефакты не всем доступны).
+      - name: Картинки в ветку screens-out
+        if: always()
+        run: |
+          mkdir -p /tmp/out && cp tool/screens/out/*.png /tmp/out/ || exit 0
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout --orphan screens-out
+          git rm -rfq . >/dev/null
+          cp /tmp/out/*.png .
+          git add *.png
+          git commit -qm "Снимки экранов"
+          git push -f origin screens-out

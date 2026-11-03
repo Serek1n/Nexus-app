@@ -285,6 +285,7 @@ class NeonButton extends StatelessWidget {
     this.loading = false,
     this.expand = false,
     this.secondary = false,
+    this.danger = false,
   });
   final String label;
   final VoidCallback? onPressed;
@@ -293,14 +294,25 @@ class NeonButton extends StatelessWidget {
   final bool expand;
   final bool secondary;
 
+  /// Опасное действие (сброс, удаление) — красный текст на тёмной плашке.
+  final bool danger;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final fg = secondary ? NX.text : Colors.white;
+    final fg = danger
+        ? NX.red
+        : secondary
+            ? NX.text
+            : Colors.white;
     return Opacity(
       opacity: enabled ? 1 : 0.5,
       child: Material(
-        color: secondary ? NX.surface2 : NX.violet,
+        color: danger
+            ? NX.red.withValues(alpha: 0.1)
+            : secondary
+                ? NX.surface2
+                : NX.violet,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),

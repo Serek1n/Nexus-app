@@ -246,9 +246,7 @@ class SettingsScreen extends StatelessWidget {
 
     Widget routeOption(RoutingMode m, String title, String text) {
       final on = st.routing == m;
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: NeonCard(
+      return NeonCard(
           active: on,
           onTap: () async {
             app.updateSettings((s) => s.routing = m);
@@ -283,7 +281,6 @@ class SettingsScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
       );
     }
 
@@ -291,7 +288,7 @@ class SettingsScreen extends StatelessWidget {
       bottom: false,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
+        children: _gapped([
           PageHeader(title: tr('Настройки')),
           SectionTitle(tr('Маршрутизация')),
           routeOption(
@@ -1102,7 +1099,7 @@ class SettingsScreen extends StatelessWidget {
                     NeonButton(
                       label: tr('Сбросить всё'),
                       icon: Icons.restart_alt_rounded,
-                      secondary: true,
+                      danger: true,
                       onPressed: () => _reset(context),
                     ),
                   ],
@@ -1110,9 +1107,25 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-        ],
+        ]),
       ),
     );
+  }
+
+  /// Ровные промежутки между карточками (после заголовков разделов — нет).
+  static List<Widget> _gapped(List<Widget> xs) {
+    final out = <Widget>[];
+    for (var i = 0; i < xs.length; i++) {
+      out.add(xs[i]);
+      final next = i + 1 < xs.length ? xs[i + 1] : null;
+      if (next != null &&
+          xs[i] is! SectionTitle &&
+          xs[i] is! PageHeader &&
+          next is! SectionTitle) {
+        out.add(const SizedBox(height: 10));
+      }
+    }
+    return out;
   }
 
   Future<void> _showLogs(BuildContext context) async {

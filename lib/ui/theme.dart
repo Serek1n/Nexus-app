@@ -71,6 +71,10 @@ ThemeData buildTheme() {
     error: NX.red,
     onPrimary: Colors.white,
     onSurface: NX.text,
+    // Выбранные чипы (DNS, язык, таймер) — фиолетовый оттенок, а не голубая
+    // заливка по умолчанию.
+    secondaryContainer: Color(0xFF2A2547),
+    onSecondaryContainer: NX.text,
   );
   final base = ThemeData(
     useMaterial3: true,
@@ -126,7 +130,12 @@ ThemeData buildTheme() {
           s.contains(WidgetState.selected) ? Colors.white : NX.text3),
       trackColor: WidgetStateProperty.resolveWith((s) =>
           s.contains(WidgetState.selected) ? NX.violet : NX.surface2),
-      trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+      // Выключенный переключатель — с тонкой обводкой, чтобы его было видно
+      // на тёмной карточке.
+      trackOutlineColor: WidgetStateProperty.resolveWith((s) =>
+          s.contains(WidgetState.selected)
+              ? Colors.transparent
+              : NX.strokeStrong),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: NX.surface,
@@ -138,6 +147,27 @@ ThemeData buildTheme() {
     bottomSheetTheme: const BottomSheetThemeData(
       backgroundColor: Colors.transparent,
       modalBackgroundColor: Colors.transparent,
+    ),
+    // Чипы в общем стиле: тёмная плашка и тонкая граница вместо белой
+    // рамки Material по умолчанию.
+    chipTheme: ChipThemeData(
+      backgroundColor: NX.surface2,
+      selectedColor: const Color(0xFF2A2547),
+      checkmarkColor: NX.violet,
+      deleteIconColor: NX.text2,
+      labelStyle: const TextStyle(
+          color: NX.text,
+          fontFamily: NX.body,
+          fontWeight: FontWeight.w600,
+          fontSize: 13.5),
+      side: WidgetStateBorderSide.resolveWith((s) => BorderSide(
+          color: s.contains(WidgetState.selected)
+              ? NX.violet.withValues(alpha: 0.6)
+              : NX.strokeStrong)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      iconTheme: const IconThemeData(color: NX.text2, size: 18),
+      showCheckmark: true,
     ),
     progressIndicatorTheme:
         const ProgressIndicatorThemeData(color: NX.violet),
