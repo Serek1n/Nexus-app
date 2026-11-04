@@ -349,6 +349,8 @@ const kEn = <String, String>{
       'MB',
   'Маршрутизация':
       'Routing',
+  'Маскировка соединения':
+      'Connection masking',
   'Наведите камеру на QR подписки или ключа':
       'Point the camera at a subscription or key QR code',
   'Нажмите «Установить» — скачаем и проверим':
@@ -455,8 +457,6 @@ const kEn = <String, String>{
       'Update subscriptions',
   'Обновляются автоматически при запуске':
       'Updated automatically on launch',
-  'Обход блокировок':
-      'Bypass blocking',
   'Отдача':
       'Upload',
   'Откатить':
@@ -727,8 +727,8 @@ const kEn = <String, String>{
       'Server',
   'Сервер «{0}»':
       'Server “{0}”',
-  'Сервер не отвечает — выберите другой сервер или включите «Обход блокировок».':
-      'The server doesn\'t respond — pick another server or turn on "Bypass blocking".',
+  'Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения».':
+      'The server doesn\'t respond — pick another server or turn on "Connection masking".',
   'Сервер ответил кодом {0}':
       'Server responded with code {0}',
   'Сервер подписки':

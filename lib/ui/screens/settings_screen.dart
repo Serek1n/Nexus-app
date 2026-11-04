@@ -609,7 +609,7 @@ class SettingsScreen extends StatelessWidget {
             const Divider(height: 14),
             switchRow(
               Icons.call_split_rounded,
-              tr('Обход блокировок'),
+              tr('Маскировка соединения'),
               tr('Если провайдер блокирует подключение к серверу: Nexus режет первый пакет на части, и его сложнее распознать. Подключение чуть медленнее'),
               st.antiBlock,
               (v) async {

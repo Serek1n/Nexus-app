@@ -1466,7 +1466,7 @@ class AppState extends ChangeNotifier {
       ..writeln('Режим: ${st.routing.name}'
           '${isDesktop ? ' · TUN ${st.windowsTun ? 'вкл' : 'выкл'} · прокси ${st.windowsSystemProxy ? 'вкл' : 'выкл'}' : ' · VPN ${st.androidVpnMode ? 'вкл' : 'только прокси'}'}'
           ' · Авто ${st.autoMode ? 'вкл' : 'выкл'}'
-          ' · обход ${st.antiBlock ? 'вкл' : 'выкл'}'
+          ' · маскировка ${st.antiBlock ? 'вкл' : 'выкл'}'
           ' · реклама ${st.blockAds ? 'блок' : 'нет'}'
           ' · своих правил ${st.customProxy.length + st.customDirect.length}'
           ' · Wi-Fi авто ${st.wifiAuto ? 'вкл (доверенных ${st.trustedWifi.length})' : 'выкл'}'

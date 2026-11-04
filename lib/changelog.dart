@@ -27,6 +27,7 @@ const changelog = <(String, List<String>)>[
     'Дизайн: единый стиль переключателей и кнопок выбора, ровные отступы в настройках',
     'Избранные серверы на главной больше не обрезаются, у безлимитной подписки — своя полоса',
     'Красная кнопка «Сбросить всё», знак Nexus на первом экране, на ПК выровнены заголовки списка серверов',
+    '«Обход блокировок» теперь называется «Маскировка соединения»',
   ]),
   ('2.2.0', [
     'Android: «Постоянная VPN» больше не оставляет без интернета',
@@ -212,6 +213,7 @@ const changelogEn = <String, List<String>>{
     'Design: one style for switches and choice buttons, even spacing in settings',
     'Favorite servers on the home screen are no longer cut off; unlimited subscriptions get their own bar',
     'Red "Reset everything" button, Nexus mark on the first screen, aligned server list headers on PC',
+    '"Bypass blocking" is now called "Connection masking"',
   ],
   '2.2.0': [
     'Android: "Always-on VPN" no longer leaves you without internet',
