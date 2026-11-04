@@ -225,31 +225,13 @@ object NexusTile {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-    /** Таймер отключения: [at] — время в мс, 0 — отменить. */
+    /** Будильник таймера отключения (бета 2.3.0): 0 — снять. Функция убрана,
+     *  остался только сброс будильника у тех, кто успел его поставить. */
+    @Suppress("UNUSED_PARAMETER")
     fun scheduleStop(ctx: Context, at: Long) {
         val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = stopIntent(ctx)
         am.cancel(pi)
-        if (at <= System.currentTimeMillis()) return
-        // Неточный будильник: точные требуют отдельного разрешения, а
-        // минута-другая для таймера не важна.
-        if (Build.VERSION.SDK_INT >= 23) {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-        } else {
-            am.set(AlarmManager.RTC_WAKEUP, at, pi)
-        }
-    }
-
-    /** Сработал таймер: приложение открыто — отключает оно, иначе сами. */
-    fun onStopTimer(ctx: Context) {
-        MainActivity.live?.let {
-            try {
-                it.invokeMethod("timerStop", null)
-                return
-            } catch (e: Exception) {
-            }
-        }
-        stopNow(ctx)
     }
 
     fun toggle(ctx: Context): Boolean {
@@ -509,10 +491,8 @@ class NexusWidget : AppWidgetProvider() {
 /** Напоминание о конце подписки (по будильнику AlarmManager). */
 class NexusAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == NexusTile.ACTION_STOP) {
-            NexusTile.onStopTimer(ctx)
-            return
-        }
+        // Будильник таймера отключения из беты 2.3.0 — функция убрана.
+        if (intent.action == NexusTile.ACTION_STOP) return
         NexusTile.notifyExpiry(
             ctx, intent.getStringExtra("title") ?: "Подписка", intent.getIntExtra("days", 1),
             intent.getStringExtra("msg"), intent.getStringExtra("url"),

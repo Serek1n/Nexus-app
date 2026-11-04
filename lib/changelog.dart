@@ -19,10 +19,11 @@ const appVersionLabel = isBetaBuild
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
   ('2.3.0', [
-    'Таймер: «Отключить через 15 мин … 8 ч» — сработает, даже если закрыть Nexus',
-    'Дома VPN выключается сам: «Отключать VPN в доверенных сетях»',
+    'Задержки серверов меряются сами после запуска — без «— мс» в списке',
+    'Смена сети (Wi-Fi ↔ мобильная): связь возвращается примерно на 10 секунд быстрее',
     'Нет сети — Nexus ждёт её и подключается сразу, как только интернет появится',
     'Скопированные ключи и подписки через 2 минуты пропадают из буфера, Android не показывает их в подсказках клавиатуры',
+    'Пароль новой резервной копии — от 8 символов',
     'В фоне Nexus реже проверяет Wi-Fi — меньше расход батареи',
     'Дизайн: единый стиль переключателей и кнопок выбора, ровные отступы в настройках',
     'Избранные серверы на главной больше не обрезаются, у безлимитной подписки — своя полоса',
@@ -205,10 +206,11 @@ const changelog = <(String, List<String>)>[
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
   '2.3.0': [
-    'Timer: "Turn off in 15 min … 8 h" — works even if Nexus is closed',
-    'The VPN turns off at home by itself: "Turn VPN off in trusted networks"',
+    'Server latencies are measured automatically after launch — no more "— ms" in the list',
+    'Network change (Wi-Fi ↔ mobile): connection comes back about 10 seconds faster',
     'No network — Nexus waits and connects as soon as the internet is back',
     'Copied keys and subscriptions disappear from the clipboard after 2 minutes; Android hides them from keyboard suggestions',
+    'New backups need a password of at least 8 characters',
     'In the background Nexus checks Wi-Fi less often — better battery life',
     'Design: one style for switches and choice buttons, even spacing in settings',
     'Favorite servers on the home screen are no longer cut off; unlimited subscriptions get their own bar',

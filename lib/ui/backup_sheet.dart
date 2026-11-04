@@ -67,7 +67,7 @@ Future<String?> _askPassword(BuildContext context, {required bool confirm}) {
               Padding(
                 padding: EdgeInsets.only(bottom: 12),
                 child: Text(
-                    tr('В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 6 символов.'),
+                    tr('В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 8 символов.'),
                     style: TextStyle(color: NX.text2, fontSize: 13)),
               ),
             TextField(
@@ -98,8 +98,14 @@ Future<String?> _askPassword(BuildContext context, {required bool confirm}) {
               child: Text(tr('Отмена'))),
           TextButton(
             onPressed: () {
-              if (a.text.length < 6) {
-                set(() => err = tr('Не короче 6 символов'));
+              // Новая копия — пароль от 8 символов (копию могут перебирать
+              // офлайн). Старые копии открываются с любым паролем.
+              if (confirm && a.text.length < 8) {
+                set(() => err = tr('Не короче 8 символов'));
+                return;
+              }
+              if (a.text.isEmpty) {
+                set(() => err = tr('Введите пароль'));
                 return;
               }
               if (confirm && a.text != b.text) {

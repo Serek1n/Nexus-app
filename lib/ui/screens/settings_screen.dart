@@ -635,14 +635,6 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 if (st.wifiAuto) ...[
                   const Divider(height: 14),
-                  switchRow(
-                    Icons.home_rounded,
-                    tr('Отключать VPN в доверенных сетях'),
-                    tr('Дома VPN выключается сам, в чужой сети — снова включается'),
-                    st.wifiTrustedOff,
-                    (v) => app.updateSettings((s) => s.wifiTrustedOff = v),
-                  ),
-                  const Divider(height: 14),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 4, 6, 8),
                     child: Wrap(

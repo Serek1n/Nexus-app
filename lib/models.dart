@@ -355,7 +355,6 @@ class AppSettings {
     List<String>? autoExclude,
     List<String>? appsProxy,
     this.wifiAuto = false,
-    this.wifiTrustedOff = false,
     this.onboarded = false,
     this.dns = 'cloudflare',
     this.betaUpdates = false,
@@ -446,8 +445,6 @@ class AppSettings {
   /// Включать VPN в незнакомых сетях Wi-Fi (кроме [trustedWifi]).
   bool wifiAuto;
 
-  /// В доверенной сети Wi-Fi VPN отключается сам (при входе в сеть).
-  bool wifiTrustedOff;
 
   /// Экран первого запуска пройден или пропущен.
   bool onboarded;
@@ -511,7 +508,6 @@ class AppSettings {
         'appsProxy': appsProxy,
         'appsDirect': appsDirect,
         'wifiAuto': wifiAuto,
-        'wifiTrustedOff': wifiTrustedOff,
         'onboarded': onboarded,
         'dns': dns,
         'betaUpdates': betaUpdates,
@@ -559,7 +555,6 @@ class AppSettings {
         appsProxy: (j['appsProxy'] as List?)?.whereType<String>().toList(),
         appsDirect: (j['appsDirect'] as List?)?.whereType<String>().toList(),
         wifiAuto: j['wifiAuto'] as bool? ?? false,
-        wifiTrustedOff: j['wifiTrustedOff'] as bool? ?? false,
         onboarded: j['onboarded'] as bool? ?? false,
         dns: j['dns'] as String? ?? 'cloudflare',
         betaUpdates: j['betaUpdates'] as bool? ?? false,

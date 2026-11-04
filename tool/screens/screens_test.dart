@@ -165,15 +165,7 @@ void main() {
       await t.pumpWidget(NexusApp(state: app!));
       await _shot(t, 'phone_1_home');
       await t.runAsync(() => app.connect());
-      app.setStopTimer(const Duration(minutes: 60));
       await _shot(t, 'phone_2_home_connected');
-      app.setStopTimer(null);
-      await t.pump(const Duration(milliseconds: 300));
-      await t.tap(find.text(tr('Отключить через…')), warnIfMissed: false);
-      await _shot(t, 'phone_2b_timer_sheet');
-      await t.tapAt(const Offset(200, 100));
-      await t.pump(const Duration(milliseconds: 500));
-      app.setStopTimer(const Duration(minutes: 60));
       await _tab(t, tr('Серверы'));
       await _shot(t, 'phone_3_servers');
       await _tab(t, tr('Подписки'));
@@ -184,7 +176,6 @@ void main() {
       _size(t, 412, 915);
       await _tab(t, tr('Главная'));
       await t.runAsync(() => app.disconnect());
-      app.setStopTimer(null);
       await t.pumpWidget(const SizedBox());
       app.dispose();
     });

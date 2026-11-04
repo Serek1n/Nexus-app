@@ -71,7 +71,7 @@ class AppState extends ChangeNotifier {
 
   /// Трафик через VPN по дням.
   final traffic = TrafficLog();
-  Timer? _subTimer, _updTimer;
+  Timer? _subTimer, _updTimer, _startPing;
 
   bool get isDesktop => debugDesktop ?? Platform.isWindows;
 
@@ -113,7 +113,10 @@ class AppState extends ChangeNotifier {
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     L10n.apply(settings.language, PlatformDispatcher.instance.locale.languageCode);
     language.value = L10n.lang;
-    if (!isDesktop) unawaited(AndroidSystem.setTileLabels());
+    if (!isDesktop) {
+      unawaited(AndroidSystem.setTileLabels());
+      unawaited(AndroidSystem.cancelStopTimer());
+    }
     traffic.load(_prefs);
     try {
       final subs = jsonDecode(await _readSecret('subscriptions')) as List;
@@ -189,6 +192,17 @@ class AppState extends ChangeNotifier {
       _updTimer = Timer.periodic(const Duration(hours: 6),
           (_) => checkAppUpdate(silent: true));
     }
+
+    // Задержки после перезапуска неизвестны («— мс»): один раз меряем их
+    // сами, когда запуск и подключение уже прошли.
+    _startPing = Timer(const Duration(seconds: 8), () {
+      if (!windowVisible || pingingAll || servers.isEmpty) return;
+      if (servers.length > 40 || servers.any((s) => s.ping != null)) return;
+      if (state == ConnState.connecting || state == ConnState.disconnecting) {
+        return;
+      }
+      unawaited(pingAll());
+    });
 
     // Раз в сутки тихо проверяем обновление ядра Xray.
     final day = const Duration(hours: 20).inMilliseconds;
@@ -605,6 +619,9 @@ class AppState extends ChangeNotifier {
   /// следующий сервер. Смена сети (Wi-Fi ↔ мобильный) — проверка сразу.
   Timer? _netTimer;
   String? _netSig;
+
+  /// Когда последний раз сменилась сеть (Wi-Fi ↔ мобильная).
+  DateTime? _netChangedAt;
   DateTime _lastNetTick = DateTime.now();
   Timer? _connectGuard;
 
@@ -671,7 +688,10 @@ class AppState extends ChangeNotifier {
       if (sig.isEmpty) return;
       final changed = _netSig != null && _netSig!.isNotEmpty && sig != _netSig;
       _netSig = sig;
-      if (changed) _scheduleHealth(const Duration(seconds: 2));
+      if (changed) {
+        _netChangedAt = DateTime.now();
+        _scheduleHealth(const Duration(seconds: 2));
+      }
     });
   }
 
@@ -710,6 +730,20 @@ class AppState extends ChangeNotifier {
       return;
     }
     _healthFails++;
+    // Только что сменилась сеть, а канал молчит — старые соединения ядра
+    // остались на прежней сети. Не ждём повторной проверки, сразу
+    // переподключаемся: связь возвращается на ~10 с быстрее.
+    final netJustChanged = _netChangedAt != null &&
+        DateTime.now().difference(_netChangedAt!) < const Duration(seconds: 30);
+    if (netJustChanged && _healthFails == 1 && _deadReconnects == 0) {
+      _healthFails = 0;
+      _netChangedAt = null;
+      _deadReconnects++;
+      reconnectNote = tr('Сеть сменилась — переподключаюсь…');
+      notifyListeners();
+      await reconnect();
+      return;
+    }
     if (_healthFails == 1) {
       _scheduleHealth(const Duration(seconds: 10));
       return;
@@ -880,17 +914,7 @@ class AppState extends ChangeNotifier {
       if (net?.key == _lastWifi) return;
       _lastWifi = net?.key;
       notifyListeners();
-      if (net == null) return;
-      if (net.trustedBy(settings.trustedWifi)) {
-        // Пришли домой — VPN не нужен (если пользователь так настроил).
-        // Срабатывает только при входе в сеть: включённый вручную VPN
-        // в этой же сети не трогаем.
-        if (settings.wifiTrustedOff && state == ConnState.connected) {
-          core.note(tr('Доверенная сеть «{0}» — отключаю VPN', [net.ssid]));
-          await disconnect();
-        }
-        return;
-      }
+      if (net == null || net.trustedBy(settings.trustedWifi)) return;
       if (state != ConnState.disconnected || selected == null) return;
       core.note(tr('Незнакомая сеть Wi-Fi «{0}» — включаю VPN', [net.ssid]));
       reconnectNote =
@@ -1058,30 +1082,8 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Таймер отключения: когда VPN выключится сам (null — не задан).
-  DateTime? stopAt;
-  Timer? _stopTimer;
-
-  /// Включает таймер на [d] или отменяет его (null).
-  void setStopTimer(Duration? d) {
-    _stopTimer?.cancel();
-    _stopTimer = null;
-    stopAt = d == null ? null : DateTime.now().add(d);
-    if (d != null) _stopTimer = Timer(d, onStopTimer);
-    if (!isDesktop) unawaited(AndroidSystem.setStopTimer(stopAt));
-    notifyListeners();
-  }
-
-  /// Время вышло (свой таймер или системный будильник Android).
-  void onStopTimer() {
-    if (stopAt == null && state == ConnState.disconnected) return;
-    core.note(tr('Таймер: VPN отключён'));
-    unawaited(disconnect());
-  }
-
   Future<void> disconnect() async {
     _wantConnected = false;
-    if (stopAt != null) setStopTimer(null);
     _connectGuard?.cancel();
     _retryTimer?.cancel();
     _stopHealth();
@@ -1740,7 +1742,7 @@ class AppState extends ChangeNotifier {
     _retryTimer?.cancel();
     _connectGuard?.cancel();
     _notifyTimer?.cancel();
-    _stopTimer?.cancel();
+    _startPing?.cancel();
     _stopHealth();
     core.dispose();
     super.dispose();

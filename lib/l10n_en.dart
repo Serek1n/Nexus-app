@@ -79,8 +79,6 @@ const kEn = <String, String>{
       '{0} uses UDP — checked by connecting',
   '{0} с':
       '{0} s',
-  '{0} ч':
-      '{0} h',
   '{0} ч {1} мин':
       '{0} h {1} min',
   '{0} через VPN':
@@ -141,8 +139,8 @@ const kEn = <String, String>{
       'In cafés, hotels and airports Nexus connects by itself while it\'s running. Android only reveals the network name with location permission',
   'В кафе, отеле, аэропорту Nexus подключится сам. Домашние сети отметьте доверенными':
       'In cafés, hotels and airports Nexus connects by itself. Mark your home networks as trusted',
-  'В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 6 символов.':
-      'The backup contains your subscriptions and server keys. Choose a password of at least 6 characters.',
+  'В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 8 символов.':
+      'The backup holds your subscriptions and server keys. Choose a password of at least 8 characters.',
   'В настройках VPN выберите Nexus и включите «Постоянная VPN» и «Блокировать соединения без VPN»':
       'In VPN settings, choose Nexus and turn on “Always-on VPN” and “Block connections without VPN”',
   'В подписке не найдено ни одного сервера':
@@ -153,6 +151,8 @@ const kEn = <String, String>{
       'Release {0} has no Windows build',
   'В релизе нет файла для этого устройства':
       'The release has no file for this device',
+  'Введите пароль':
+      'Enter the password',
   'Вернуть в режим «Авто»':
       'Return to Auto mode',
   'Вернуть исходное':
@@ -251,14 +251,10 @@ const kEn = <String, String>{
       'Add a subscription',
   'Добавьте подписку из бота — серверы появятся здесь':
       'Add a subscription from the bot — servers will appear here',
-  'Доверенная сеть «{0}» — отключаю VPN':
-      'Trusted network "{0}" — turning the VPN off',
   'Доверенные сети:':
       'Trusted networks:',
   'Доверять «{0}»':
       'Trust “{0}”',
-  'Дома VPN выключается сам, в чужой сети — снова включается':
-      'At home the VPN turns off by itself, in other networks it turns back on',
   'Доступна {0}':
       '{0} available',
   'Доступно обновление':
@@ -371,8 +367,8 @@ const kEn = <String, String>{
       'Get started',
   'Не использовать в режиме «Авто»':
       'Don\'t use in Auto mode',
-  'Не короче 6 символов':
-      'At least 6 characters',
+  'Не короче 8 символов':
+      'At least 8 characters',
   'Не найдено ни одной поддерживаемой ссылки':
       'No supported links found',
   'Не найдено ядро {0} рядом с программой. Переустановите Nexus из архива целиком.':
@@ -465,30 +461,20 @@ const kEn = <String, String>{
       'Roll back version',
   'Откатить на {0}?':
       'Roll back to {0}?',
-  'Отключать VPN в доверенных сетях':
-      'Turn VPN off in trusted networks',
   'Отключение…':
       'Disconnecting…',
   'Отключено':
       'Disconnected',
   'Отключите для Nexus экономию батареи, чтобы VPN не обрывался':
       'Turn off battery saving for Nexus so the VPN doesn\'t drop',
-  'Отключится в {0}':
-      'Turns off at {0}',
   'Отключить':
       'Disconnect',
-  'Отключить VPN через':
-      'Turn VPN off in',
-  'Отключить через…':
-      'Turn off in…',
   'Открыть':
       'Open',
   'Открыть Nexus':
       'Open Nexus',
   'Отмена':
       'Cancel',
-  'Отменить таймер':
-      'Cancel timer',
   'Отправить':
       'Send',
   'Отчёт для поддержки':
@@ -509,8 +495,8 @@ const kEn = <String, String>{
       'Backup password',
   'Пароль от копии':
       'Backup password',
-  'Пароль — не короче 6 символов':
-      'Password must be at least 6 characters',
+  'Пароль — не короче 8 символов':
+      'Password — at least 8 characters',
   'Перезапуск не удался: {0}':
       'Restart failed: {0}',
   'Перезапустить':
@@ -747,6 +733,8 @@ const kEn = <String, String>{
       'The subscription server certificate is invalid or expired — tell the subscription owner',
   'Сеть появилась — подключаюсь…':
       'Network is back — connecting…',
+  'Сеть сменилась — переподключаюсь…':
+      'Network changed — reconnecting…',
   'Сеть узнаётся по имени и роутеру: чужая сеть с тем же именем доверенной не станет. Если дома несколько роутеров, добавьте каждый.':
       'A network is recognized by name and router: a stranger\'s network with the same name won\'t be trusted. If you have several routers at home, add each one.',
   'Система может остановить VPN':
@@ -807,8 +795,6 @@ const kEn = <String, String>{
       'Save the string in your notes or send it to yourself. To restore: “Add” → paste it → enter the password. Without the password the backup can\'t be opened — it can\'t be recovered.',
   'Сохранить':
       'Save',
-  'Сработает, даже если закрыть Nexus':
-      'Works even if Nexus is closed',
   'Ссылка без шифрования: её могут подменить по дороге. Добавляйте, только если доверяете источнику.':
       'This link isn\'t encrypted: it could be tampered with on the way. Add it only if you trust the source.',
   'Ссылка на подписку (https://…) или ключ сервера (vless://, vmess://, trojan://, ss://)':
@@ -827,8 +813,6 @@ const kEn = <String, String>{
       'Only VPN traffic is counted; the data is stored on this device. Your carrier or provider may count differently.',
   'ТБ':
       'TB',
-  'Таймер: VPN отключён':
-      'Timer: VPN turned off',
   'Текст слишком длинный для QR-кода':
       'The text is too long for a QR code',
   'Тест скорости: {0} Мбит/с через «{1}»':

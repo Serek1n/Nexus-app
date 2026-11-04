@@ -30,8 +30,8 @@ class Backup {
   /// Подбор ключа из пароля занимает 1–3 секунды — выполняем в отдельном
   /// потоке, чтобы интерфейс не замирал.
   static Future<String> encrypt(Map<String, dynamic> data, String password) {
-    if (password.length < 6) {
-      throw Exception(tr('Пароль — не короче 6 символов'));
+    if (password.length < 8) {
+      throw Exception(tr('Пароль — не короче 8 символов'));
     }
     final json = jsonEncode(data);
     final salt = _random(16);

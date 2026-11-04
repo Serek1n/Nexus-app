@@ -25,14 +25,13 @@ class AndroidSystem {
   /// Ссылки nexus://: первая (с которой открыли приложение) и последующие.
   /// [onToggle] — нажатие плитки «Nexus» в шторке уведомлений.
   static Future<void> listenLinks(void Function(String) onLink,
-      {void Function()? onToggle, void Function()? onTimerStop}) async {
+      {void Function()? onToggle}) async {
     if (!Platform.isAndroid) return;
     _ch.setMethodCallHandler((call) async {
       if (call.method == 'link' && call.arguments is String) {
         onLink(call.arguments as String);
       }
       if (call.method == 'toggle') onToggle?.call();
-      if (call.method == 'timerStop') onTimerStop?.call();
     });
     final first = await _call<String>('initialLink');
     if (first != null) onLink(first);
@@ -100,10 +99,9 @@ class AndroidSystem {
   static Future<bool> copySecret(String text) async =>
       await _call<bool>('copySecret', text) == true;
 
-  /// Таймер отключения в системе: срабатывает, даже если Nexus выгружен.
-  /// [at] = null — отменить.
-  static Future<void> setStopTimer(DateTime? at) =>
-      _call('stopTimer', at?.millisecondsSinceEpoch ?? 0);
+  /// Снимает системный будильник таймера отключения, оставшийся от
+  /// бета-версии 2.3.0 (функция убрана).
+  static Future<void> cancelStopTimer() => _call('stopTimer', 0);
 
   /// Android 13+: разрешение на уведомление о подключении.
   static Future<void> requestNotifications() => _call('requestNotifications');
