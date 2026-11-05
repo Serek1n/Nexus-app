@@ -110,10 +110,6 @@ def android():
          r'\1<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />'
          r'\1<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
          r'\1<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
-         # Имя сети Wi-Fi для «Включать VPN в чужих Wi-Fi» (запрашивается
-         # только когда пользователь включает эту функцию).
-         r'\1<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />'
-         r'\1<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
          # Внутреннее разрешение: статус VPN могут присылать только
          # процессы самого Nexus (см. tool/patch_plugin.py).
          r'\1<permission android:name="${applicationId}.permission.NEXUS_INTERNAL" android:protectionLevel="signature" />'

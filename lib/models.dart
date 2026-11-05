@@ -354,11 +354,9 @@ class AppSettings {
     this.socksAuth = false,
     List<String>? autoExclude,
     List<String>? appsProxy,
-    this.wifiAuto = false,
     this.onboarded = false,
     this.dns = 'cloudflare',
     this.betaUpdates = false,
-    List<String>? trustedWifi,
     List<String>? appsDirect,
     this.socksUser = '',
     this.socksPass = '',
@@ -376,8 +374,7 @@ class AppSettings {
         customDirect = customDirect ?? [],
         autoExclude = autoExclude ?? [],
         appsProxy = appsProxy ?? [],
-        appsDirect = appsDirect ?? [],
-        trustedWifi = trustedWifi ?? [];
+        appsDirect = appsDirect ?? [];
 
   RoutingMode routing;
 
@@ -442,8 +439,6 @@ class AppSettings {
   List<String> appsProxy;
   List<String> appsDirect;
 
-  /// Включать VPN в незнакомых сетях Wi-Fi (кроме [trustedWifi]).
-  bool wifiAuto;
 
 
   /// Экран первого запуска пройден или пропущен.
@@ -454,7 +449,6 @@ class AppSettings {
 
   /// Получать бета-версии (пробные сборки) раньше остальных.
   bool betaUpdates;
-  List<String> trustedWifi;
   String socksUser;
   String socksPass;
 
@@ -507,11 +501,9 @@ class AppSettings {
         'autoExclude': autoExclude,
         'appsProxy': appsProxy,
         'appsDirect': appsDirect,
-        'wifiAuto': wifiAuto,
         'onboarded': onboarded,
         'dns': dns,
         'betaUpdates': betaUpdates,
-        'trustedWifi': trustedWifi,
         'socksUser': socksUser,
         'socksPass': socksPass,
         'favorites': favorites,
@@ -554,11 +546,9 @@ class AppSettings {
         autoExclude: (j['autoExclude'] as List?)?.whereType<String>().toList(),
         appsProxy: (j['appsProxy'] as List?)?.whereType<String>().toList(),
         appsDirect: (j['appsDirect'] as List?)?.whereType<String>().toList(),
-        wifiAuto: j['wifiAuto'] as bool? ?? false,
         onboarded: j['onboarded'] as bool? ?? false,
         dns: j['dns'] as String? ?? 'cloudflare',
         betaUpdates: j['betaUpdates'] as bool? ?? false,
-        trustedWifi: (j['trustedWifi'] as List?)?.whereType<String>().toList(),
         socksUser: j['socksUser'] as String? ?? '',
         socksPass: j['socksPass'] as String? ?? '',
         favorites: (j['favorites'] as List?)?.whereType<String>().toList(),

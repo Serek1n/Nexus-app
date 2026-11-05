@@ -135,10 +135,6 @@ const kEn = <String, String>{
       'xray.exe is missing from the archive',
   'В избранное':
       'Add to favorites',
-  'В кафе, отеле, аэропорту Nexus подключится сам, пока он запущен. Android сообщает имя сети только с разрешением на геолокацию':
-      'In cafés, hotels and airports Nexus connects by itself while it\'s running. Android only reveals the network name with location permission',
-  'В кафе, отеле, аэропорту Nexus подключится сам. Домашние сети отметьте доверенными':
-      'In cafés, hotels and airports Nexus connects by itself. Mark your home networks as trusted',
   'В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 8 символов.':
       'The backup holds your subscriptions and server keys. Choose a password of at least 8 characters.',
   'В настройках VPN выберите Nexus и включите «Постоянная VPN» и «Блокировать соединения без VPN»':
@@ -165,8 +161,6 @@ const kEn = <String, String>{
       'All traffic',
   'Весь трафик телефона идёт через Nexus':
       'All phone traffic goes through Nexus',
-  'Включать VPN в чужих Wi-Fi':
-      'Turn on VPN in unknown Wi-Fi',
   'Включён, но Nexus запущен без прав администратора — работает системный прокси':
       'On, but Nexus is running without administrator rights — the system proxy is used',
   'Внимание: трафик идёт мимо VPN':
@@ -251,10 +245,6 @@ const kEn = <String, String>{
       'Add a subscription',
   'Добавьте подписку из бота — серверы появятся здесь':
       'Add a subscription from the bot — servers will appear here',
-  'Доверенные сети:':
-      'Trusted networks:',
-  'Доверять «{0}»':
-      'Trust “{0}”',
   'Доступна {0}':
       '{0} available',
   'Доступно обновление':
@@ -405,8 +395,6 @@ const kEn = <String, String>{
       'Can\'t connect to “{0}”. Try another server',
   'Неверный пароль':
       'Wrong password',
-  'Незнакомая сеть Wi-Fi «{0}» — включаю VPN':
-      'Unknown Wi-Fi “{0}” — turning on the VPN',
   'Нет интернета даже без VPN — проверьте Wi-Fi или мобильные данные.':
       'No internet even without the VPN — check Wi-Fi or mobile data.',
   'Нет контрольной суммы для {0}':
@@ -735,8 +723,6 @@ const kEn = <String, String>{
       'Network is back — connecting…',
   'Сеть сменилась — переподключаюсь…':
       'Network changed — reconnecting…',
-  'Сеть узнаётся по имени и роутеру: чужая сеть с тем же именем доверенной не станет. Если дома несколько роутеров, добавьте каждый.':
-      'A network is recognized by name and router: a stranger\'s network with the same name won\'t be trusted. If you have several routers at home, add each one.',
   'Система может остановить VPN':
       'The system may stop the VPN',
   'Системный прокси':
@@ -937,8 +923,6 @@ const kEn = <String, String>{
       'not connected',
   'не удалось узнать':
       'couldn\'t find out',
-  'нет':
-      'none',
   'нет связи':
       'no connection',
   'нет сервисов Google Play':

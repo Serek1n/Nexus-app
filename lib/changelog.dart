@@ -5,7 +5,7 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.3.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.3.1');
 
 /// Сборка из ветки beta (передаётся сборкой).
 const isBetaBuild = String.fromEnvironment('APP_CHANNEL') == 'beta';
@@ -18,6 +18,9 @@ const appVersionLabel = isBetaBuild
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.3.1', [
+    'Убрано «Включать VPN в чужих Wi-Fi» — Nexus больше не просит доступ к геолокации',
+  ]),
   ('2.3.0', [
     'Задержки серверов меряются сами после запуска — без «— мс» в списке',
     'Смена сети (Wi-Fi ↔ мобильная): связь возвращается примерно на 10 секунд быстрее',
@@ -205,6 +208,9 @@ const changelog = <(String, List<String>)>[
 
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
+  '2.3.1': [
+    'Removed "Turn on VPN in unknown Wi-Fi" — Nexus no longer asks for location access',
+  ],
   '2.3.0': [
     'Server latencies are measured automatically after launch — no more "— ms" in the list',
     'Network change (Wi-Fi ↔ mobile): connection comes back about 10 seconds faster',

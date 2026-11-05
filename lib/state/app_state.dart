@@ -14,7 +14,6 @@ import '../services/support_report.dart';
 import '../models.dart';
 import '../platform/android_system.dart';
 import '../platform/links.dart';
-import '../platform/wifi.dart';
 import '../platform/win_dpapi.dart';
 import '../services/config_builder.dart';
 import '../services/net_probe.dart';
@@ -156,7 +155,6 @@ class AppState extends ChangeNotifier {
       lastError = tr('Ошибка инициализации ядра: {0}', [e]);
     }
     unawaited(refreshBattery());
-    _startWifiWatch();
     core.coreVersion().then((v) {
       coreVersion = v;
       notifyListeners();
@@ -884,66 +882,7 @@ class AppState extends ChangeNotifier {
     return pool.isEmpty ? [s] : pool;
   }
 
-  // ─────────────────── незнакомые сети Wi-Fi ───────────────────
-
-  Timer? _wifiTimer;
-  String? _lastWifi;
-
-  /// Текущая сеть Wi-Fi (по последней проверке) — для кнопки «доверять».
-  WifiNet? currentWifiNet;
-
-  /// Раз в 15 секунд смотрим, к какой сети Wi-Fi подключено устройство.
-  /// Новая сеть не из списка доверенных и VPN выключен — подключаемся.
-  /// Если в этой сети VPN отключили вручную — не спорим до смены сети.
-  void _startWifiWatch() {
-    _wifiTimer?.cancel();
-    if (!settings.wifiAuto) return;
-    var busy = false;
-    Future<void> check() async {
-      // Предыдущая проверка ещё идёт (netsh завис) — не накладываем.
-      if (busy) return;
-      busy = true;
-      final WifiNet? net;
-      try {
-        net = await currentWifi();
-      } finally {
-        busy = false;
-      }
-      currentWifiNet = net;
-      // Смена сети — это смена имени или точки доступа.
-      if (net?.key == _lastWifi) return;
-      _lastWifi = net?.key;
-      notifyListeners();
-      if (net == null || net.trustedBy(settings.trustedWifi)) return;
-      if (state != ConnState.disconnected || selected == null) return;
-      core.note(tr('Незнакомая сеть Wi-Fi «{0}» — включаю VPN', [net.ssid]));
-      reconnectNote =
-          tr('Незнакомая сеть Wi-Fi «{0}» — включаю VPN', [net.ssid]);
-      await connect();
-    }
-
-    // Свёрнутое приложение проверяет сеть вдвое реже — бережём батарею.
-    var tick = 0;
-    _wifiTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (!windowVisible && (tick++ % 2) != 0) return;
-      check();
-    });
-    unawaited(check());
-  }
-
-  Future<void> setWifiAuto(bool on) async {
-    if (on && !isDesktop) await AndroidSystem.requestLocation();
-    updateSettings((s) => s.wifiAuto = on);
-    _lastWifi = null;
-    _startWifiWatch();
-  }
-
-  /// Добавить или убрать запись доверенной сети («имя|точка доступа»).
-  void toggleTrustedWifi(String entry) => updateSettings((s) {
-        s.trustedWifi = s.trustedWifi.contains(entry)
-            ? s.trustedWifi.where((x) => x != entry).toList()
-            : [...s.trustedWifi, entry];
-      });
+  // ─────────────────── локальный прокси ───────────────────
 
   /// Windows: «логин:пароль» локального SOCKS-прокси или null (без пароля).
   String? get socksAccount => settings.socksAuth &&
@@ -1012,7 +951,7 @@ class AppState extends ChangeNotifier {
   bool _askedNotifications = false;
 
   /// Подключение уже идёт — повторные нажатия (кнопка, плитка, трей,
-  /// автоподключение в Wi-Fi) не запускают ядро второй раз. Внутренние
+  /// автоподключение при запуске) не запускают ядро второй раз. Внутренние
   /// переподключения и смена сервера при сбое проходят всегда.
   bool _connectBusy = false;
 
@@ -1471,7 +1410,6 @@ class AppState extends ChangeNotifier {
           ' · маскировка ${st.antiBlock ? 'вкл' : 'выкл'}'
           ' · реклама ${st.blockAds ? 'блок' : 'нет'}'
           ' · своих правил ${st.customProxy.length + st.customDirect.length}'
-          ' · Wi-Fi авто ${st.wifiAuto ? 'вкл (доверенных ${st.trustedWifi.length})' : 'выкл'}'
           ' · SOCKS-пароль ${st.socksAuth ? 'вкл' : 'выкл'}'
           ' · исключено из «Авто» ${st.autoExclude.length}'
           ' · бета ${st.betaUpdates ? 'вкл' : 'выкл'}'
@@ -1735,7 +1673,6 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _stSub?.cancel();
     _statsSub?.cancel();
-    _wifiTimer?.cancel();
     traffic.save();
     _subTimer?.cancel();
     _updTimer?.cancel();

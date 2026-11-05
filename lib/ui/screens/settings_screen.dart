@@ -7,7 +7,6 @@ import '../../changelog.dart';
 import '../../models.dart';
 import '../../services/app_updater.dart';
 import '../../platform/android_system.dart';
-import '../../platform/wifi.dart';
 import '../../platform/windows_host.dart';
 import '../../services/config_builder.dart';
 import '../../services/traffic_log.dart';
@@ -618,62 +617,6 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             ]),
-          ),
-          NeonCard(
-            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                switchRow(
-                  Icons.wifi_lock_rounded,
-                  tr('Включать VPN в чужих Wi-Fi'),
-                  app.isDesktop
-                      ? tr('В кафе, отеле, аэропорту Nexus подключится сам. Домашние сети отметьте доверенными')
-                      : tr('В кафе, отеле, аэропорту Nexus подключится сам, пока он запущен. Android сообщает имя сети только с разрешением на геолокацию'),
-                  st.wifiAuto,
-                  (v) => app.setWifiAuto(v),
-                ),
-                if (st.wifiAuto) ...[
-                  const Divider(height: 14),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 4, 6, 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(tr('Доверенные сети:'),
-                            style: const TextStyle(color: NX.text2, fontSize: 12.5)),
-                        if (st.trustedWifi.isEmpty)
-                          Text(tr('нет'),
-                              style: const TextStyle(color: NX.text3, fontSize: 12.5)),
-                        for (final w in st.trustedWifi)
-                          InputChip(
-                            label: Text(trustedLabel(w)),
-                            onDeleted: () => app.toggleTrustedWifi(w),
-                          ),
-                        if (app.currentWifiNet != null &&
-                            !app.currentWifiNet!.trustedBy(st.trustedWifi))
-                          ActionChip(
-                            avatar: const Icon(Icons.add_rounded, size: 18),
-                            label: Text(tr('Доверять «{0}»',
-                                [app.currentWifiNet!.ssid])),
-                            onPressed: () =>
-                                app.toggleTrustedWifi(app.currentWifiNet!.key),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 0, 6, 8),
-                    child: Text(
-                      tr('Сеть узнаётся по имени и роутеру: чужая сеть с тем же именем доверенной не станет. Если дома несколько роутеров, добавьте каждый.'),
-                      style: const TextStyle(color: NX.text3, fontSize: 12),
-                    ),
-                  ),
-                ],
-              ],
-            ),
           ),
           SectionTitle(tr('Работа в фоне')),
           NeonCard(

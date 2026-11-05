@@ -117,8 +117,7 @@ Future<AppState> _state({bool fresh = false, bool desktop = false}) async {
   SharedPreferences.setMockInitialValues({
     'settings':
         '{"language":"ru","onboarded":${!fresh},"autoUpdateOnStart":false,"autoConnectOnStart":false,'
-            '"favorites":["🇳🇱 Нидерланды|203.0.113.2:443","🇩🇪 Германия|203.0.113.3:443"],'
-            '"wifiAuto":true,"trustedWifi":["Home|aa:bb:cc:dd:ee:01"]}',
+            '"favorites":["🇳🇱 Нидерланды|203.0.113.2:443","🇩🇪 Германия|203.0.113.3:443"]}',
   });
   AppState.debugDesktop = desktop;
   final app = AppState.withCore(FakeCore());

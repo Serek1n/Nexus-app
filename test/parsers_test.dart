@@ -8,7 +8,6 @@ import 'package:nexus/services/deep_links.dart';
 import 'package:nexus/services/qr.dart';
 import 'package:nexus/services/subscription_service.dart';
 import 'package:nexus/services/support_report.dart';
-import 'package:nexus/platform/wifi.dart';
 
 void main() {
   group('Ссылки nexus://', () {
@@ -157,26 +156,5 @@ void main() {
   test('Программы Windows', () {
     expect(parseProcessList('Discord.exe\nC:\\Games\\steam.exe, chrome\n<script>'),
         ['Discord.exe', 'steam.exe', 'chrome.exe']);
-  });
-
-  group('Доверенные сети Wi-Fi', () {
-    const out = '    Name                   : Wi-Fi\n'
-        '    SSID                   : Home\n'
-        '    BSSID                  : AA:BB:CC:DD:EE:01\n';
-    test('netsh: имя и точка доступа', () {
-      final n = parseNetsh(out)!;
-      expect(n.ssid, 'Home');
-      expect(n.bssid, 'aa:bb:cc:dd:ee:01');
-      expect(parseNetsh('нет подключения'), isNull);
-    });
-    test('чужой роутер с тем же именем не доверенный', () {
-      final home = parseNetsh(out)!;
-      final fake = parseNetsh(out.replaceAll('EE:01', 'EE:99'))!;
-      expect(home.trustedBy([home.key]), isTrue);
-      expect(fake.trustedBy([home.key]), isFalse);
-      // Записи старых версий (только имя) работают по имени.
-      expect(fake.trustedBy(['Home']), isTrue);
-      expect(trustedLabel(home.key), 'Home · …ee:01');
-    });
   });
 }

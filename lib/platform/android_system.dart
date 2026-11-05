@@ -71,14 +71,6 @@ class AndroidSystem {
           },
       ]));
 
-  /// Текущая сеть Wi-Fi: {ssid, bssid} или null (не Wi-Fi / нет разрешения).
-  static Future<Map<String, String?>?> wifiInfo() async {
-    final m = await _call<Map<dynamic, dynamic>>('wifiInfo');
-    return m?.map((k, v) => MapEntry('$k', v?.toString()));
-  }
-
-  /// Разрешение на геолокацию — без него Android не сообщает имя Wi-Fi.
-  static Future<void> requestLocation() => _call('requestLocation');
 
   /// Подписи плитки и виджета на языке интерфейса (без смены состояния).
   static Future<void> setTileLabels() => _call('tileLabels', {
