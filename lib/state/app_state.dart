@@ -4,14 +4,19 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../changelog.dart' show appVersion, appVersionLabel;
 import '../core/vpn_core.dart';
+import '../ui/theme.dart' show NX;
+import '../services/pin.dart';
+import '../services/deep_links.dart';
 import '../services/app_updater.dart';
 import '../services/backup.dart';
 import '../services/support_report.dart';
 import '../models.dart';
+import '../platform/hotkey.dart';
 import '../platform/android_system.dart';
 import '../platform/links.dart';
 import '../platform/win_dpapi.dart';
@@ -110,10 +115,16 @@ class AppState extends ChangeNotifier {
     SubscriptionService.deviceId = did;
     SubscriptionService.appVersion = appVersion;
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
+    locked = settings.pinHash != null;
     L10n.apply(settings.language, PlatformDispatcher.instance.locale.languageCode);
     language.value = L10n.lang;
+    applyTheme();
+    PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
+      if (settings.theme == 'system') applyTheme();
+    };
     if (!isDesktop) {
       unawaited(AndroidSystem.setTileLabels());
+      unawaited(AndroidSystem.setShortcuts());
       unawaited(AndroidSystem.cancelStopTimer());
     }
     traffic.load(_prefs);
@@ -193,14 +204,7 @@ class AppState extends ChangeNotifier {
 
     // Задержки после перезапуска неизвестны («— мс»): один раз меряем их
     // сами, когда запуск и подключение уже прошли.
-    _startPing = Timer(const Duration(seconds: 8), () {
-      if (!windowVisible || pingingAll || servers.isEmpty) return;
-      if (servers.length > 40 || servers.any((s) => s.ping != null)) return;
-      if (state == ConnState.connecting || state == ConnState.disconnecting) {
-        return;
-      }
-      unawaited(pingAll());
-    });
+    _startPing = Timer(const Duration(seconds: 8), () => _autoPing(0));
 
     // Раз в сутки тихо проверяем обновление ядра Xray.
     final day = const Duration(hours: 20).inMilliseconds;
@@ -476,6 +480,39 @@ class AppState extends ChangeNotifier {
 
   /// Тест скорости загрузки через текущий сервер. Возвращает текст ошибки
   /// или null при успехе.
+  /// Проверка скорости всех серверов по очереди (ПК): для каждого —
+  /// временное ядро и загрузка тестового файла. Текущее подключение не
+  /// трогается. (прогресс, всего) или null, если проверка не идёт.
+  (int, int)? speedAllProgress;
+
+  bool get canSpeedAll => isDesktop;
+
+  Future<void> speedTestAll() async {
+    if (!canSpeedAll || speedAllProgress != null) return;
+    final list = servers.where((s) => (s.ping ?? 0) >= 0).take(30).toList();
+    if (list.isEmpty) return;
+    speedAllProgress = (0, list.length);
+    notifyListeners();
+    var done = 0;
+    for (final s in list) {
+      try {
+        final r = await core.viaTunnel(
+            s,
+            _configFor(s),
+            (proxy) => NetProbe.downloadSpeed(proxy,
+                limit: const Duration(seconds: 5)));
+        s.mbps = r ?? 0;
+      } catch (_) {
+        s.mbps = 0;
+      }
+      done++;
+      speedAllProgress = (done, list.length);
+      notifyListeners();
+    }
+    speedAllProgress = null;
+    notifyListeners();
+  }
+
   Future<String?> runSpeedTest() async {
     final proxy = state == ConnState.connected ? core.activeProxy : null;
     if (proxy == null) return tr('Сначала подключитесь');
@@ -610,6 +647,26 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await connect(keepFailover: true, auto: true);
     });
+  }
+
+  /// Автозамер задержек после запуска. Пока идёт подключение (или оно
+  /// случилось только что) — ждём: иначе замер совпадает с рукопожатием
+  /// и показывает 300+ мс вместо настоящих 100.
+  void _autoPing(int attempt) {
+    if (!windowVisible || pingingAll || servers.isEmpty) return;
+    if (servers.length > 40 || servers.any((s) => s.ping != null)) return;
+    final busy = state == ConnState.connecting ||
+        state == ConnState.disconnecting ||
+        (connectedAt != null &&
+            DateTime.now().difference(connectedAt!) <
+                const Duration(seconds: 10));
+    if (busy) {
+      if (attempt < 12) {
+        _startPing = Timer(const Duration(seconds: 5), () => _autoPing(attempt + 1));
+      }
+      return;
+    }
+    unawaited(pingAll());
   }
 
   /// Проверка канала: раз в 45 с запрос через туннель. Провал — повтор через
@@ -856,6 +913,7 @@ class AppState extends ChangeNotifier {
         customDirect: settings.customDirect,
         blockAds: settings.blockAds,
         antiBlock: settings.antiBlock,
+        antiBlockFast: settings.antiBlockFast,
         socksAccount: socksAccount,
         appsProxy: settings.appsProxy,
         appsDirect: settings.appsDirect,
@@ -934,6 +992,7 @@ class AppState extends ChangeNotifier {
         customDirect: settings.customDirect,
         blockAds: settings.blockAds,
         antiBlock: settings.antiBlock,
+        antiBlockFast: settings.antiBlockFast,
         socksAccount: socksAccount,
         appsProxy: settings.appsProxy,
         appsDirect: settings.appsDirect,
@@ -1061,6 +1120,35 @@ class AppState extends ChangeNotifier {
   /// Язык интерфейса ('ru'/'en') — интерфейс пересобирается только при его смене.
   final language = ValueNotifier<String>(L10n.lang);
 
+  /// Светлая тема сейчас (интерфейс перестраивается при смене).
+  final themeLight = ValueNotifier<bool>(false);
+
+  /// Применяет оформление из настроек (и системную тему для «Как в системе»).
+  void applyTheme() {
+    final light = switch (settings.theme) {
+      'light' => true,
+      'system' =>
+        PlatformDispatcher.instance.platformBrightness == Brightness.light,
+      _ => false,
+    };
+    NX.light = light;
+    themeLight.value = light;
+    if (!isDesktop) {
+      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+        statusBarColor: const Color(0x00000000),
+        statusBarIconBrightness: light ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: NX.bg,
+        systemNavigationBarIconBrightness:
+            light ? Brightness.dark : Brightness.light,
+      ));
+    }
+  }
+
+  void setTheme(String v) {
+    updateSettings((s) => s.theme = v);
+    applyTheme();
+  }
+
   /// Язык интерфейса: 'system', 'ru' или 'en'.
   void setLanguage(String v) {
     L10n.apply(v, PlatformDispatcher.instance.locale.languageCode);
@@ -1069,6 +1157,26 @@ class AppState extends ChangeNotifier {
     if (!isDesktop) {
       unawaited(AndroidSystem.setTileState(state == ConnState.connected,
           vpn: settings.androidVpnMode));
+      unawaited(AndroidSystem.setShortcuts());
+    }
+  }
+
+  /// Ярлык на значке приложения: «Подключить» или «Режим Авто».
+  /// («Проверка связи» открывает экран — это делает интерфейс.)
+  Future<void> runShortcut(String id) async {
+    if (!ready) {
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 100));
+        return !ready;
+      });
+    }
+    if (id == 'auto' && !settings.autoMode && selected != null) {
+      await setAutoMode(true);
+    }
+    if ((id == 'connect' || id == 'auto') &&
+        state == ConnState.disconnected &&
+        selected != null) {
+      await connect();
     }
   }
 
@@ -1244,8 +1352,13 @@ class AppState extends ChangeNotifier {
   /// Универсальный импорт: ссылка на подписку, ссылка на сервер,
   /// список ссылок или base64-блок. Возвращает текст результата.
   Future<String> importText(String raw) async {
-    final text = raw.trim();
+    var text = raw.trim();
     if (text.isEmpty) throw Exception(tr('Пусто — вставьте ссылку'));
+    // «Открыть в Happ / Hiddify / v2rayNG…» — берём ссылку изнутри.
+    if (text.toLowerCase().startsWith('happ://crypt')) {
+      throw Exception(tr('Это зашифрованная ссылка Happ — её открывает только Happ. Попросите у сервиса обычную ссылку подписки'));
+    }
+    text = unwrapForeignLink(text) ?? text;
 
     if (isHttpUrl(text) && !text.contains('\n')) {
       final sub = await addSubscription(text);
@@ -1310,6 +1423,22 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       if (!isTransportError(e)) rethrow;
       Object last = e;
+      // Основной адрес недоступен (заблокирован, упал) — пробуем запасные.
+      final main = sub.url;
+      for (final m in sub.mirrors) {
+        try {
+          sub.url = m;
+          return await SubscriptionService.fetch(sub);
+        } catch (e2) {
+          if (!isTransportError(e2)) {
+            sub.url = main;
+            rethrow;
+          }
+          last = e2;
+        } finally {
+          sub.url = main;
+        }
+      }
       final via = state == ConnState.connected ? core.activeProxy : null;
       if (via != null) {
         try {
@@ -1407,7 +1536,7 @@ class AppState extends ChangeNotifier {
       ..writeln('Режим: ${st.routing.name}'
           '${isDesktop ? ' · TUN ${st.windowsTun ? 'вкл' : 'выкл'} · прокси ${st.windowsSystemProxy ? 'вкл' : 'выкл'}' : ' · VPN ${st.androidVpnMode ? 'вкл' : 'только прокси'}'}'
           ' · Авто ${st.autoMode ? 'вкл' : 'выкл'}'
-          ' · маскировка ${st.antiBlock ? 'вкл' : 'выкл'}'
+          ' · маскировка ${st.antiBlock ? (st.antiBlockFast ? 'быстрая' : 'надёжная') : 'выкл'}'
           ' · реклама ${st.blockAds ? 'блок' : 'нет'}'
           ' · своих правил ${st.customProxy.length + st.customDirect.length}'
           ' · SOCKS-пароль ${st.socksAuth ? 'вкл' : 'выкл'}'
@@ -1454,7 +1583,12 @@ class AppState extends ChangeNotifier {
     return Backup.encrypt({
       'v': 1,
       'subscriptions': [
-        for (final x in subscriptions) {'url': x.url, 'title': x.title},
+        for (final x in subscriptions)
+          {
+            'url': x.url,
+            'title': x.title,
+            if (x.mirrors.isNotEmpty) 'mirrors': x.mirrors,
+          },
       ],
       'servers': [
         for (final x in servers)
@@ -1474,15 +1608,19 @@ class AppState extends ChangeNotifier {
       if (e is! Map) continue;
       final url = e['url'];
       if (url is! String || !isHttpUrl(url) || url.length > 2048) continue;
-      if (subscriptions.any((x) => x.url == url)) continue;
+      if (subscriptions.any((x) => subKey(x.url) == subKey(url))) continue;
+      final ms = cleanMirrors(
+          (e['mirrors'] as List?)?.whereType<String>() ?? const [],
+          except: url);
       try {
-        await addSubscription(url);
+        await addSubscription(url, mirrors: ms);
       } catch (_) {
         // Нет связи с сервером подписки — сохраняем, загрузится позже.
         final t = e['title'];
         subscriptions.add(Subscription(
             id: newId(),
             url: url,
+            mirrors: ms,
             title: t is String && t.isNotEmpty && t.length <= 80
                 ? t
                 : titleFromUrl(url)));
@@ -1521,13 +1659,28 @@ class AppState extends ChangeNotifier {
     return tr('Восстановлено: подписок {0}, серверов {1}, настройки', [subs, srv]);
   }
 
-  Future<Subscription> addSubscription(String url) async {
-    final existing = subscriptions.where((s) => s.url == url).toList();
+  static String subKey(String url) => subscriptionKey(url);
+
+  Future<Subscription> addSubscription(String url,
+      {List<String> mirrors = const []}) async {
+    final key = subKey(url);
+    final existing =
+        subscriptions.where((s) => subKey(s.url) == key).toList();
+    final ms = [...mirrors, ...DeepLinks.takeMirrors(url)];
     if (existing.isNotEmpty) {
+      if (ms.isNotEmpty) {
+        existing.first.mirrors = cleanMirrors(
+            [...existing.first.mirrors, ...ms],
+            except: existing.first.url);
+      }
       await refresh(existing.first);
       return existing.first;
     }
-    final sub = Subscription(id: newId(), url: url, title: titleFromUrl(url));
+    final sub = Subscription(
+        id: newId(),
+        url: url,
+        title: titleFromUrl(url),
+        mirrors: cleanMirrors(ms, except: url));
     final res = await _fetchSub(sub);
     subscriptions.add(res.meta);
     servers.addAll(res.servers);
@@ -1613,6 +1766,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setMirrors(Subscription sub, List<String> mirrors) {
+    sub.mirrors = cleanMirrors(mirrors, except: sub.url);
+    _save();
+    notifyListeners();
+  }
+
   void renameSubscription(Subscription sub, String title) {
     sub.title = title.trim().isEmpty ? sub.title : title.trim();
     _save();
@@ -1626,6 +1785,9 @@ class AppState extends ChangeNotifier {
     selectedId = null;
     await _prefs.clear();
     settings = AppSettings();
+    locked = false;
+    pinFails = 0;
+    pinBlockedUntil = null;
     traffic.clear();
     if (!isDesktop) {
       unawaited(AndroidSystem.saveTileConfig());
@@ -1640,6 +1802,72 @@ class AppState extends ChangeNotifier {
     if (windowVisible == v) return;
     windowVisible = v;
     core.setForeground(v);
+    // Вернулись в Nexus больше чем через минуту — снова спрашиваем PIN.
+    if (!v) {
+      _hiddenAt = DateTime.now();
+    } else if (pinEnabled &&
+        _hiddenAt != null &&
+        DateTime.now().difference(_hiddenAt!) > const Duration(minutes: 1)) {
+      locked = true;
+      notifyListeners();
+    }
+  }
+
+  // ─────────────────── PIN-код ───────────────────
+
+  bool get pinEnabled => settings.pinHash != null;
+
+  /// Интерфейс закрыт экраном PIN-кода.
+  bool locked = false;
+  DateTime? _hiddenAt;
+  int pinFails = 0;
+  DateTime? pinBlockedUntil;
+
+  /// Проверяет PIN; при успехе снимает блокировку.
+  Future<bool> unlock(String pin) async {
+    final h = settings.pinHash;
+    if (h == null) {
+      locked = false;
+      notifyListeners();
+      return true;
+    }
+    if (pinBlockedUntil != null && DateTime.now().isBefore(pinBlockedUntil!)) {
+      return false;
+    }
+    if (await Pin.verify(pin, h)) {
+      pinFails = 0;
+      pinBlockedUntil = null;
+      locked = false;
+      notifyListeners();
+      return true;
+    }
+    pinFails++;
+    final d = Pin.delayAfter(pinFails);
+    pinBlockedUntil = d == Duration.zero ? null : DateTime.now().add(d);
+    notifyListeners();
+    return false;
+  }
+
+  // ─────────────────── горячая клавиша (Windows) ───────────────────
+
+  /// false — Ctrl+Alt+N уже занята другой программой.
+  bool hotkeyOk = true;
+
+  Future<void> applyHotkey() async {
+    if (!isDesktop) return;
+    if (settings.hotkey) {
+      hotkeyOk = await Hotkey.register(() => unawaited(toggle()));
+    } else {
+      hotkeyOk = true;
+      await Hotkey.unregister();
+    }
+    notifyListeners();
+  }
+
+  /// Задать PIN (null — выключить вход по PIN-коду).
+  Future<void> setPin(String? pin) async {
+    final h = pin == null ? null : await Pin.hash(pin);
+    updateSettings((s) => s.pinHash = h);
   }
 
   void clearError() {

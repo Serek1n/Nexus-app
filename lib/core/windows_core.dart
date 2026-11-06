@@ -69,6 +69,56 @@ class WindowsCore extends VpnCore {
   String get _coreDir =>
       File('$_updDir\\$kCoreExe').existsSync() ? _updDir : _exeDir;
   String get _corePath => '$_coreDir\\$kCoreExe';
+
+  // ── Права администратора (режим TUN) ──
+  // Nexus стоит в папке пользователя, куда может писать любая его
+  // программа. Чтобы подменённое ядро не получило права администратора,
+  // с правами администратора ядро запускается только проверенное (та же
+  // SHA-256, что у ядра из сборки) и из папки, куда пишут лишь
+  // администраторы (Program Files\Nexus\core).
+  static const _coreSha = String.fromEnvironment('CORE_SHA256');
+  static const _wintunSha = String.fromEnvironment('WINTUN_SHA256');
+  String? _safeDir;
+
+  String get _runDir => _safeDir ?? _coreDir;
+
+  /// Путь к ядру для запуска; с правами администратора — проверенная копия.
+  Future<String> _runCore() async {
+    if (WinAdmin.isAdmin && _coreSha.isNotEmpty && _safeDir == null) {
+      await _prepareSafeCore();
+    }
+    return '$_runDir\\$kCoreExe';
+  }
+
+  Future<void> _prepareSafeCore() async {
+    final pf = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+    final dir = Directory('$pf\\Nexus\\core');
+    Future<void> put(String name, String want) async {
+      final src = File('$_exeDir\\$name');
+      if (!src.existsSync()) {
+        if (name == kCoreExe) throw Exception(tr('Не найдено ядро {0} рядом с программой. Переустановите Nexus из архива целиком.', [kCoreExe]));
+        return;
+      }
+      final bytes = await src.readAsBytes();
+      if (sha256.convert(bytes).toString() != want) {
+        throw Exception(tr('Файл {0} изменён после установки — запуск с правами администратора отменён. Переустановите Nexus', [name]));
+      }
+      final dst = File('${dir.path}\\$name');
+      if (dst.existsSync() &&
+          sha256.convert(await dst.readAsBytes()).toString() == want) {
+        return;
+      }
+      await dst.writeAsBytes(bytes, flush: true);
+    }
+
+    await dir.create(recursive: true);
+    // Проверяем байты, которые сами же и записываем: подменить файл между
+    // проверкой и запуском нельзя — в Program Files пишут только администраторы.
+    await put(kCoreExe, _coreSha);
+    if (_wintunSha.isNotEmpty) await put('wintun.dll', _wintunSha);
+    _safeDir = dir.path;
+    _log(tr('Права администратора: ядро запускается из защищённой папки'));
+  }
   String get _assetDir =>
       File('$_coreDir\\geoip.dat').existsSync() ? _coreDir : _exeDir;
 
@@ -218,6 +268,13 @@ class WindowsCore extends VpnCore {
 
     _logs.clear();
     _log(tr('Запуск ядра: {0}', [remark]));
+    final String corePath;
+    try {
+      corePath = await _runCore();
+    } catch (e) {
+      _states.add(ConnState.disconnected);
+      rethrow;
+    }
     _tun = false;
     _modeWarning = null;
     if (settings.windowsTun) {
@@ -237,9 +294,9 @@ class WindowsCore extends VpnCore {
     try {
       // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
       final started = await Process.start(
-        _corePath,
+        corePath,
         ['run', '-format', 'json', '-c', 'stdin:'],
-        workingDirectory: _coreDir,
+        workingDirectory: _runDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
       );
       _proc = started;
@@ -438,7 +495,7 @@ class WindowsCore extends VpnCore {
   /// автообновления живёт в папке данных — копируем библиотеку туда.
   bool _ensureWintun() {
     try {
-      final target = File('$_coreDir\\wintun.dll');
+      final target = File('$_runDir\\wintun.dll');
       if (target.existsSync()) return true;
       final src = File('$_exeDir\\wintun.dll');
       if (!src.existsSync()) return false;
@@ -657,9 +714,9 @@ class WindowsCore extends VpnCore {
       cfg.remove('stats');
       cfg.remove('api');
       p = await Process.start(
-        _corePath,
+        await _runCore(),
         ['run', '-format', 'json', '-c', 'stdin:'],
-        workingDirectory: _coreDir,
+        workingDirectory: _runDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
       );
       p.stdout.drain<void>();
@@ -739,9 +796,9 @@ class WindowsCore extends VpnCore {
       }..removeWhere((_, v) => v == null);
 
       p = await Process.start(
-        _corePath,
+        await _runCore(),
         ['run', '-format', 'json', '-c', 'stdin:'],
-        workingDirectory: _coreDir,
+        workingDirectory: _runDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
       );
       p.stdout.drain<void>();
@@ -825,9 +882,9 @@ class WindowsCore extends VpnCore {
       cfg.remove('api');
 
       p = await Process.start(
-        _corePath,
+        await _runCore(),
         ['run', '-format', 'json', '-c', 'stdin:'],
-        workingDirectory: _coreDir,
+        workingDirectory: _runDir,
         environment: {'XRAY_LOCATION_ASSET': _assetDir},
       );
       // Вывод ядра проверки сохраняем: при неудаче причина попадёт в журнал.
@@ -926,7 +983,13 @@ class WindowsCore extends VpnCore {
 
 
   @override
-  Future<String> coreVersion() => _versionOf(_corePath);
+  Future<String> coreVersion() async {
+    try {
+      return await _versionOf(await _runCore());
+    } catch (e) {
+      return '$e';
+    }
+  }
 
   Future<String> _versionOf(String exe) async {
     try {
@@ -985,6 +1048,11 @@ class WindowsCore extends VpnCore {
 
   @override
   Future<String> updateCore({bool force = false}) async {
+    // С правами администратора работает только ядро из сборки (см.
+    // _prepareSafeCore) — скачанное здесь всё равно не запустилось бы.
+    if (WinAdmin.isAdmin && _coreSha.isNotEmpty) {
+      return tr('С правами администратора используется ядро из сборки Nexus — оно обновляется вместе с приложением');
+    }
     final res = await http.get(Uri.parse(_releaseApi), headers: {
       'User-Agent': 'Nexus',
       'Accept': 'application/vnd.github+json',

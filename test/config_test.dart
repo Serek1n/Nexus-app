@@ -71,6 +71,17 @@ void main() {
           ['streamSettings']['finalmask']['tcp'] as List;
       expect(tcp.single['type'], 'fragment');
     });
+    test('«Быстрая» — паузы только между первыми кусками', () {
+      final c = jsonDecode(buildXrayConfig(_vless,
+          routing: RoutingMode.smart,
+          desktop: true,
+          antiBlock: true,
+          antiBlockFast: true)) as Map<String, dynamic>;
+      final st = (_out(c, 'proxy')['streamSettings']['finalmask']['tcp']
+          as List).single['settings'] as Map;
+      expect(st['delays'], ['10-20', '10-20', '10-20', '0']);
+      expect(st.containsKey('delay'), isFalse);
+    });
     test('выключен — без масок', () {
       expect(_out(_cfg(_vless), 'proxy')['streamSettings']['finalmask'],
           isNull);
@@ -176,5 +187,19 @@ void main() {
         routing: RoutingMode.smart, desktop: false, lockLocalProxy: true))
         as Map<String, dynamic>;
     expect(socks(vpn)['settings']['auth'], 'password');
+  });
+
+  test('«Только заблокированное»: заблокированное через VPN, остальное напрямую', () {
+    final rules = (_cfg(_vless, routing: RoutingMode.blocked)['routing']
+        ['rules'] as List).cast<Map>();
+    final proxy = rules.firstWhere((r) =>
+        r['outboundTag'] == 'proxy' &&
+        (r['domain'] as List? ?? const []).contains('domain:youtube.com'));
+    expect(proxy['domain'], contains('domain:chatgpt.com'));
+    expect(rules.any((r) =>
+        r['outboundTag'] == 'proxy' &&
+        (r['ip'] as List? ?? const []).contains('geoip:telegram')), isTrue);
+    expect(rules.last['outboundTag'], 'direct');
+    expect(rules.last['network'], 'tcp,udp');
   });
 }

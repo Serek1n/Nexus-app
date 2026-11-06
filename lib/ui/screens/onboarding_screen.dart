@@ -78,7 +78,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       fontSize: 27, fontWeight: FontWeight.w800, height: 1.15)),
               const SizedBox(height: 10),
               Text(text,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: NX.text2, fontSize: 14.5, height: 1.4)),
               const SizedBox(height: 26),
               ...body,
@@ -206,7 +206,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 TextButton(
                   onPressed: _finish,
                   child: Text(tr('Пропустить'),
-                      style: const TextStyle(color: NX.text2)),
+                      style: TextStyle(color: NX.text2)),
                 ),
               ]),
             ),

@@ -11,12 +11,16 @@ const kEn = <String, String>{
       ' · from {0} ms',
   ' — трафик идёт мимо VPN':
       ' — traffic bypasses the VPN',
+  '4–8 цифр':
+      '4–8 digits',
   'Android любит экономить батарею и останавливать приложения в фоне. Разрешите Nexus работать без ограничений и показывать уведомление о подключении.':
       'Android likes to save battery by stopping apps in the background. Let Nexus run without restrictions and show the connection notification.',
   'Android может отключать VPN в фоне — разрешите Nexus работать без ограничений':
       'Android may stop the VPN in the background — let Nexus run without restrictions',
   'Android не даёт поставить старую версию поверх новой. Скопируйте подписки, удалите Nexus, скачайте нужную версию со страницы релиза и вставьте подписки обратно.':
       'Android won\'t install an older version over a newer one. Copy your subscriptions, uninstall Nexus, download the version you need from the release page and paste the subscriptions back.',
+  'Ctrl+Alt+N уже занята другой программой — закройте её и включите снова':
+      'Ctrl+Alt+N is taken by another program — close it and turn this on again',
   'DNS':
       'DNS',
   'GitHub ответил {0}':
@@ -39,6 +43,14 @@ const kEn = <String, String>{
       'Nexus starts minimized to the tray',
   'Nexus установит выбранную версию и перезапустится. Подписки и настройки сохранятся. Текущую версию автоматически предлагать не будем — только более новые.':
       'Nexus will install the selected version and restart. Subscriptions and settings are kept. The current version won\'t be offered automatically again — only newer ones.',
+  'PIN-код':
+      'PIN',
+  'PIN-код включён. Его не восстановить — если забудете, поможет только «Сбросить всё»':
+      'PIN is on. It cannot be recovered — if you forget it, only "Reset everything" helps',
+  'PIN-код не восстановить. Можно стереть все подписки, серверы и настройки — потом добавьте подписку заново (ссылка есть у вашего VPN-сервиса).':
+      'The PIN can\'t be recovered. You can erase all subscriptions, servers and settings, then add your subscription again (your VPN service has the link).',
+  'PIN-коды не совпадают':
+      'PINs don\'t match',
   'SOCKS-прокси с паролем':
       'Password-protected SOCKS proxy',
   'Telegram Desktop не всегда использует системный прокси — добавим ему прокси Nexus':
@@ -111,6 +123,10 @@ const kEn = <String, String>{
       'B',
   'Банки и Госуслуги работают напрямую, остальное — через VPN':
       'Banks and Gosuslugi work directly, everything else via the VPN',
+  'Без PIN никто не откроет Nexus и не увидит ключи и подписки. Подключение кнопкой в шторке и виджетом работает и так':
+      'Without the PIN nobody can open Nexus or see keys and subscriptions. The quick tile and widget still work',
+  'Без PIN никто не откроет окно Nexus и не увидит ключи и подписки. Подключение из трея и по Ctrl+Alt+N работает и так':
+      'Without the PIN nobody can open the Nexus window or see keys and subscriptions. The tray menu and Ctrl+Alt+N still work',
   'Бессрочно':
       'No expiry',
   'Бета-версии':
@@ -129,6 +145,8 @@ const kEn = <String, String>{
       'All subscriptions, servers and settings will be deleted.',
   'Буфер обмена пуст':
       'Clipboard is empty',
+  'Быстрая':
+      'Fast',
   'В QR-коде нет текста':
       'The QR code has no text',
   'В архиве нет xray.exe':
@@ -147,6 +165,8 @@ const kEn = <String, String>{
       'Release {0} has no Windows build',
   'В релизе нет файла для этого устройства':
       'The release has no file for this device',
+  'Введите PIN-код':
+      'Enter PIN',
   'Введите пароль':
       'Enter the password',
   'Вернуть в режим «Авто»':
@@ -189,6 +209,10 @@ const kEn = <String, String>{
       'Paste the link from the NEXUS bot',
   'Всё работает.':
       'Everything works.',
+  'Вход по PIN-коду':
+      'PIN lock',
+  'Вход по PIN-коду выключен':
+      'PIN lock is off',
   'Выберите программы, которые всегда идут через VPN или напрямую':
       'Choose programs that always go via the VPN or directly',
   'Выберите сайты, которые всегда идут через VPN или напрямую':
@@ -203,6 +227,8 @@ const kEn = <String, String>{
       'Geo database {0} failed verification and was skipped',
   'Главная':
       'Home',
+  'Горячая клавиша Ctrl+Alt+N':
+      'Hotkey Ctrl+Alt+N',
   'Госуслуги не открываются':
       'Gosuslugi doesn\'t open',
   'Готовлю {0}…':
@@ -245,6 +271,8 @@ const kEn = <String, String>{
       'Add a subscription',
   'Добавьте подписку из бота — серверы появятся здесь':
       'Add a subscription from the bot — servers will appear here',
+  'Доступ к Nexus':
+      'Access to Nexus',
   'Доступна {0}':
       '{0} available',
   'Доступно обновление':
@@ -253,6 +281,8 @@ const kEn = <String, String>{
       'Other programs on this computer can\'t quietly use your VPN. Telegram gets the password with the button below',
   'Если VPN оборвётся, интернет блокируется, а не идёт напрямую':
       'If the VPN drops, internet is blocked instead of going direct',
+  'Если основной адрес подписки заблокируют, Nexus обновит её с запасного. По одному https-адресу в строке — их даёт ваш VPN-сервис.':
+      'If the main subscription address gets blocked, Nexus updates it from a backup one. One https address per line — your VPN service provides them.',
   'Если провайдер блокирует подключение к серверу: Nexus режет первый пакет на части, и его сложнее распознать. Подключение чуть медленнее':
       'If your provider blocks connections to the server: Nexus splits the first packet into pieces so it\'s harder to detect. Connecting is a bit slower',
   'Если сервер не пропускает трафик, Nexus сам переключится на следующий':
@@ -265,6 +295,8 @@ const kEn = <String, String>{
       'Log is empty',
   'Журнал ядра':
       'Core log',
+  'Забыли PIN-код?':
+      'Forgot PIN?',
   'Загружено {0} — применится при следующем подключении':
       'Downloaded {0} — applies on next connection',
   'Загрузка':
@@ -277,6 +309,10 @@ const kEn = <String, String>{
       'The download stalled — check your internet and try again',
   'Закрыть':
       'Close',
+  'Запасные адреса':
+      'Backup addresses',
+  'Запасные адреса ({0})':
+      'Backup addresses ({0})',
   'Запрет скриншотов и размытие в списке недавних приложений':
       'Blocks screenshots and blurs the app in recent apps',
   'Запросы зашифрованы и идут через сервер. AdGuard дополнительно отсекает рекламу на уровне DNS':
@@ -339,6 +375,8 @@ const kEn = <String, String>{
       'Connection masking',
   'Наведите камеру на QR подписки или ключа':
       'Point the camera at a subscription or key QR code',
+  'Надёжная':
+      'Reliable',
   'Нажмите «Установить» — скачаем и проверим':
       'Tap “Install” — we\'ll download and verify it',
   'Нажмите, чтобы подключиться':
@@ -357,6 +395,8 @@ const kEn = <String, String>{
       'Get started',
   'Не использовать в режиме «Авто»':
       'Don\'t use in Auto mode',
+  'Не короче 4 цифр':
+      'At least 4 digits',
   'Не короче 8 символов':
       'At least 8 characters',
   'Не найдено ни одной поддерживаемой ссылки':
@@ -393,6 +433,8 @@ const kEn = <String, String>{
       'Couldn\'t establish a secure connection to the subscription server — your provider seems to block it. Connect to the VPN and try again',
   'Не удаётся подключиться к «{0}». Попробуйте другой сервер':
       'Can\'t connect to “{0}”. Try another server',
+  'Неверный PIN-код':
+      'Wrong PIN',
   'Неверный пароль':
       'Wrong password',
   'Нет интернета даже без VPN — проверьте Wi-Fi или мобильные данные.':
@@ -417,6 +459,8 @@ const kEn = <String, String>{
       'New versions come from GitHub XTLS/Xray-core',
   'Новые версии приходят с GitHub':
       'New versions come from GitHub',
+  'Новый PIN-код':
+      'New PIN',
   'Нужны права администратора':
       'Administrator rights required',
   'О приложении':
@@ -469,6 +513,8 @@ const kEn = <String, String>{
       'Report for support',
   'Отчёт скопирован — отправьте его в поддержку. Ключей и ссылок подписок в нём нет':
       'Report copied — send it to support. It contains no keys or subscription links',
+  'Оформление':
+      'Appearance',
   'Очищать буфер обмена':
       'Clear clipboard',
   'Ошибка инициализации ядра: {0}':
@@ -485,6 +531,10 @@ const kEn = <String, String>{
       'Backup password',
   'Пароль — не короче 8 символов':
       'Password — at least 8 characters',
+  'Паузы между всеми частями: надёжнее против умных фильтров, соединение открывается на ~0,2 с дольше':
+      'Pauses between all pieces: more reliable against smart filters, connections open ~0.2 s slower',
+  'Паузы только между первыми частями: соединение открывается на ~0,05 с дольше. Если сервер перестал подключаться — выберите «Надёжная»':
+      'Pauses only between the first pieces: connections open ~0.05 s slower. If the server stops connecting, choose "Reliable"',
   'Перезапуск не удался: {0}':
       'Restart failed: {0}',
   'Перезапустить':
@@ -519,6 +569,8 @@ const kEn = <String, String>{
       'Connect',
   'Подключить Telegram':
       'Connect Telegram',
+  'Подключить или отключить VPN из любой программы, даже когда Nexus свёрнут':
+      'Connect or disconnect the VPN from any program, even when Nexus is minimized',
   'Подозрительный путь в архиве обновления':
       'Suspicious path in the update archive',
   'Подписка «{0}»':
@@ -571,6 +623,8 @@ const kEn = <String, String>{
       'After adding a key or subscription',
   'Последние 14 дней':
       'Last 14 days',
+  'Права администратора: ядро запускается из защищённой папки':
+      'Administrator rights: the core runs from a protected folder',
   'При запуске, подключении и переподключении VPN':
       'On launch, connect and reconnect',
   'Приложения без VPN':
@@ -583,6 +637,8 @@ const kEn = <String, String>{
       'Test latency',
   'Проверить задержку группы':
       'Test group latency',
+  'Проверить скорость всех серверов':
+      'Test speed of all servers',
   'Проверка «{0}» ({1}): {2}{3}':
       'Check “{0}” ({1}): {2}{3}',
   'Проверка канала: «{0}» не ответил':
@@ -657,6 +713,8 @@ const kEn = <String, String>{
       'Russian sites, IPs and apps (Gosuslugi, banks, VK, Yandex) work directly without the VPN; everything else goes through Nexus',
   'Российские — напрямую':
       'Russian — direct',
+  'С правами администратора используется ядро из сборки Nexus — оно обновляется вместе с приложением':
+      'With administrator rights Nexus uses its bundled core — it updates together with the app',
   'Сайты видят ваш российский IP — трафик идёт мимо VPN. Нажмите, чтобы переподключиться':
       'Sites see your Russian IP — traffic is bypassing the VPN. Tap to reconnect',
   'Сайты видят российский IP — трафик идёт мимо VPN. Переподключитесь или выберите другой сервер.':
@@ -681,6 +739,8 @@ const kEn = <String, String>{
       'Reset statistics?',
   'Свежий Xray приходит обновлением Nexus':
       'Fresh Xray arrives with Nexus updates',
+  'Светлая':
+      'Light',
   'Свои правила':
       'Custom rules',
   'Сворачивать в трей':
@@ -757,10 +817,18 @@ const kEn = <String, String>{
       'Copy the link from the bot and tap here',
   'Скорость':
       'Speed',
+  'Скорость: {0} из {1}':
+      'Speed: {0} of {1}',
   'Скрывать экран':
       'Hide screen',
   'Слишком большая копия':
       'The backup is too large',
+  'Слишком много попыток. Подождите {0} с':
+      'Too many attempts. Wait {0} s',
+  'Слишком простой PIN-код':
+      'PIN is too simple',
+  'Сменить PIN-код':
+      'Change PIN',
   'Сначала добавьте подписку или сервер':
       'Add a subscription or server first',
   'Сначала подключитесь':
@@ -795,20 +863,28 @@ const kEn = <String, String>{
       'The NEXUS_VPN bot gives you a subscription link. Copy it and tap the button — or scan the QR code.',
   'Статистика трафика':
       'Traffic statistics',
+  'Стереть всё':
+      'Erase everything',
   'Считается только трафик через VPN, данные хранятся на этом устройстве. Оператор и провайдер могут считать иначе.':
       'Only VPN traffic is counted; the data is stored on this device. Your carrier or provider may count differently.',
   'ТБ':
       'TB',
   'Текст слишком длинный для QR-кода':
       'The text is too long for a QR code',
+  'Текущий PIN-код':
+      'Current PIN',
   'Тест скорости: {0} Мбит/с через «{1}»':
       'Speed test: {0} Mbps via “{1}”',
+  'Только заблокированное':
+      'Blocked only',
   'Только прокси 127.0.0.1:10807 — им сможет пользоваться любое приложение на телефоне':
       'Proxy only 127.0.0.1:10807 — any app on the phone can use it',
   'Только рабочие':
       'Working only',
   'Трафик через «{0}» идёт, задержка {1} мс':
       'Traffic flows via “{0}”, latency {1} ms',
+  'Тёмная':
+      'Dark',
   'Убрать из избранного':
       'Remove from favorites',
   'Удалить':
@@ -829,10 +905,14 @@ const kEn = <String, String>{
       'Install update',
   'Установлена последняя версия':
       'The latest version is installed',
+  'Файл {0} изменён после установки — запуск с правами администратора отменён. Переустановите Nexus':
+      'File {0} was changed after installation — running with administrator rights was cancelled. Reinstall Nexus',
   'Часть сайтов не открывается через этот сервер — попробуйте другой.':
       'Some sites don\'t open through this server — try another one.',
   'Через Nexus идут все программы: Telegram, игры, всё, что не смотрит на прокси':
       'All programs go through Nexus: Telegram, games, everything that ignores the proxy',
+  'Через Nexus — YouTube, Instagram, Discord, Telegram, ИИ-сервисы и другие недоступные сайты; всё остальное — напрямую. Меньше нагрузки, банки и маркетплейсы не замечают VPN':
+      'YouTube, Instagram, Discord, Telegram, AI services and other unavailable sites go through Nexus; everything else goes directly. Less load, banks and marketplaces don\'t notice the VPN',
   'Через VPN: {0} · напрямую: {1}':
       'Via VPN: {0} · direct: {1}',
   'Через «{0}» трафик не проходит — сервер не ответил':
@@ -851,6 +931,8 @@ const kEn = <String, String>{
       'This build has no update source',
   'Эти серверы уже добавлены':
       'These servers are already added',
+  'Это зашифрованная ссылка Happ — её открывает только Happ. Попросите у сервиса обычную ссылку подписки':
+      'This is an encrypted Happ link — only Happ can open it. Ask your service for a regular subscription link',
   'Это ключ доступа к серверу: с ним можно подключаться от вашего имени. Делитесь только с теми, кому доверяете.':
       'This is a server access key: anyone with it can connect as you. Share only with people you trust.',
   'Это не резервная копия Nexus или она из новой версии':
@@ -953,6 +1035,8 @@ const kEn = <String, String>{
       'servers',
   'серверов':
       'servers',
+  'скорость —':
+      'speed —',
   'только что':
       'just now',
   'февраль':

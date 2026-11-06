@@ -140,7 +140,7 @@ class _SubCard extends StatelessWidget {
                     Text(
                         '${count} ${plural(count, tr('сервер'), tr('сервера'), tr('серверов'))} · ${_ago(sub.updatedAt)}',
                         style:
-                            const TextStyle(color: NX.text2, fontSize: 12.5)),
+                            TextStyle(color: NX.text2, fontSize: 12.5)),
                     if (sub.error != null) ...[
                       const SizedBox(height: 6),
                       Tooltip(
@@ -167,11 +167,11 @@ class _SubCard extends StatelessWidget {
                 onPressed: () => app.refresh(sub),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, color: NX.text3),
+                icon: Icon(Icons.more_vert_rounded, color: NX.text3),
                 color: NX.surface2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: NX.stroke),
+                  side: BorderSide(color: NX.stroke),
                 ),
                 onSelected: (v) async {
                   switch (v) {
@@ -187,6 +187,8 @@ class _SubCard extends StatelessWidget {
                       if (context.mounted) toast(context, tr('Ссылка скопирована · буфер очистится через 2 мин'));
                     case 'rename':
                       await _rename(context);
+                    case 'mirrors':
+                      await _mirrors(context);
                     case 'delete':
                       await _delete(context);
                   }
@@ -195,6 +197,11 @@ class _SubCard extends StatelessWidget {
                   PopupMenuItem(value: 'share', child: Text(tr('Поделиться (QR)'))),
                   PopupMenuItem(value: 'copy', child: Text(tr('Скопировать ссылку'))),
                   PopupMenuItem(value: 'rename', child: Text(tr('Переименовать'))),
+                  PopupMenuItem(
+                      value: 'mirrors',
+                      child: Text(sub.mirrors.isEmpty
+                          ? tr('Запасные адреса')
+                          : tr('Запасные адреса ({0})', [sub.mirrors.length]))),
                   PopupMenuItem(
                       value: 'delete',
                       child: Text(tr('Удалить'), style: TextStyle(color: NX.red))),
@@ -216,11 +223,11 @@ class _SubCard extends StatelessWidget {
                     Text(
                         unlimited ? tr('  · безлимит') : tr('  из {0}', [fmtBytes(sub.total)]),
                         style:
-                            const TextStyle(color: NX.text2, fontSize: 13)),
+                            TextStyle(color: NX.text2, fontSize: 13)),
                     const Spacer(),
                     if (frac != null)
                       Text('${(frac * 100).round()}%',
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: NX.text2,
                               fontWeight: FontWeight.w700,
                               fontSize: 12.5)),
@@ -231,13 +238,13 @@ class _SubCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.event_rounded, size: 15, color: NX.text3),
+                    Icon(Icons.event_rounded, size: 15, color: NX.text3),
                     const SizedBox(width: 6),
                     Text(
                       sub.expire == null
                           ? tr('Бессрочно')
                           : tr('До {0}', [_date(sub.expire!)]),
-                      style: const TextStyle(color: NX.text2, fontSize: 12.5),
+                      style: TextStyle(color: NX.text2, fontSize: 12.5),
                     ),
                     const SizedBox(width: 8),
                     if (days != null)
@@ -266,7 +273,7 @@ class _SubCard extends StatelessWidget {
                     ),
                     child: Text(sub.announce!,
                         style:
-                            const TextStyle(fontSize: 12.5, color: NX.text)),
+                            TextStyle(fontSize: 12.5, color: NX.text)),
                   ),
                 ],
                 // Продлить и ссылки от панели: поддержка, личный кабинет.
@@ -284,7 +291,7 @@ class _SubCard extends StatelessWidget {
                       icon: const Icon(Icons.autorenew_rounded,
                           size: 17, color: NX.violet),
                       label: Text(tr('Продлить'),
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: NX.text, fontWeight: FontWeight.w700, fontSize: 13)),
                     ),
                     for (final (url, icon, label) in [
@@ -299,7 +306,7 @@ class _SubCard extends StatelessWidget {
                           onPressed: () => openWebLink(url),
                           icon: Icon(icon, size: 17, color: NX.violet),
                           label: Text(label,
-                              style: const TextStyle(color: NX.text2, fontSize: 13)),
+                              style: TextStyle(color: NX.text2, fontSize: 13)),
                         ),
                   ]),
                 ],
@@ -332,13 +339,46 @@ class _SubCard extends StatelessWidget {
     }
   }
 
+  Future<void> _mirrors(BuildContext context) async {
+    final ctrl = TextEditingController(text: sub.mirrors.join('\n'));
+    final res = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Запасные адреса')),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+              tr('Если основной адрес подписки заблокируют, Nexus обновит её с запасного. По одному https-адресу в строке — их даёт ваш VPN-сервис.'),
+              style: TextStyle(color: NX.text2, fontSize: 13)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            minLines: 2,
+            maxLines: 5,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(hintText: 'https://…'),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text),
+              child: Text(tr('Сохранить'))),
+        ],
+      ),
+    );
+    if (res != null && context.mounted) {
+      AppScope.read(context).setMirrors(sub, res.split(RegExp(r'[\s,]+')));
+    }
+  }
+
   Future<void> _delete(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr('Удалить подписку?')),
         content: Text(tr('«{0}» и все её серверы будут удалены.', [sub.title]),
-            style: const TextStyle(color: NX.text2)),
+            style: TextStyle(color: NX.text2)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),

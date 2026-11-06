@@ -85,7 +85,8 @@ class _ServersScreenState extends State<ServersScreen> {
     // Поиск или фильтр — показываем группы развёрнутыми.
     final forceOpen = _q.isNotEmpty || _filter != null;
     final dead = app.servers.where((s) => (s.ping ?? 0) < 0).length;
-    final prog = app.pingProgress;
+    final sp = app.speedAllProgress;
+    final prog = app.pingProgress ?? sp;
 
     return SafeArea(
       bottom: false,
@@ -98,7 +99,9 @@ class _ServersScreenState extends State<ServersScreen> {
                 title: tr('Серверы'),
                 subtitle: app.servers.isEmpty
                     ? null
-                    : prog != null
+                    : sp != null
+                        ? tr('Скорость: {0} из {1}', [sp.$1, sp.$2])
+                        : prog != null
                         ? tr('Проверка: {0} из {1}', [prog.$1, prog.$2])
                         : '${app.servers.length} ${plural(app.servers.length, tr('локация'), tr('локации'), tr('локаций'))}' '${dead > 0 ? tr(' · {0} не отвечают', [dead]) : ''}',
                 actions: [
@@ -119,6 +122,15 @@ class _ServersScreenState extends State<ServersScreen> {
                     spinning: app.pingingAll,
                     onPressed: app.servers.isEmpty ? null : app.pingAll,
                   ),
+                  if (app.canSpeedAll)
+                    NxIconButton(
+                      icon: Icons.download_rounded,
+                      tooltip: tr('Проверить скорость всех серверов'),
+                      spinning: app.speedAllProgress != null,
+                      onPressed: app.servers.isEmpty || app.speedAllProgress != null
+                          ? null
+                          : app.speedTestAll,
+                    ),
                   const SizedBox(width: 8),
                   NxIconButton(
                     icon: Icons.add_rounded,
@@ -358,7 +370,7 @@ class _GroupHeader extends StatelessWidget {
               AnimatedRotation(
                 turns: collapsed ? -0.25 : 0,
                 duration: const Duration(milliseconds: 200),
-                child: const Icon(Icons.expand_more_rounded,
+                child: Icon(Icons.expand_more_rounded,
                     size: 20, color: NX.text3),
               ),
               const SizedBox(width: 4),
@@ -372,7 +384,7 @@ class _GroupHeader extends StatelessWidget {
                   child: Text(title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: NX.text,
                           fontSize: 14,
                           fontWeight: FontWeight.w700)),
@@ -395,7 +407,7 @@ class _GroupHeader extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${servers.length} ' '${plural(servers.length, tr('сервер'), tr('сервера'), tr('серверов'))}' '${pings.isEmpty ? '' : tr(' · от {0} мс', [pings.first])}',
-              style: const TextStyle(color: NX.text3, fontSize: 12),
+              style: TextStyle(color: NX.text3, fontSize: 12),
             ),
             if (onPing != null)
               Tooltip(
@@ -408,12 +420,12 @@ class _GroupHeader extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(6),
                     child: servers.any((s) => app.pinging.contains(s.id))
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(
                                 strokeWidth: 1.6, color: NX.text3))
-                        : const Icon(Icons.speed_rounded,
+                        : Icon(Icons.speed_rounded,
                             size: 16, color: NX.text3),
                   ),
                 ),
@@ -466,7 +478,7 @@ class _ServerTile extends StatelessWidget {
                   ],
                   // Исключён из режима «Авто».
                   if (app.settings.autoMode && app.isAutoExcluded(server)) ...[
-                    const Icon(Icons.do_not_disturb_on_outlined,
+                    Icon(Icons.do_not_disturb_on_outlined,
                         size: 15, color: NX.text3),
                     const SizedBox(width: 4),
                   ],
@@ -481,6 +493,18 @@ class _ServerTile extends StatelessWidget {
                 const SizedBox(height: 5),
                 Row(children: [
                   Tag(server.protocol, color: NX.cyan),
+                  if (server.mbps != null) ...[
+                    const SizedBox(width: 6),
+                    Tag(
+                        server.mbps! > 0
+                            ? tr('{0} Мбит/с', [server.mbps!.round()])
+                            : tr('скорость —'),
+                        color: server.mbps! >= 50
+                            ? NX.mint
+                            : server.mbps! >= 10
+                                ? NX.amber
+                                : NX.red),
+                  ],
                   if (live) ...[
                     const SizedBox(width: 6),
                     Tag(tr('АКТИВЕН'), color: NX.mint),
@@ -495,7 +519,7 @@ class _ServerTile extends StatelessWidget {
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: NX.text3, fontSize: 11.5),
+                      style: TextStyle(color: NX.text3, fontSize: 11.5),
                     ),
                   ),
                 ]),
@@ -514,7 +538,7 @@ class _ServerTile extends StatelessWidget {
           ),
           IconButton(
             onPressed: () => _menu(context),
-            icon: const Icon(Icons.more_vert_rounded,
+            icon: Icon(Icons.more_vert_rounded,
                 color: NX.text3, size: 20),
           ),
         ],
@@ -560,7 +584,7 @@ class _ServerTile extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: NX.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           border: Border(top: BorderSide(color: NX.strokeStrong)),
@@ -611,7 +635,7 @@ class _ServerTile extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.edit_rounded, color: NX.text2),
+                leading: Icon(Icons.edit_rounded, color: NX.text2),
                 title: Text(tr('Переименовать')),
                 onTap: () {
                   Navigator.pop(ctx);

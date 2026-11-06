@@ -13,6 +13,7 @@ import '../app_scope.dart';
 import '../connect_button.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../world_map.dart';
 import 'traffic_screen.dart';
 import '../../l10n.dart';
 
@@ -168,6 +169,7 @@ class HomeScreen extends StatelessWidget {
             children: [
               _ServerRow(onTap: onOpenServers),
               const _FavoritesStrip(),
+              const _MapCard(),
             ],
           )
         else
@@ -393,7 +395,7 @@ class _UpdateCard extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: NX.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           border: Border(top: BorderSide(color: NX.strokeStrong)),
@@ -444,10 +446,10 @@ class _Notice extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,
-                  style: const TextStyle(color: NX.text, fontSize: 13)),
+                  style: TextStyle(color: NX.text, fontSize: 13)),
             ),
             if (onTap != null)
-              const Icon(Icons.chevron_right_rounded,
+              Icon(Icons.chevron_right_rounded,
                   color: NX.text3, size: 18),
           ],
         ),
@@ -570,7 +572,7 @@ class _TimerLineState extends State<_TimerLine> {
                       children: [
                         PingBadge(ping: lat),
                         const SizedBox(width: 6),
-                        const Icon(Icons.refresh_rounded,
+                        Icon(Icons.refresh_rounded,
                             size: 14, color: NX.text3),
                       ],
                     ),
@@ -588,12 +590,12 @@ class _TimerLineState extends State<_TimerLine> {
         children: [
           Text(
             idle ? tr('Нажмите, чтобы подключиться') : '',
-            style: const TextStyle(color: NX.text3, fontSize: 13.5),
+            style: TextStyle(color: NX.text3, fontSize: 13.5),
           ),
           if (idle && last != null) ...[
             const SizedBox(height: 3),
             Text(tr('Прошлая сессия: {0}', [last]),
-                style: const TextStyle(
+                style: TextStyle(
                     color: NX.text3,
                     fontSize: 11.5,
                     fontFeatures: [FontFeature.tabularFigures()])),
@@ -619,7 +621,7 @@ class _StatsRow extends StatelessWidget {
                   Icon(icon, size: 14, color: NX.text3),
                   const SizedBox(width: 4),
                   Text(label,
-                      style: const TextStyle(color: NX.text3, fontSize: 12)),
+                      style: TextStyle(color: NX.text3, fontSize: 12)),
                 ],
               ),
               const SizedBox(height: 4),
@@ -744,7 +746,7 @@ class _ServerRow extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(children: [
                   Text(s.protocol,
-                      style: const TextStyle(color: NX.text3, fontSize: 12.5)),
+                      style: TextStyle(color: NX.text3, fontSize: 12.5)),
                   const SizedBox(width: 10),
                   PingBadge(
                       ping: app.state == ConnState.connected &&
@@ -771,10 +773,41 @@ class _ServerRow extends StatelessWidget {
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.bolt_rounded, color: NX.text2, size: 20),
+                : Icon(Icons.bolt_rounded, color: NX.text2, size: 20),
           ),
-          const Icon(Icons.chevron_right_rounded, color: NX.text3),
+          Icon(Icons.chevron_right_rounded, color: NX.text3),
         ],
+      ),
+    );
+  }
+}
+
+/// Карта: где сервер (в режиме «Авто» — весь пул, текущий крупнее).
+class _MapCard extends StatelessWidget {
+  const _MapCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final sel = app.selected;
+    if (sel == null) return const SizedBox.shrink();
+    final current = app.settings.autoMode ? (app.autoCurrent?.$1 ?? sel) : sel;
+    final codes = <String>[
+      if (current.countryCode != null) current.countryCode!,
+      if (app.settings.autoMode)
+        for (final s in app.activeAutoPool)
+          if (s.countryCode != null && s.countryCode != current.countryCode)
+            s.countryCode!,
+    ].where(kCountryPoint.containsKey).toSet().toList();
+    if (codes.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: NeonCard(
+        padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+        child: WorldMap(
+          codes: codes,
+          active: app.state == ConnState.connected,
+        ),
       ),
     );
   }
@@ -793,7 +826,7 @@ class _FavoritesStrip extends StatelessWidget {
       color: NX.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: NX.stroke),
+        side: BorderSide(color: NX.stroke),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -898,7 +931,7 @@ class _AutoRow extends StatelessWidget {
                 NX.mint.withValues(alpha: 0.18),
               ]),
             ),
-            child: const Icon(Icons.bolt_rounded, color: NX.text, size: 22),
+            child: Icon(Icons.bolt_rounded, color: NX.text, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -928,7 +961,7 @@ class _AutoRow extends StatelessWidget {
                                 ]),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: NX.text3, fontSize: 12.5),
                         ),
                       ),
@@ -942,7 +975,7 @@ class _AutoRow extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: NX.text3),
+          Icon(Icons.chevron_right_rounded, color: NX.text3),
         ],
       ),
     );
@@ -996,7 +1029,7 @@ class _SubscriptionStrip extends StatelessWidget {
             unlimited
                 ? tr('{0} · без лимита', [fmtBytes(sub.used)])
                 : tr('{0} из {1}', [fmtBytes(sub.used), fmtBytes(sub.total)]),
-            style: const TextStyle(
+            style: TextStyle(
                 color: NX.text3,
                 fontSize: 12,
                 fontFeatures: [FontFeature.tabularFigures()]),
@@ -1071,11 +1104,11 @@ class _ErrorBanner extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,
-                  style: const TextStyle(color: NX.text, fontSize: 13)),
+                  style: TextStyle(color: NX.text, fontSize: 13)),
             ),
             IconButton(
               onPressed: onClose,
-              icon: const Icon(Icons.close_rounded, size: 18, color: NX.text2),
+              icon: Icon(Icons.close_rounded, size: 18, color: NX.text2),
             ),
           ],
         ),

@@ -189,7 +189,7 @@ class AndroidCore extends VpnCore {
     // Приложения мимо VPN: выбранные вручную + российские в умном режиме.
     final bypass = <String>{
       ...settings.bypassApps,
-      if (settings.routing == RoutingMode.smart && settings.ruAppsDirect)
+      if (settings.routing != RoutingMode.global && settings.ruAppsDirect)
         ...RuAppsUpdater.all,
     }.toList();
     // Новое подключение: сбрасываем запомненное состояние, иначе статус

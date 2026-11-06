@@ -26,6 +26,10 @@ class ServerProfile {
   /// Задержка в мс; -1 — недоступен; null — не измерялась.
   int? ping;
 
+  /// Скорость загрузки через сервер, Мбит/с (проверка «Скорость всех»,
+  /// не сохраняется). 0 — проверка не удалась.
+  double? mbps;
+
   /// Своё название, заданное пользователем (переживает обновление подписки).
   String? alias;
 
@@ -263,10 +267,15 @@ class Subscription {
     this.webPageUrl,
     this.announce,
     this.updateHours,
-  });
+    List<String>? mirrors,
+  }) : mirrors = mirrors ?? [];
 
   final String id;
   String url;
+
+  /// Запасные адреса той же подписки: если основной адрес заблокирован,
+  /// Nexus обновляет подписку с них (только https).
+  List<String> mirrors;
   String title;
   int upload;
   int download;
@@ -301,6 +310,7 @@ class Subscription {
         'webPageUrl': webPageUrl,
         'announce': announce,
         'updateHours': updateHours,
+        if (mirrors.isNotEmpty) 'mirrors': mirrors,
       };
 
   factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
@@ -321,10 +331,42 @@ class Subscription {
         webPageUrl: j['webPageUrl'] as String?,
         announce: j['announce'] as String?,
         updateHours: (j['updateHours'] as num?)?.toInt(),
+        mirrors: cleanMirrors(
+            (j['mirrors'] as List?)?.whereType<String>() ?? const []),
       );
 }
 
-enum RoutingMode { global, smart }
+/// Одна и та же подписка с разными «хвостами» (#?providerid=… от Happ,
+/// слэш в конце, регистр домена) — это одна подписка.
+String subscriptionKey(String url) {
+  var u = url.trim();
+  final h = u.indexOf('#');
+  if (h >= 0) u = u.substring(0, h);
+  while (u.endsWith('/')) {
+    u = u.substring(0, u.length - 1);
+  }
+  final p = Uri.tryParse(u);
+  if (p == null || p.host.isEmpty) return u;
+  return p.replace(host: p.host.toLowerCase()).toString();
+}
+
+/// Запасные адреса подписки: только https, без повторов, не больше 5.
+List<String> cleanMirrors(Iterable<String> xs, {String? except}) {
+  final out = <String>[];
+  for (final raw in xs) {
+    final m = raw.trim();
+    final u = Uri.tryParse(m);
+    if (u == null || u.scheme != 'https' || u.host.isEmpty) continue;
+    if (m.length > 2048 || m == except || out.contains(m)) continue;
+    out.add(m);
+    if (out.length == 5) break;
+  }
+  return out;
+}
+
+/// smart — российское напрямую, остальное через VPN; global — всё через VPN;
+/// blocked — через VPN только заблокированное, остальное напрямую.
+enum RoutingMode { global, smart, blocked }
 
 enum ConnState { disconnected, connecting, connected, disconnecting }
 
@@ -349,6 +391,10 @@ class AppSettings {
     this.autoReconnect = true,
     this.blockAds = false,
     this.antiBlock = false,
+    this.antiBlockFast = false,
+    this.pinHash,
+    this.hotkey = true,
+    this.theme = 'dark',
     this.autoMode = false,
     this.language = 'system',
     this.socksAuth = false,
@@ -421,6 +467,18 @@ class AppSettings {
 
   /// Маскировка соединения: фрагментация первого пакета к серверу.
   bool antiBlock;
+
+  /// Маскировка «Быстрая»: паузы только между первыми кусками пакета.
+  bool antiBlockFast;
+
+  /// Вход по PIN-коду: отпечаток PIN (см. services/pin.dart) или null.
+  String? pinHash;
+
+  /// Windows: Ctrl+Alt+N — подключить/отключить из любой программы.
+  bool hotkey;
+
+  /// Оформление: dark, light или system.
+  String theme;
 
   /// Режим «Авто»: Nexus сам держит соединение через самый быстрый сервер.
   bool autoMode;
@@ -495,6 +553,10 @@ class AppSettings {
         'autoReconnect': autoReconnect,
         'blockAds': blockAds,
         'antiBlock': antiBlock,
+        'antiBlockFast': antiBlockFast,
+        if (pinHash != null) 'pinHash': pinHash,
+        'hotkey': hotkey,
+        'theme': theme,
         'autoMode': autoMode,
         'language': language,
         'socksAuth': socksAuth,
@@ -540,6 +602,12 @@ class AppSettings {
         autoReconnect: j['autoReconnect'] as bool? ?? true,
         blockAds: j['blockAds'] as bool? ?? false,
         antiBlock: j['antiBlock'] as bool? ?? false,
+        antiBlockFast: j['antiBlockFast'] as bool? ?? false,
+        pinHash: j['pinHash'] as String?,
+        hotkey: j['hotkey'] as bool? ?? true,
+        theme: const ['dark', 'light', 'system'].contains(j['theme'])
+            ? j['theme'] as String
+            : 'dark',
         autoMode: j['autoMode'] as bool? ?? false,
         language: j['language'] as String? ?? 'system',
         socksAuth: j['socksAuth'] as bool? ?? false,

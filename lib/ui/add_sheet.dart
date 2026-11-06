@@ -31,7 +31,7 @@ Future<void> showAddSheet(BuildContext context) async {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: NX.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
             border: Border(top: BorderSide(color: NX.strokeStrong)),

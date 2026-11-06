@@ -42,7 +42,7 @@ class _TrafficScreenState extends State<TrafficScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(color: NX.text3, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text3, fontSize: 12.5)),
                 const SizedBox(height: 4),
                 Text(fmtBytes(bytes),
                     style: const TextStyle(
@@ -138,12 +138,12 @@ class _TrafficScreenState extends State<TrafficScreen> {
                           const Spacer(),
                           const _Dot(NX.violet),
                           Text(' ↓ ${fmtBytes(pdn)}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: NX.text2, fontSize: 13)),
                           const SizedBox(width: 12),
                           const _Dot(NX.mint),
                           Text(' ↑ ${fmtBytes(pu)}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: NX.text2, fontSize: 13)),
                         ]),
                       ],
@@ -183,7 +183,7 @@ class _TrafficScreenState extends State<TrafficScreen> {
                                 setState(() => _picked = null);
                               }
                             },
-                      icon: const Icon(Icons.delete_outline_rounded,
+                      icon: Icon(Icons.delete_outline_rounded,
                           color: NX.text3),
                       label: Text(tr('Сбросить статистику'),
                           style: TextStyle(color: NX.text2)),

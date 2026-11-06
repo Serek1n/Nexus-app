@@ -39,6 +39,7 @@ String buildXrayConfig(
   List<String> customDirect = const [],
   bool blockAds = false,
   bool antiBlock = false,
+  bool antiBlockFast = false,
   String? socksAccount,
   List<String> appsProxy = const [],
   List<String> appsDirect = const [],
@@ -169,7 +170,7 @@ String buildXrayConfig(
 
   _patchHysteria2(cfg, server.link);
   _patchShareParams(cfg, server.link);
-  if (antiBlock) _addFragment(cfg);
+  if (antiBlock) _addFragment(cfg, fast: antiBlockFast);
 
   // DNS-over-HTTPS: запросы Xray зашифрованы и идут через сервер —
   // провайдер не видит и не может подменить ответы. Адреса — IP, поэтому
@@ -286,6 +287,30 @@ String buildXrayConfig(
     ]);
   }
 
+  if (routing == RoutingMode.blocked) {
+    // «Только заблокированное»: через сервер — заблокированные и
+    // недоступные из России сервисы, DNS-запросы и IP Telegram;
+    // всё остальное — напрямую, как без VPN.
+    final d = kDnsProviders[dns] ?? kDnsProviders['cloudflare']!;
+    rules.addAll([
+      {
+        'type': 'field',
+        'domain': [..._alwaysProxy, ..._blockedOnly],
+        'outboundTag': 'proxy',
+      },
+      {
+        'type': 'field',
+        'ip': ['geoip:telegram', '${d.ip}/32'],
+        'outboundTag': 'proxy',
+      },
+      {
+        'type': 'field',
+        'network': 'tcp,udp',
+        'outboundTag': 'direct',
+      },
+    ]);
+  }
+
   cfg['routing'] = {
     'domainStrategy':
         routing == RoutingMode.smart ? 'IPIfNonMatch' : 'AsIs',
@@ -388,6 +413,7 @@ String buildAutoConfig(
   List<String> customDirect = const [],
   bool blockAds = false,
   bool antiBlock = false,
+  bool antiBlockFast = false,
   String probeInterval = '2m',
   String? socksAccount,
   List<String> appsProxy = const [],
@@ -409,6 +435,7 @@ String buildAutoConfig(
         customDirect: customDirect,
         blockAds: blockAds,
         antiBlock: antiBlock,
+        antiBlockFast: antiBlockFast,
         socksAccount: socksAccount,
         appsProxy: appsProxy,
         appsDirect: appsDirect,
@@ -509,7 +536,11 @@ const kAutoPrefix = 'nx-';
 /// поток TCP, а системам фильтрации провайдера сложнее распознать
 /// подключение. Только для TCP-транспортов (Hysteria2 работает по UDP);
 /// маски из ссылки 3x-ui (fm) не трогаем.
-void _addFragment(Map<String, dynamic> cfg) {
+/// Маскировка: первый пакет (TLS ClientHello с именем сайта) режется на
+/// куски по 100–200 байт. «Надёжная» — пауза 10–20 мс между всеми кусками
+/// (≈+0,2 с к новому соединению); «Быстрая» — паузы только между первыми
+/// тремя, остальные уходят сразу (≈+0,05 с). Имя сайта разрезано в обоих.
+void _addFragment(Map<String, dynamic> cfg, {bool fast = false}) {
   for (final ob in (cfg['outbounds'] as List? ?? [])) {
     if (ob is! Map<String, dynamic> || ob['tag'] != 'proxy') continue;
     // Hysteria2 и WireGuard работают по UDP — им это не нужно.
@@ -525,7 +556,13 @@ void _addFragment(Map<String, dynamic> cfg) {
     fm['tcp'] = [
       {
         'type': 'fragment',
-        'settings': {'packets': '1-1', 'length': '100-200', 'delay': '10-20'},
+        'settings': fast
+            ? {
+                'packets': '1-1',
+                'length': '100-200',
+                'delays': ['10-20', '10-20', '10-20', '0'],
+              }
+            : {'packets': '1-1', 'length': '100-200', 'delay': '10-20'},
       },
     ];
     ss['finalmask'] = fm;
@@ -738,6 +775,32 @@ const _alwaysProxy = [
   'domain:linkedin.com', 'domain:licdn.com', 'domain:medium.com',
   'domain:signal.org', 'domain:telegram.org', 'domain:t.me',
   'domain:patreon.com', 'domain:soundcloud.com',
+];
+
+/// Дополнительно для «Только заблокированное»: сервисы, которые сами не
+/// пускают пользователей из России (в «Умном режиме» они и так идут
+/// через VPN как зарубежные).
+const _blockedOnly = [
+  // ИИ-сервисы
+  'domain:openai.com', 'domain:chatgpt.com', 'domain:oaistatic.com',
+  'domain:oaiusercontent.com', 'domain:anthropic.com', 'domain:claude.ai',
+  'domain:gemini.google.com', 'domain:aistudio.google.com',
+  'domain:perplexity.ai', 'domain:copilot.microsoft.com',
+  // Музыка и видео
+  'domain:spotify.com', 'domain:scdn.co', 'domain:spotifycdn.com',
+  'domain:netflix.com', 'domain:nflxvideo.net', 'domain:nflximg.net',
+  'domain:nflxext.com', 'domain:twitch.tv', 'domain:ttvnw.net',
+  'domain:jtvnw.net', 'domain:vimeo.com', 'domain:vimeocdn.com',
+  // Сервисы, закрытые для России, и прочее заблокированное
+  'domain:telegram.me', 'domain:telesco.pe', 'domain:tdesktop.com',
+  'domain:threads.net', 'domain:reddit.com', 'domain:redd.it',
+  'domain:redditmedia.com', 'domain:redditstatic.com',
+  'domain:notion.so', 'domain:notion.site', 'domain:canva.com',
+  'domain:figma.com', 'domain:protonvpn.com', 'domain:proton.me',
+  'domain:rutracker.org', 'domain:archive.org', 'domain:quora.com',
+  'domain:deviantart.com', 'domain:viber.com', 'domain:snapchat.com',
+  'domain:pinterest.com', 'domain:pinimg.com', 'domain:tumblr.com',
+  'domain:grok.com', 'domain:x.ai',
 ];
 
 String _randomToken() {

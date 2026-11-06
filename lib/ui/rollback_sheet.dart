@@ -20,7 +20,7 @@ Future<void> showRollbackSheet(BuildContext context) => showModalBottomSheet(
         constraints:
             BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: NX.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             border: Border(top: BorderSide(color: NX.strokeStrong)),
@@ -105,7 +105,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: NX.text2),
+              icon: Icon(Icons.close_rounded, color: NX.text2),
               onPressed: () => Navigator.pop(context),
             ),
           ]),
@@ -116,7 +116,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
             android
                 ? tr('Android не даёт поставить старую версию поверх новой. Скопируйте подписки, удалите Nexus, скачайте нужную версию со страницы релиза и вставьте подписки обратно.')
                 : tr('Сейчас установлена {0}. Выберите версию, которая работала хорошо.', [appVersionLabel]),
-            style: const TextStyle(color: NX.text2, fontSize: 13, height: 1.4),
+            style: TextStyle(color: NX.text2, fontSize: 13, height: 1.4),
           ),
         ),
         if (android)
@@ -199,7 +199,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
                                       fontSize: 15)),
                               if (r.date != null)
                                 Text(_date(r.date),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         color: NX.text3, fontSize: 12)),
                               if (r.notes.isNotEmpty) ...[
                                 const SizedBox(height: 6),

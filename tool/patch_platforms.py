@@ -46,7 +46,10 @@ def android():
          '    xmlns:tools="http://schemas.android.com/tools"'),
         (re.compile(r'android:label="[^"]*"'), 'android:label="Nexus"'),
         # Ссылки nexus://add/... из Discord-бота открывают Nexus.
-        (re.compile(r"(<category android:name=\"android.intent.category.LAUNCHER\"\s*/>\s*</intent-filter>)"),
+        # Android TV: значок в меню телевизора (LEANBACK_LAUNCHER).
+        (re.compile(r"(<category android:name=\"android.intent.category.LAUNCHER\"\s*/>)"),
+         r'\1\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>'),
+        (re.compile(r"(<category android:name=\"android.intent.category.LEANBACK_LAUNCHER\"/>\s*</intent-filter>)"),
          r'\1\n            <intent-filter>\n'
          r'                <action android:name="android.intent.action.VIEW" />\n'
          r'                <category android:name="android.intent.category.DEFAULT" />\n'
@@ -110,6 +113,9 @@ def android():
          r'\1<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />'
          r'\1<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
          r'\1<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
+         # Телевизоры без сенсорного экрана тоже могут ставить Nexus.
+         r'\1<uses-feature android:name="android.hardware.touchscreen" android:required="false" />'
+         r'\1<uses-feature android:name="android.software.leanback" android:required="false" />'
          # Внутреннее разрешение: статус VPN могут присылать только
          # процессы самого Nexus (см. tool/patch_plugin.py).
          r'\1<permission android:name="${applicationId}.permission.NEXUS_INTERNAL" android:protectionLevel="signature" />'
@@ -119,7 +125,8 @@ def android():
          # Android 12+: allowBackup не запрещает перенос данных при смене
          # телефона — запрещаем его отдельными правилами.
          r'\n        android:fullBackupContent="false"'
-         r'\n        android:dataExtractionRules="@xml/nexus_no_backup"'),
+         r'\n        android:dataExtractionRules="@xml/nexus_no_backup"'
+         r'\n        android:banner="@drawable/nexus_banner"'),
     ])
 
     gradle = "android/app/build.gradle.kts"
@@ -174,6 +181,10 @@ if (keystorePropertiesFile.exists()) {
         encoding="utf-8")
     # Значок плитки в шторке: одноцветная «N» (система сама красит её).
     dr_dir = ROOT / "android/app/src/main/res/drawable"
+    # Баннер для меню Android TV (320×180 dp).
+    tv_dir = ROOT / "android/app/src/main/res/drawable-xhdpi"
+    tv_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / "tool/res/nexus_banner.png", tv_dir / "nexus_banner.png")
     dr_dir.mkdir(parents=True, exist_ok=True)
     (dr_dir / "ic_nexus_tile.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -291,6 +302,52 @@ def windows():
     patch("windows/runner/main.cpp", [
         (re.compile(r'Size size\(\d+, \d+\);'), "Size size(1120, 720);"),
         (re.compile(r'window\.Create\(L"[^"]*"'), 'window.Create(L"Nexus"'),
+    ])
+    # Горячая клавиша Ctrl+Alt+N (подключить/отключить из любой программы):
+    # Windows присылает WM_HOTKEY окну, передаём его в Dart по каналу.
+    patch("windows/runner/flutter_window.h", [
+        ("#include <flutter/flutter_view_controller.h>\n",
+         "#include <flutter/flutter_view_controller.h>\n"
+         "#include <flutter/method_channel.h>\n"
+         "#include <flutter/standard_method_codec.h>\n"),
+        ("  std::unique_ptr<flutter::FlutterViewController> flutter_controller_;\n",
+         "  std::unique_ptr<flutter::FlutterViewController> flutter_controller_;\n\n"
+         "  // Канал горячей клавиши Nexus (Ctrl+Alt+N).\n"
+         "  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> hotkey_channel_;\n"),
+    ])
+    patch("windows/runner/flutter_window.cpp", [
+        ("  RegisterPlugins(flutter_controller_->engine());\n",
+         "  RegisterPlugins(flutter_controller_->engine());\n"
+         "  hotkey_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(\n"
+         "      flutter_controller_->engine()->messenger(), \"nexus/hotkey\",\n"
+         "      &flutter::StandardMethodCodec::GetInstance());\n"
+         "  hotkey_channel_->SetMethodCallHandler(\n"
+         "      [this](const flutter::MethodCall<flutter::EncodableValue>& call,\n"
+         "             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {\n"
+         "        if (call.method_name() == \"register\") {\n"
+         "          UnregisterHotKey(GetHandle(), 0x4E58);\n"
+         "          BOOL ok = RegisterHotKey(GetHandle(), 0x4E58,\n"
+         "                                   MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'N');\n"
+         "          result->Success(flutter::EncodableValue(ok != 0));\n"
+         "        } else if (call.method_name() == \"unregister\") {\n"
+         "          UnregisterHotKey(GetHandle(), 0x4E58);\n"
+         "          result->Success();\n"
+         "        } else {\n"
+         "          result->NotImplemented();\n"
+         "        }\n"
+         "      });\n"),
+        ("    case WM_FONTCHANGE:\n",
+         "    case WM_HOTKEY:\n"
+         "      if (wparam == 0x4E58 && hotkey_channel_) {\n"
+         "        hotkey_channel_->InvokeMethod(\"hotkey\", nullptr);\n"
+         "        return 0;\n"
+         "      }\n"
+         "      break;\n"
+         "    case WM_FONTCHANGE:\n"),
+        ("  if (flutter_controller_) {\n    flutter_controller_ = nullptr;\n  }\n",
+         "  if (GetHandle()) UnregisterHotKey(GetHandle(), 0x4E58);\n"
+         "  hotkey_channel_ = nullptr;\n"
+         "  if (flutter_controller_) {\n    flutter_controller_ = nullptr;\n  }\n"),
     ])
     patch("windows/runner/Runner.rc", [
         (re.compile(r'VALUE "FileDescription", "[^"]*"'),

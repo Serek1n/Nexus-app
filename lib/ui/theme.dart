@@ -3,12 +3,22 @@ import '../l10n.dart';
 
 /// Палитра: строгий тёмный интерфейс, один акцент, неон — только в состоянии «подключено».
 class NX {
-  static const bg = Color(0xFF0B0B10);
-  static const bg2 = Color(0xFF0F0F15);
-  static const surface = Color(0xFF15151C);
-  static const surface2 = Color(0xFF1D1D26);
-  static const stroke = Color(0x12FFFFFF);
-  static const strokeStrong = Color(0x22FFFFFF);
+  /// Светлая тема включена (меняется только при перестройке интерфейса).
+  static bool light = false;
+
+  // Нейтральные цвета — свои для тёмной и светлой темы.
+  static Color get bg => light ? const Color(0xFFF4F4F8) : const Color(0xFF0B0B10);
+  static Color get bg2 => light ? const Color(0xFFEDEDF3) : const Color(0xFF0F0F15);
+  static Color get surface => light ? const Color(0xFFFFFFFF) : const Color(0xFF15151C);
+  static Color get surface2 => light ? const Color(0xFFF0F0F5) : const Color(0xFF1D1D26);
+  /// Выбранный чип: фиолетовый оттенок поверх фона.
+  static Color get chipSelected =>
+      light ? const Color(0xFFE6E1FF) : const Color(0xFF2A2547);
+
+  /// Лёгкая подсветка при наведении/нажатии (белая на тёмном, чёрная на светлом).
+  static Color get hover => light ? const Color(0x0A000000) : const Color(0x08FFFFFF);
+  static Color get stroke => light ? const Color(0x14000000) : const Color(0x12FFFFFF);
+  static Color get strokeStrong => light ? const Color(0x24000000) : const Color(0x22FFFFFF);
 
   static const violet = Color(0xFF8B7CF6);
   static const indigo = Color(0xFF6E68F0);
@@ -18,9 +28,9 @@ class NX {
   static const amber = Color(0xFFF2B544);
   static const red = Color(0xFFF0566E);
 
-  static const text = Color(0xFFECECF1);
-  static const text2 = Color(0xFF9C9CAD);
-  static const text3 = Color(0xFF62626F);
+  static Color get text => light ? const Color(0xFF16161D) : const Color(0xFFECECF1);
+  static Color get text2 => light ? const Color(0xFF5A5A6A) : const Color(0xFF9C9CAD);
+  static Color get text3 => light ? const Color(0xFF8E8E9C) : const Color(0xFF62626F);
 
   static const neon = LinearGradient(
     colors: [violet, indigo],
@@ -64,7 +74,7 @@ class NX {
 }
 
 ThemeData buildTheme() {
-  const scheme = ColorScheme.dark(
+  final scheme = (NX.light ? ColorScheme.light : ColorScheme.dark)(
     primary: NX.violet,
     secondary: NX.cyan,
     surface: NX.surface,
@@ -73,12 +83,12 @@ ThemeData buildTheme() {
     onSurface: NX.text,
     // Выбранные чипы (DNS, язык, таймер) — фиолетовый оттенок, а не голубая
     // заливка по умолчанию.
-    secondaryContainer: Color(0xFF2A2547),
+    secondaryContainer: NX.chipSelected,
     onSecondaryContainer: NX.text,
   );
   final base = ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: NX.light ? Brightness.light : Brightness.dark,
     colorScheme: scheme,
     scaffoldBackgroundColor: NX.bg,
     fontFamily: NX.body,
@@ -93,32 +103,32 @@ ThemeData buildTheme() {
     dividerColor: NX.stroke,
     // Разделители тёмные, но различимые на карточках (в Material 3 по
     // умолчанию они почти белые).
-    dividerTheme: const DividerThemeData(
-      color: Color(0x1CFFFFFF),
+    dividerTheme: DividerThemeData(
+      color: NX.light ? const Color(0x14000000) : const Color(0x1CFFFFFF),
       thickness: 1,
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: NX.surface2,
       contentTextStyle:
-          const TextStyle(color: NX.text, fontFamily: NX.body, fontSize: 14),
+          TextStyle(color: NX.text, fontFamily: NX.body, fontSize: 14),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: NX.strokeStrong),
+        side: BorderSide(color: NX.strokeStrong),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: NX.bg2,
-      hintStyle: const TextStyle(color: NX.text3),
+      hintStyle: TextStyle(color: NX.text3),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: NX.stroke),
+        borderSide: BorderSide(color: NX.stroke),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: NX.stroke),
+        borderSide: BorderSide(color: NX.stroke),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -141,7 +151,7 @@ ThemeData buildTheme() {
       backgroundColor: NX.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: NX.stroke),
+        side: BorderSide(color: NX.stroke),
       ),
     ),
     bottomSheetTheme: const BottomSheetThemeData(
@@ -152,10 +162,10 @@ ThemeData buildTheme() {
     // рамки Material по умолчанию.
     chipTheme: ChipThemeData(
       backgroundColor: NX.surface2,
-      selectedColor: const Color(0xFF2A2547),
+      selectedColor: NX.chipSelected,
       checkmarkColor: NX.violet,
       deleteIconColor: NX.text2,
-      labelStyle: const TextStyle(
+      labelStyle: TextStyle(
           color: NX.text,
           fontFamily: NX.body,
           fontWeight: FontWeight.w600,
@@ -166,7 +176,7 @@ ThemeData buildTheme() {
               : NX.strokeStrong)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      iconTheme: const IconThemeData(color: NX.text2, size: 18),
+      iconTheme: IconThemeData(color: NX.text2, size: 18),
       showCheckmark: true,
     ),
     progressIndicatorTheme:
@@ -177,7 +187,7 @@ ThemeData buildTheme() {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: NX.stroke),
       ),
-      textStyle: const TextStyle(color: NX.text, fontSize: 12),
+      textStyle: TextStyle(color: NX.text, fontSize: 12),
     ),
   );
 }

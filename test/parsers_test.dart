@@ -34,6 +34,49 @@ void main() {
     });
   });
 
+  group('Ссылки других клиентов', () {
+    test('Happ, Hiddify, v2rayNG, sing-box, Clash', () {
+      const sub = 'https://sub.example.com/abc';
+      final enc = Uri.encodeComponent(sub);
+      expect(unwrapForeignLink('happ://add/$sub'), sub);
+      expect(unwrapForeignLink('hiddify://import/$sub#Nexus'), '$sub#Nexus');
+      expect(unwrapForeignLink('v2rayng://install-config?url=$enc'), sub);
+      expect(unwrapForeignLink('sing-box://import-remote-profile?url=$enc#X'), sub);
+      expect(unwrapForeignLink('clash://install-config?url=$enc'), sub);
+      expect(unwrapForeignLink('streisand://import/vless://id@h:443#A'),
+          'vless://id@h:443#A');
+    });
+    test('мусор и неизвестное', () {
+      expect(unwrapForeignLink('https://x.com'), isNull);
+      expect(unwrapForeignLink('happ://add/javascript:alert(1)'), isNull);
+      expect(unwrapForeignLink('evil://add/https://x.com'), isNull);
+      expect(unwrapForeignLink('happ://crypt4/AAAA'), isNull);
+    });
+  });
+
+  group('Запасные адреса подписки', () {
+    test('из ссылки nexus:// — только https', () {
+      const sub = 'https://a.example.com/s/1';
+      final link = 'nexus://import?url=${Uri.encodeComponent(sub)}'
+          '&mirror=${Uri.encodeComponent('https://b.example.com/s/1')}'
+          '&mirror=${Uri.encodeComponent('http://c.example.com/s/1')}';
+      expect(DeepLinks.parse(link), sub);
+      expect(DeepLinks.takeMirrors(sub), ['https://b.example.com/s/1']);
+      expect(DeepLinks.takeMirrors(sub), isEmpty);
+    });
+    test('чистка списка', () {
+      expect(
+          cleanMirrors(['https://a/1', 'https://a/1', 'http://b/1', 'ftp://c',
+            ' https://d/2 '], except: 'https://d/2'),
+          ['https://a/1']);
+    });
+  });
+
+  test('Одна подписка с «хвостом» Happ — та же подписка', () {
+    expect(subscriptionKey('https://Sub.Example.com:2096/s/abc/#?providerid=1'),
+        subscriptionKey('https://sub.example.com:2096/s/abc'));
+  });
+
   group('Свои правила', () {
     test('домены, адреса и подсети', () {
       expect(

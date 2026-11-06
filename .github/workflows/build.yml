@@ -366,18 +366,9 @@ jobs:
             echo "::warning::Секрет UPDATE_SIGNING_KEY не задан — подпись обновлений отключена"
           fi
 
-      - name: Сборка
-        shell: bash
-        run: |
-          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
-          flutter build windows --release --obfuscate --split-debug-info=build/symbols \
-            --build-name=$VER --build-number=$BUILD \
-            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL
-
-      - name: Ядро Xray и гео-базы
+      - name: Ядро Xray (скачать и проверить)
         shell: pwsh
         run: |
-          $rel = "build\windows\x64\runner\Release"
           $base = "https://github.com/XTLS/Xray-core/releases/latest/download"
           Invoke-WebRequest "$base/Xray-windows-64.zip" -OutFile xray.zip
           Invoke-WebRequest "$base/Xray-windows-64.zip.dgst" -OutFile xray.dgst
@@ -385,6 +376,26 @@ jobs:
           $got = (Get-FileHash xray.zip -Algorithm SHA256).Hash.ToLower()
           if ($want -ne $got) { throw "Контрольная сумма Xray не совпала: $got != $want" }
           Expand-Archive xray.zip -DestinationPath xray
+          # Отпечатки ядра и драйвера TUN вшиваются в Nexus: с правами
+          # администратора он запустит только эти файлы.
+          $core = (Get-FileHash xray\xray.exe -Algorithm SHA256).Hash.ToLower()
+          $wt = (Get-FileHash xray\wintun.dll -Algorithm SHA256).Hash.ToLower()
+          "CORE_SHA256=$core" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "WINTUN_SHA256=$wt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Сборка
+        shell: bash
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          flutter build windows --release --obfuscate --split-debug-info=build/symbols \
+            --build-name=$VER --build-number=$BUILD \
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=CORE_SHA256=$CORE_SHA256 --dart-define=WINTUN_SHA256=$WINTUN_SHA256
+
+      - name: Ядро Xray и гео-базы
+        shell: pwsh
+        run: |
+          $rel = "build\windows\x64\runner\Release"
+          # xray\ скачан и проверен до сборки (шаг «Ядро Xray»).
           Copy-Item xray\xray.exe "$rel\nexus-core.exe"
           # Драйвер виртуальной сетевой карты для режима TUN (идёт в архиве Xray).
           Copy-Item xray\wintun.dll "$rel\wintun.dll"

@@ -73,6 +73,8 @@ class WindowsHost with TrayListener, WindowListener {
         tun: app.settings.windowsTun);
     // Ссылки nexus:// открывают Nexus.
     Autostart.registerProtocol();
+    // Ctrl+Alt+N — подключить/отключить из любой программы.
+    unawaited(app.applyHotkey());
   }
 
   Future<void> show() async {
@@ -158,11 +160,17 @@ class WindowsHost with TrayListener, WindowListener {
           checked: app.settings.autoMode,
           disabled: app.selected == null,
         ),
-        MenuItem.checkbox(
-          key: 'smart',
-          label: tr('Умный режим (РФ напрямую)'),
-          checked: app.settings.routing == RoutingMode.smart,
-        ),
+        MenuItem.separator(),
+        for (final (m, label) in [
+          (RoutingMode.smart, tr('Умный режим (РФ напрямую)')),
+          (RoutingMode.blocked, tr('Только заблокированное')),
+          (RoutingMode.global, tr('Весь трафик')),
+        ])
+          MenuItem.checkbox(
+            key: 'route:${m.name}',
+            label: label,
+            checked: app.settings.routing == m,
+          ),
         MenuItem.separator(),
         MenuItem(key: 'quit', label: tr('Выход')),
       ]));
@@ -186,9 +194,12 @@ class WindowsHost with TrayListener, WindowListener {
         quit();
       case 'auto':
         app.setAutoMode(!app.settings.autoMode);
-      case 'smart':
-        app.updateSettings((s) => s.routing =
-            s.routing == RoutingMode.smart ? RoutingMode.global : RoutingMode.smart);
+      case final k? when k.startsWith('route:'):
+        final m = RoutingMode.values
+            .where((e) => e.name == k.substring(6))
+            .firstOrNull;
+        if (m == null || m == app.settings.routing) return;
+        app.updateSettings((s) => s.routing = m);
         app.reconnectIfActive();
       case final k? when k.startsWith('srv:'):
         final id = k.substring(4);

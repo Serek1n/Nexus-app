@@ -17,7 +17,7 @@ class NeonBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: NX.bg),
+        ColoredBox(color: NX.bg),
         AnimatedContainer(
           duration: const Duration(milliseconds: 700),
           decoration: BoxDecoration(
@@ -68,8 +68,8 @@ class NeonCard extends StatelessWidget {
         onLongPress: onLongPress,
         borderRadius: br,
         splashColor: accent.withValues(alpha: 0.08),
-        highlightColor: Colors.white.withValues(alpha: 0.03),
-        hoverColor: Colors.white.withValues(alpha: 0.02),
+        highlightColor: NX.hover,
+        hoverColor: NX.hover,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: padding,
@@ -138,7 +138,7 @@ class PingBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const SizedBox(
+      return SizedBox(
         width: 14,
         height: 14,
         child: CircularProgressIndicator(strokeWidth: 1.6, color: NX.text3),
@@ -248,16 +248,17 @@ class ServerAvatar extends StatelessWidget {
 
 /// Устойчивый цвет для кода страны — каждая страна своим оттенком палитры.
 Color _tint(String code) {
-  const palette = [NX.violet, NX.cyan, NX.mint, NX.amber, NX.pink, NX.indigo];
+  final palette = [NX.violet, NX.cyan, NX.mint, NX.amber, NX.pink, NX.indigo];
   final h = code.codeUnits.fold<int>(0, (a, c) => (a * 31 + c) & 0x7fffffff);
   return palette[h % palette.length];
 }
 
 /// Небольшая метка (протокол, статус).
 class Tag extends StatelessWidget {
-  const Tag(this.text, {super.key, this.color = NX.text2});
+  const Tag(this.text, {super.key, Color? color}) : _color = color;
   final String text;
-  final Color color;
+  final Color? _color;
+  Color get color => _color ?? NX.text2;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -356,7 +357,7 @@ class SectionTitle extends StatelessWidget {
         child: Row(
           children: [
             Text(text,
-                style: const TextStyle(
+                style: TextStyle(
                   color: NX.text2,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -395,7 +396,7 @@ class PageHeader extends StatelessWidget {
                   if (subtitle != null) ...[
                     const SizedBox(height: 4),
                     Text(subtitle!,
-                        style: const TextStyle(color: NX.text2, fontSize: 13.5)),
+                        style: TextStyle(color: NX.text2, fontSize: 13.5)),
                   ],
                 ],
               ),
@@ -489,7 +490,7 @@ class EmptyState extends StatelessWidget {
               const SizedBox(height: 6),
               Text(text,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: NX.text2, height: 1.45)),
+                  style: TextStyle(color: NX.text2, height: 1.45)),
               if (action != null) ...[const SizedBox(height: 20), action!],
             ],
           ),

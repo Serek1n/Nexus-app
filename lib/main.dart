@@ -14,6 +14,8 @@ import 'services/deep_links.dart';
 import 'state/app_state.dart';
 import 'ui/add_sheet.dart';
 import 'ui/app_scope.dart';
+import 'ui/lock_screen.dart';
+import 'ui/screens/diagnostics_screen.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'ui/screens/servers_screen.dart';
@@ -56,14 +58,8 @@ Future<void> main(List<String> args) async {
       }
     });
     await windowManager.setPreventClose(true);
-  } else {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: NX.bg,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ));
   }
+  // Цвета системных панелей Android задаёт AppState.applyTheme().
 
   final state = AppState();
   runApp(NexusApp(state: state));
@@ -73,7 +69,15 @@ Future<void> main(List<String> args) async {
     unawaited(state.connect());
   }
   unawaited(AndroidSystem.listenLinks(DeepLinks.handle,
-      onToggle: () => unawaited(state.toggle())));
+      onToggle: () => unawaited(state.toggle()),
+      onShortcut: (id) {
+        if (id == 'diag') {
+          navigatorKey.currentState?.push(MaterialPageRoute(
+              builder: (_) => const DiagnosticsScreen()));
+        } else {
+          unawaited(state.runShortcut(id));
+        }
+      }));
   if (Platform.isWindows) {
     state.setWindowVisible(!startHidden);
     await WindowsHost(state).init();
@@ -91,13 +95,15 @@ class NexusApp extends StatelessWidget {
     // (пинг, прогресс) перестраивало бы всё приложение.
     return AppScope(
       state: state,
-      child: ValueListenableBuilder<String>(
+      child: ValueListenableBuilder<bool>(
+        valueListenable: state.themeLight,
+        builder: (_, light, __) => ValueListenableBuilder<String>(
         valueListenable: state.language,
         builder: (_, lang, __) => MaterialApp(
-        key: ValueKey(lang),
+        key: ValueKey('$lang|$light'),
         title: 'Nexus',
         debugShowCheckedModeBanner: false,
-        theme: _theme,
+        theme: _themes[light] ??= buildTheme(),
         locale: Locale(lang),
         supportedLocales: const [Locale('ru'), Locale('en')],
         localizationsDelegates: const [
@@ -106,7 +112,11 @@ class NexusApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         navigatorKey: navigatorKey,
+        // Экран PIN-кода поверх навигатора: открытые окна и диалоги
+        // (в том числе «Добавить подписку?» по ссылке) ждут под ним.
+        builder: (_, child) => LockGate(app: state, child: child!),
         home: const Shell(),
+        ),
         ),
       ),
     );
@@ -115,8 +125,8 @@ class NexusApp extends StatelessWidget {
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
-/// Тема создаётся один раз.
-final _theme = buildTheme();
+/// Темы создаются по одному разу (тёмная и светлая).
+final _themes = <bool, ThemeData>{};
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -191,7 +201,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               isSub
                   ? tr('Подписка с сайта {0} будет добавлена в Nexus.', [what])
                   : tr('Будет добавлен сервер {0}.', [what]),
-              style: const TextStyle(color: NX.text2),
+              style: TextStyle(color: NX.text2),
             ),
             if (payload.toLowerCase().startsWith('http://')) ...[
               const SizedBox(height: 12),
@@ -342,7 +352,7 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: NX.bg2,
         border: Border(top: BorderSide(color: NX.stroke)),
       ),
@@ -411,7 +421,7 @@ class _Sidebar extends StatelessWidget {
     return Container(
       width: 220,
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(right: BorderSide(color: NX.stroke)),
       ),
       child: Column(

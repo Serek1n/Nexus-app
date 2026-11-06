@@ -81,6 +81,37 @@ class MainActivity : FlutterActivity() {
     }
     private var pendingLink: String? = null
     private var pendingToggle = false
+    private var pendingShortcut: String? = null
+
+    /** Ярлык на значке приложения (долгое нажатие): connect, auto или diag. */
+    private fun shortcutOf(intent: Intent?): String? {
+        if (intent == null || intent.action != "$packageName.SHORTCUT") return null
+        return intent.getStringExtra("do")?.takeIf { it in setOf("connect", "auto", "diag") }
+    }
+
+    /** Ярлыки «Подключить», «Режим Авто», «Проверка связи» на значке Nexus. */
+    private fun publishShortcuts(labels: Map<*, *>) {
+        if (Build.VERSION.SDK_INT < 25) return
+        try {
+            val sm = getSystemService(android.content.pm.ShortcutManager::class.java) ?: return
+            val icon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_nexus_tile)
+            val list = listOf("connect", "auto", "diag").mapNotNull { id ->
+                val label = labels[id] as? String ?: return@mapNotNull null
+                android.content.pm.ShortcutInfo.Builder(this, id)
+                    .setShortLabel(label)
+                    .setIcon(icon)
+                    .setIntent(
+                        Intent(this, MainActivity::class.java)
+                            .setAction("$packageName.SHORTCUT")
+                            .putExtra("do", id)
+                            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    )
+                    .build()
+            }
+            sm.dynamicShortcuts = list
+        } catch (e: Exception) {
+        }
+    }
 
     /** Нажатие плитки в шторке — только с верным одноразовым ключом. */
     private fun isToggle(intent: Intent?): Boolean {
@@ -97,12 +128,14 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         linkOf(intent)?.let { channel?.invokeMethod("link", it) }
         if (isToggle(intent)) channel?.invokeMethod("toggle", null)
+        shortcutOf(intent)?.let { channel?.invokeMethod("shortcut", it) }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         pendingLink = linkOf(intent)
         pendingToggle = isToggle(intent)
+        pendingShortcut = shortcutOf(intent)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nexus/system")
         live = channel
         channel!!
@@ -132,6 +165,16 @@ class MainActivity : FlutterActivity() {
                     "takeToggle" -> {
                         result.success(pendingToggle)
                         pendingToggle = false
+                    }
+
+                    "takeShortcut" -> {
+                        result.success(pendingShortcut)
+                        pendingShortcut = null
+                    }
+
+                    "shortcuts" -> {
+                        (call.arguments as? Map<*, *>)?.let { publishShortcuts(it) }
+                        result.success(null)
                     }
 
                     "tileState" -> {
@@ -168,6 +211,15 @@ class MainActivity : FlutterActivity() {
                         val m = call.arguments as? Map<*, *>
                         NexusTile.saveLabels(this, m?.get("onLabel") as? String, m?.get("offLabel") as? String)
                         NexusTile.refreshViews(this)
+                        result.success(null)
+                    }
+
+                    "secure" -> {
+                        // Экран с ключом или QR: запрещаем скриншоты и запись
+                        // экрана, в списке недавних приложений — пустое окно.
+                        val flag = android.view.WindowManager.LayoutParams.FLAG_SECURE
+                        if (call.arguments == true) window.addFlags(flag)
+                        else window.clearFlags(flag)
                         result.success(null)
                     }
 

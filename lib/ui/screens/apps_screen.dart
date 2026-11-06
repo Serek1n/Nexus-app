@@ -38,7 +38,7 @@ class _AppsScreenState extends State<AppsScreen> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final st = app.settings;
-    final ruAuto = st.routing == RoutingMode.smart && st.ruAppsDirect;
+    final ruAuto = st.routing != RoutingMode.global && st.ruAppsDirect;
     final apps = (_apps ?? const <(String, String)>[])
         .where((a) =>
             _q.isEmpty ||
@@ -115,7 +115,7 @@ class _AppsScreenState extends State<AppsScreen> {
                   ),
                 ),
               ),
-              if (st.routing != RoutingMode.smart)
+              if (st.routing == RoutingMode.global)
                 Padding(
                   padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
                   child: Text(

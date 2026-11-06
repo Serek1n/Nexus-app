@@ -101,7 +101,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                             text: _items.map((e) => '$e').join('\n')));
                         toast(context, tr('Скопировано'));
                       },
-                icon: const Icon(Icons.copy_rounded, color: NX.text2),
+                icon: Icon(Icons.copy_rounded, color: NX.text2),
               ),
             ]),
             Padding(
@@ -158,7 +158,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                   Text(
                     tr('Результат проверки попадает в «Отчёт для поддержки».'),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: NX.text3, fontSize: 12.5),
+                    style: TextStyle(color: NX.text3, fontSize: 12.5),
                   ),
                 ],
               ),
@@ -209,7 +209,7 @@ class _Row extends StatelessWidget {
                 if (item.detail.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(item.detail,
-                      style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                      style: TextStyle(color: NX.text2, fontSize: 12.5)),
                 ],
               ],
             ),

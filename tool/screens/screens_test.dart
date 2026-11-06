@@ -180,6 +180,45 @@ void main() {
     });
   }
 
+  testWidgets('light', (t) async {
+    _size(t, 412, 915);
+    final app = await t.runAsync(() => _state());
+    app!.setTheme('light');
+    await t.pumpWidget(NexusApp(state: app));
+    await t.runAsync(() => app.connect());
+    await _shot(t, 'light_1_home');
+    await _tab(t, tr('Серверы'));
+    await _shot(t, 'light_2_servers');
+    await _tab(t, tr('Настройки'));
+    _size(t, 412, 5600);
+    await _shot(t, 'light_3_settings');
+    await t.runAsync(() => app.disconnect());
+    app.setTheme('dark');
+    await t.pumpWidget(const SizedBox());
+    app.dispose();
+  });
+
+  testWidgets('lock', (t) async {
+    _size(t, 412, 915);
+    final app = await t.runAsync(() => _state());
+    await t.runAsync(() => app!.setPin('2580'));
+    app!.locked = true;
+    await t.pumpWidget(NexusApp(state: app));
+    await _shot(t, 'phone_6_lock');
+    await t.pumpWidget(const SizedBox());
+    app.dispose();
+  });
+
+  testWidgets('tablet', (t) async {
+    _size(t, 1280, 800);
+    final app = await t.runAsync(() => _state());
+    await t.pumpWidget(NexusApp(state: app!));
+    await t.runAsync(() => app.connect());
+    await _shot(t, 'tablet_1_home');
+    await t.pumpWidget(const SizedBox());
+    app.dispose();
+  });
+
   testWidgets('onboarding', (t) async {
     _size(t, 412, 915);
     final app = await t.runAsync(() => _state(fresh: true));

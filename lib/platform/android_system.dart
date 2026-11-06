@@ -25,18 +25,30 @@ class AndroidSystem {
   /// Ссылки nexus://: первая (с которой открыли приложение) и последующие.
   /// [onToggle] — нажатие плитки «Nexus» в шторке уведомлений.
   static Future<void> listenLinks(void Function(String) onLink,
-      {void Function()? onToggle}) async {
+      {void Function()? onToggle, void Function(String)? onShortcut}) async {
     if (!Platform.isAndroid) return;
     _ch.setMethodCallHandler((call) async {
       if (call.method == 'link' && call.arguments is String) {
         onLink(call.arguments as String);
       }
       if (call.method == 'toggle') onToggle?.call();
+      if (call.method == 'shortcut' && call.arguments is String) {
+        onShortcut?.call(call.arguments as String);
+      }
     });
     final first = await _call<String>('initialLink');
     if (first != null) onLink(first);
     if (await _call<bool>('takeToggle') == true) onToggle?.call();
+    final sc = await _call<String>('takeShortcut');
+    if (sc != null) onShortcut?.call(sc);
   }
+
+  /// Ярлыки на значке приложения (долгое нажатие) — на языке интерфейса.
+  static Future<void> setShortcuts() => _call('shortcuts', {
+        'connect': tr('Подключить'),
+        'auto': tr('Режим «Авто»'),
+        'diag': tr('Проверка связи'),
+      });
 
   /// Последний конфиг для плитки и виджета (хранится зашифрованным);
   /// [config] = null — стереть.
@@ -86,6 +98,9 @@ class AndroidSystem {
         'onLabel': tr('Подключено'),
         'offLabel': tr('Отключено'),
       });
+
+  /// Запрет скриншотов, пока на экране ключ или QR-код.
+  static Future<void> setSecure(bool on) => _call('secure', on);
 
   /// Копирует строку с пометкой «секрет» (Android). false — не вышло.
   static Future<bool> copySecret(String text) async =>

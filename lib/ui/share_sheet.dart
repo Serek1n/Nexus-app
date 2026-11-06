@@ -18,6 +18,22 @@ Future<void> showShareSheet(
   required String title,
   required String text,
   required String warning,
+}) async {
+  // Пока на экране ключ и QR — скриншоты и запись экрана запрещены.
+  await AndroidSystem.setSecure(true);
+  try {
+    if (!context.mounted) return;
+    await _showShareSheet(context, title: title, text: text, warning: warning);
+  } finally {
+    await AndroidSystem.setSecure(false);
+  }
+}
+
+Future<void> _showShareSheet(
+  BuildContext context, {
+  required String title,
+  required String text,
+  required String warning,
 }) {
   QrCode? qr;
   try {
@@ -39,7 +55,7 @@ Future<void> showShareSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (ctx) => Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: NX.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
         border: Border(top: BorderSide(color: NX.strokeStrong)),
@@ -102,7 +118,7 @@ class _ShareBody extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(warning,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: NX.text2, fontSize: 12.5, height: 1.35)),
             ),
           ]),

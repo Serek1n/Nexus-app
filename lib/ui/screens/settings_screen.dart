@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../changelog.dart';
 import '../../models.dart';
+import '../../services/pin.dart';
 import '../../services/app_updater.dart';
 import '../../platform/android_system.dart';
 import '../../platform/windows_host.dart';
@@ -35,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
         TextEditingController(text: app.settings.customDirect.join('\n'));
     InputDecoration deco(String hint) => InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: NX.text3, fontSize: 13),
+          hintStyle: TextStyle(color: NX.text3, fontSize: 13),
         );
     final ok = await showDialog<bool>(
       context: context,
@@ -106,7 +107,7 @@ class SettingsScreen extends StatelessWidget {
     final direct = TextEditingController(text: app.settings.appsDirect.join('\n'));
     InputDecoration deco(String hint) => InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: NX.text3, fontSize: 13),
+          hintStyle: TextStyle(color: NX.text3, fontSize: 13),
         );
     final ok = await showDialog<bool>(
       context: context,
@@ -121,7 +122,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Text(
                     tr('По одной программе в строке — имя файла, как в Диспетчере задач (Discord.exe). Лучше всего работает в режиме TUN.'),
-                    style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text2, fontSize: 12.5)),
                 const SizedBox(height: 14),
                 Text(tr('Всегда через VPN'),
                     style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -234,7 +235,7 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(sub,
                         style:
-                            const TextStyle(color: NX.text2, fontSize: 12.5)),
+                            TextStyle(color: NX.text2, fontSize: 12.5)),
                   ],
                 ),
               ),
@@ -273,7 +274,7 @@ class SettingsScreen extends StatelessWidget {
                             fontWeight: FontWeight.w700, fontSize: 14.5)),
                     const SizedBox(height: 3),
                     Text(text,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: NX.text2, fontSize: 12.5, height: 1.35)),
                   ],
                 ),
@@ -294,6 +295,11 @@ class SettingsScreen extends StatelessWidget {
             RoutingMode.smart,
             tr('Умный режим'),
             tr('Российские сайты, IP и приложения (Госуслуги, банки, VK, Яндекс) работают напрямую, без VPN; остальное — через Nexus'),
+          ),
+          routeOption(
+            RoutingMode.blocked,
+            tr('Только заблокированное'),
+            tr('Через Nexus — YouTube, Instagram, Discord, Telegram, ИИ-сервисы и другие недоступные сайты; всё остальное — напрямую. Меньше нагрузки, банки и маркетплейсы не замечают VPN'),
           ),
           routeOption(
             RoutingMode.global,
@@ -319,12 +325,12 @@ class SettingsScreen extends StatelessWidget {
                             ? tr('Выберите сайты, которые всегда идут через VPN или напрямую')
                             : tr('Через VPN: {0} · напрямую: {1}', [st.customProxy.length, st.customDirect.length]),
                         style:
-                            const TextStyle(color: NX.text2, fontSize: 12.5),
+                            TextStyle(color: NX.text2, fontSize: 12.5),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: NX.text3),
+                Icon(Icons.chevron_right_rounded, color: NX.text3),
               ],
             ),
           ),
@@ -358,7 +364,7 @@ class SettingsScreen extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 35),
                   child: Text(
                       tr('Запросы зашифрованы и идут через сервер. AdGuard дополнительно отсекает рекламу на уровне DNS'),
-                      style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                      style: TextStyle(color: NX.text2, fontSize: 12.5)),
                 ),
                 const SizedBox(height: 10),
                 Padding(
@@ -399,12 +405,12 @@ class SettingsScreen extends StatelessWidget {
                               ? tr('Выберите программы, которые всегда идут через VPN или напрямую')
                               : tr('Через VPN: {0} · напрямую: {1}',
                                   [st.appsProxy.length, st.appsDirect.length]),
-                          style: const TextStyle(color: NX.text2, fontSize: 12.5),
+                          style: TextStyle(color: NX.text2, fontSize: 12.5),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: NX.text3),
+                  Icon(Icons.chevron_right_rounded, color: NX.text3),
                 ],
               ),
             ),
@@ -426,19 +432,19 @@ class SettingsScreen extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           [
-                            if (st.routing == RoutingMode.smart &&
+                            if (st.routing != RoutingMode.global &&
                                 st.ruAppsDirect)
                               tr('Российские — напрямую'),
                             if (st.bypassApps.isNotEmpty)
                               tr('выбрано: {0}', [st.bypassApps.length]),
                           ].join(' · ').ifEmpty(tr('Все приложения через VPN')),
                           style:
-                              const TextStyle(color: NX.text2, fontSize: 12.5),
+                              TextStyle(color: NX.text2, fontSize: 12.5),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: NX.text3),
+                  Icon(Icons.chevron_right_rounded, color: NX.text3),
                 ],
               ),
             ),
@@ -616,6 +622,37 @@ class SettingsScreen extends StatelessWidget {
                 await app.reconnectIfActive();
               },
             ),
+            if (st.antiBlock)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(36, 2, 6, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      for (final (fast, label) in [
+                        (false, tr('Надёжная')),
+                        (true, tr('Быстрая')),
+                      ])
+                        ChoiceChip(
+                          label: Text(label),
+                          selected: st.antiBlockFast == fast,
+                          onSelected: (_) async {
+                            if (st.antiBlockFast == fast) return;
+                            app.updateSettings((s) => s.antiBlockFast = fast);
+                            await app.reconnectIfActive();
+                          },
+                        ),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text(
+                      st.antiBlockFast
+                          ? tr('Паузы только между первыми частями: соединение открывается на ~0,05 с дольше. Если сервер перестал подключаться — выберите «Надёжная»')
+                          : tr('Паузы между всеми частями: надёжнее против умных фильтров, соединение открывается на ~0,2 с дольше'),
+                      style: TextStyle(color: NX.text3, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
             ]),
           ),
           SectionTitle(tr('Работа в фоне')),
@@ -640,6 +677,19 @@ class SettingsScreen extends StatelessWidget {
                         (v) {
                           app.updateSettings((s) => s.launchAtStartup = v);
                           Autostart.apply(v, tun: st.windowsTun);
+                        },
+                      ),
+                      const Divider(height: 14),
+                      switchRow(
+                        Icons.keyboard_rounded,
+                        tr('Горячая клавиша Ctrl+Alt+N'),
+                        app.hotkeyOk
+                            ? tr('Подключить или отключить VPN из любой программы, даже когда Nexus свёрнут')
+                            : tr('Ctrl+Alt+N уже занята другой программой — закройте её и включите снова'),
+                        st.hotkey,
+                        (v) async {
+                          app.updateSettings((s) => s.hotkey = v);
+                          await app.applyHotkey();
                         },
                       ),
                     ],
@@ -798,7 +848,7 @@ class SettingsScreen extends StatelessWidget {
                                         ? tr('Новые версии берутся с GitHub XTLS/Xray-core')
                                         : tr('Свежий Xray приходит обновлением Nexus')))
                                 : tr('Обновляется вместе с приложением'),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: NX.text2, fontSize: 12.5),
                           ),
                         ],
@@ -860,7 +910,7 @@ class SettingsScreen extends StatelessWidget {
                                         : app.appUpdate != null
                                             ? tr('Нажмите «Установить» — скачаем и проверим')
                                             : tr('Новые версии приходят с GitHub')),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: NX.text2, fontSize: 12.5),
                           ),
                         ],
@@ -947,6 +997,43 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          SectionTitle(tr('Доступ к Nexus')),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+            child: Column(
+              children: [
+                switchRow(
+                  Icons.lock_outline_rounded,
+                  tr('Вход по PIN-коду'),
+                  app.isDesktop
+                      ? tr('Без PIN никто не откроет окно Nexus и не увидит ключи и подписки. Подключение из трея и по Ctrl+Alt+N работает и так')
+                      : tr('Без PIN никто не откроет Nexus и не увидит ключи и подписки. Подключение кнопкой в шторке и виджетом работает и так'),
+                  app.pinEnabled,
+                  (v) => v ? _setPin(context) : _removePin(context),
+                ),
+                if (app.pinEnabled) ...[
+                  const Divider(height: 14),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _setPin(context, change: true),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(children: [
+                        const Icon(Icons.password_rounded, color: NX.violet, size: 21),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(tr('Сменить PIN-код'),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: NX.text3),
+                      ]),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           SectionTitle(tr('Данные')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 4, 10, 4),
@@ -974,6 +1061,28 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: tr('Подписки, серверы и настройки под паролем. Восстановить — через «Добавить»'),
                   onTap: () => showBackupExport(context),
                 ),
+              ],
+            ),
+          ),
+          SectionTitle(tr('Оформление')),
+          NeonCard(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (v, label, icon) in [
+                  ('dark', tr('Тёмная'), Icons.dark_mode_rounded),
+                  ('light', tr('Светлая'), Icons.light_mode_rounded),
+                  ('system', tr('Как в системе'), Icons.brightness_auto_rounded),
+                ])
+                  ChoiceChip(
+                    avatar: Icon(icon, size: 17),
+                    label: Text(label),
+                    selected: st.theme == v,
+                    showCheckmark: false,
+                    onSelected: (_) => app.setTheme(v),
+                  ),
               ],
             ),
           ),
@@ -1105,6 +1214,99 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  /// Окно ввода PIN: [twice] — с повтором (новый PIN).
+  Future<String?> _askPin(BuildContext context,
+      {required String title, bool twice = false}) {
+    final a = TextEditingController(), b = TextEditingController();
+    String? err;
+    InputDecoration deco(String hint) =>
+        InputDecoration(hintText: hint, counterText: '');
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text(title),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: a,
+              autofocus: true,
+              obscureText: true,
+              maxLength: 8,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: deco(twice ? tr('4–8 цифр') : tr('PIN-код')),
+            ),
+            if (twice)
+              TextField(
+                controller: b,
+                obscureText: true,
+                maxLength: 8,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: deco(tr('Ещё раз')),
+              ),
+            if (err != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(err!, style: const TextStyle(color: NX.red, fontSize: 13)),
+              ),
+          ]),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
+            TextButton(
+              onPressed: () {
+                if (a.text.length < 4) {
+                  set(() => err = tr('Не короче 4 цифр'));
+                  return;
+                }
+                if (twice && a.text != b.text) {
+                  set(() => err = tr('PIN-коды не совпадают'));
+                  return;
+                }
+                if (twice && RegExp(r'^(\d)\1+$').hasMatch(a.text)) {
+                  set(() => err = tr('Слишком простой PIN-код'));
+                  return;
+                }
+                Navigator.pop(ctx, a.text);
+              },
+              child: Text(tr('Готово')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _checkPin(BuildContext context) async {
+    final app = AppScope.read(context);
+    final h = app.settings.pinHash;
+    if (h == null) return true;
+    final cur = await _askPin(context, title: tr('Текущий PIN-код'));
+    if (cur == null) return false;
+    final ok = await Pin.verify(cur, h);
+    if (!ok && context.mounted) toast(context, tr('Неверный PIN-код'));
+    return ok;
+  }
+
+  Future<void> _setPin(BuildContext context, {bool change = false}) async {
+    if (change && !await _checkPin(context)) return;
+    if (!context.mounted) return;
+    final pin = await _askPin(context, title: tr('Новый PIN-код'), twice: true);
+    if (pin == null || !context.mounted) return;
+    await AppScope.read(context).setPin(pin);
+    if (context.mounted) {
+      toast(context, tr('PIN-код включён. Его не восстановить — если забудете, поможет только «Сбросить всё»'));
+    }
+  }
+
+  Future<void> _removePin(BuildContext context) async {
+    if (!await _checkPin(context)) return;
+    if (!context.mounted) return;
+    await AppScope.read(context).setPin(null);
+    if (context.mounted) toast(context, tr('Вход по PIN-коду выключен'));
+  }
+
   Future<void> _reset(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -1136,7 +1338,7 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
-          Text(k, style: const TextStyle(color: NX.text2, fontSize: 13.5)),
+          Text(k, style: TextStyle(color: NX.text2, fontSize: 13.5)),
           const Spacer(),
           Text(v,
               style:
@@ -1217,7 +1419,7 @@ class _AndroidBackgroundState extends State<_AndroidBackground>
                     ok
                         ? tr('Экономия батареи не мешает Nexus')
                         : tr('Отключите для Nexus экономию батареи, чтобы VPN не обрывался'),
-                    style: const TextStyle(color: NX.text2, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text2, fontSize: 12.5)),
               ],
             ),
           ),
@@ -1269,11 +1471,11 @@ class _NavRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(subtitle,
                         style:
-                            const TextStyle(color: NX.text2, fontSize: 12.5)),
+                            TextStyle(color: NX.text2, fontSize: 12.5)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: NX.text3),
+              Icon(Icons.chevron_right_rounded, color: NX.text3),
             ],
           ),
         ),

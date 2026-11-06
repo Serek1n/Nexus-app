@@ -5,7 +5,7 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.3.1');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.4.0');
 
 /// Сборка из ветки beta (передаётся сборкой).
 const isBetaBuild = String.fromEnvironment('APP_CHANNEL') == 'beta';
@@ -18,6 +18,23 @@ const appVersionLabel = isBetaBuild
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.4.0', [
+    'Режим «Только заблокированное»: через VPN — YouTube, Instagram, Discord, Telegram, ИИ-сервисы; остальное напрямую',
+    'Вход по PIN-коду: без него никто не увидит ключи и подписки',
+    'Светлая тема (или как в системе)',
+    'Карта на главной: где ваш сервер',
+    'Маскировка соединения: «Надёжная» или «Быстрая» (в 4 раза быстрее открывает соединения)',
+    'Ссылки «Открыть в Happ / Hiddify / v2rayNG / Clash» теперь добавляются и в Nexus',
+    'Запасные адреса подписки — если основной заблокируют',
+    'Одна подписка больше не добавляется дважды (ссылки с «хвостом» Happ)',
+    'Android: ярлыки на значке (долгое нажатие) — «Подключить», «Режим Авто», «Проверка связи»',
+    'Android TV: Nexus в меню телевизора, управление пультом',
+    'Android: на экранах с ключами и QR-кодами запрещены скриншоты',
+    'Windows: Ctrl+Alt+N — подключить/отключить из любой программы',
+    'Windows: проверка скорости всех серверов',
+    'Windows (TUN): с правами администратора запускается только проверенное ядро из защищённой папки',
+    'Задержки после запуска меряются, когда подключение уже завершилось — без завышенных цифр',
+  ]),
   ('2.3.1', [
     'Убрано «Включать VPN в чужих Wi-Fi» — Nexus больше не просит доступ к геолокации',
   ]),
@@ -208,6 +225,23 @@ const changelog = <(String, List<String>)>[
 
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
+  '2.4.0': [
+    '"Blocked only" mode: YouTube, Instagram, Discord, Telegram and AI services via VPN; everything else directly',
+    'PIN lock: nobody sees your keys and subscriptions without it',
+    'Light theme (or follow the system)',
+    'Map on the home screen: where your server is',
+    'Connection masking: "Reliable" or "Fast" (opens connections 4× faster)',
+    '"Open in Happ / Hiddify / v2rayNG / Clash" links now work in Nexus too',
+    'Backup subscription addresses — in case the main one gets blocked',
+    'The same subscription is no longer added twice (links with a Happ "tail")',
+    'Android: app shortcuts (long press) — "Connect", "Auto mode", "Connection check"',
+    'Android TV: Nexus in the TV menu, remote control navigation',
+    'Android: screenshots are blocked on screens with keys and QR codes',
+    'Windows: Ctrl+Alt+N — connect/disconnect from any program',
+    'Windows: speed test of all servers',
+    'Windows (TUN): with administrator rights only the verified core runs, from a protected folder',
+    'Latencies after launch are measured once the connection has finished — no inflated numbers',
+  ],
   '2.3.1': [
     'Removed "Turn on VPN in unknown Wi-Fi" — Nexus no longer asks for location access',
   ],
@@ -292,7 +326,7 @@ void showChangelog(BuildContext context, {bool onlyCurrent = false}) {
       constraints:
           BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: NX.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           border: Border(top: BorderSide(color: NX.strokeStrong)),
@@ -316,7 +350,7 @@ void showChangelog(BuildContext context, {bool onlyCurrent = false}) {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: NX.text2),
+                    icon: Icon(Icons.close_rounded, color: NX.text2),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ]),
@@ -379,7 +413,7 @@ class ChangeList extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(n,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: NX.text2, fontSize: 13.5, height: 1.35)),
                   ),
                 ],
