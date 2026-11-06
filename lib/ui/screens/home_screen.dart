@@ -858,10 +858,13 @@ class _MapCard extends StatelessWidget {
                       Text(L10n.lang == 'ru' ? city.$3 : city.$4,
                           style: const TextStyle(
                               fontWeight: FontWeight.w700, fontSize: 12.5)),
-                      if (codes.length > 1) ...[
-                        Text(
-                            '  ·  ${tr('ещё {0} {1}', [codes.length - 1, plural(codes.length - 1, tr('страна'), tr('страны'), tr('стран'))])}',
-                            style: TextStyle(color: NX.text3, fontSize: 12)),
+                      if ((current.ping ?? -1) > 0) ...[
+                        Text('  ·  ', style: TextStyle(color: NX.text3, fontSize: 12)),
+                        Text(tr('{0} мс', [current.ping]),
+                            style: TextStyle(
+                                color: NX.pingColor(current.ping),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5)),
                       ],
                     ]),
                   ),

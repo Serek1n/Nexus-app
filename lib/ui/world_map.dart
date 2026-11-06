@@ -243,7 +243,7 @@ class _WorldMapState extends State<WorldMap>
   Widget build(BuildContext context) {
     final p = kCountryCity[widget.codes.isEmpty ? '' : widget.codes.first];
     // Центр карты — сервер; при смене сервера карта плавно переезжает.
-    final target = Offset(p?.$2 ?? 20, (p?.$1 ?? 40).clamp(-20, 55).toDouble());
+    final target = Offset(p?.$2 ?? 20, (p?.$1 ?? 40).clamp(-35, 58).toDouble());
     return RepaintBoundary(
       child: TweenAnimationBuilder<Offset>(
         tween: Tween(end: target),
@@ -286,7 +286,7 @@ class _MapPainter extends CustomPainter {
   final Color dot, accent, other;
 
   /// Сколько градусов долготы помещается в ширину карты.
-  static const _spanLon = 120.0;
+  static const _spanLon = 72.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -319,7 +319,7 @@ class _MapPainter extends CustomPainter {
         if (o.dx < -cell || o.dx > size.width + cell) continue;
         var t = 0.0;
         if (focus != null) {
-          final d = (o - focus).distance / (size.shortestSide * 0.55);
+          final d = (o - focus).distance / (size.shortestSide * 0.7);
           t = (1 - d).clamp(0.0, 1.0);
           t = t * t;
         }
