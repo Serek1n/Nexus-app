@@ -19,13 +19,15 @@ Future<void> showShareSheet(
   required String text,
   required String warning,
 }) async {
-  // Пока на экране ключ и QR — скриншоты и запись экрана запрещены.
-  await AndroidSystem.setSecure(true);
+  // Пока на экране ключ и QR — скриншоты и запись экрана запрещены;
+  // потом — как в настройке «Скрывать экран».
+  final keep = AppScope.read(context).settings.secureScreen;
+  await AndroidSystem.setSecureScreen(true);
   try {
     if (!context.mounted) return;
     await _showShareSheet(context, title: title, text: text, warning: warning);
   } finally {
-    await AndroidSystem.setSecure(false);
+    await AndroidSystem.setSecureScreen(keep);
   }
 }
 

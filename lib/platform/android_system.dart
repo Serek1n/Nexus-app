@@ -99,9 +99,6 @@ class AndroidSystem {
         'offLabel': tr('Отключено'),
       });
 
-  /// Запрет скриншотов, пока на экране ключ или QR-код.
-  static Future<void> setSecure(bool on) => _call('secure', on);
-
   /// Копирует строку с пометкой «секрет» (Android). false — не вышло.
   static Future<bool> copySecret(String text) async =>
       await _call<bool>('copySecret', text) == true;

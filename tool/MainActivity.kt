@@ -214,15 +214,6 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
-                    "secure" -> {
-                        // Экран с ключом или QR: запрещаем скриншоты и запись
-                        // экрана, в списке недавних приложений — пустое окно.
-                        val flag = android.view.WindowManager.LayoutParams.FLAG_SECURE
-                        if (call.arguments == true) window.addFlags(flag)
-                        else window.clearFlags(flag)
-                        result.success(null)
-                    }
-
                     "copySecret" -> {
                         // Ключ помечается как секрет: Android 13+ не показывает
                         // его в превью буфера, клавиатуры не сохраняют в историю.
