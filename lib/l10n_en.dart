@@ -1037,6 +1037,12 @@ const kEn = <String, String>{
       'servers',
   'скорость —':
       'speed —',
+  'стран':
+      'countries',
+  'страна':
+      'country',
+  'страны':
+      'countries',
   'только что':
       'just now',
   'февраль':

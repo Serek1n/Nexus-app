@@ -4,99 +4,201 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 
-// Точечная карта мира для главного экрана: где находится сервер.
-// Суша — по данным Natural Earth (общественное достояние), сетка 3°×3°,
-// широты от 80° с. ш. до 56° ю. ш. Каждая строка — 120 бит в hex.
-const _cols = 120, _rows = 45;
+// Точечная карта для главного экрана: где находится сервер.
+// Суша — по данным Natural Earth (общественное достояние), сетка 1,5°,
+// широты от 80° с. ш. до 58° ю. ш. Каждая строка — 240 бит в hex.
+const _cols = 240, _rows = 92;
+const _step = 1.5, _lat0 = 80.0;
 const _land = <String>[
-  '0000000feffffc00f000000e000000',
-  '0000173f80fffc000001807fc03000',
-  '00003fbbe07ff800000617fffe3c00',
-  '07ffffdffc3ff0003f00ffffffffff',
-  'e7ffffffbe3f8e00ffffffffffffff',
-  '07fffffdbc1c0603ffffffffffffff',
-  '07fffff8380c0003dfffffffffff78',
-  '0181fffc3e000023dfffffffffe0c0',
-  '0000ffffbf800073ffffffffffe0c0',
-  '00007fffffc0003ffffffffffff080',
-  '00003ffffec0001ffffffffffff000',
-  '00003fffff00001ffdf7ffffffd000',
-  '00003ffff8000079fd77ffffff1000',
-  '00001fffe000007057fbfffff62000',
-  '00001fffe000003f07fffffff26000',
-  '00000fffc000007f00fffffff18000',
-  '000007ff8000007ffffffffff80000',
-  '000003f0800001fffffffffff00000',
-  '000000f0000001fffffe3ffff80000',
-  '00000072600003ffff7f1fdf800000',
-  '0000007e080003ffffbe0f1f080000',
-  '00000007000003fffff80e0f080000',
-  '00000001080003ffffe80607840000',
-  '00000000ff0001fffff80600040000',
-  '000000003fc000fffff00004200000',
-  '000000003fe00001fff0000e600000',
-  '000000007ff00001ffe00006f80000',
-  '000000007ffe0001ffc0000268f000',
-  '000000007fff0000ff800001003800',
-  '000000003fff0000ff800000001400',
-  '000000003fff0000ffc00000009000',
-  '000000001ffe0000ffd8000007d000',
-  '000000000ffe0000ff98000007f800',
-  '000000000ffe0000ff3000003ffc00',
-  '000000000ff800007f3000003ffe00',
-  '000000000ff000007e0000003ffe00',
-  '000000000fe000003c0000003ffe00',
-  '000000000fe00000380000003c7e00',
-  '000000001f80000000000000003c00',
-  '000000001f00000000000000000002',
-  '000000001e00000000000000000c04',
-  '000000001c00000000000000000008',
-  '000000001c00000000000000000000',
-  '000000001800000000000000000000',
-  '000000000c00000000000000000000',
+  '00000000000030fffe3ffffffff00001fe000000000003f8000000000000',
+  '0000000000040187f0ffffffffe00000730000000000000c000000000000',
+  '0000000001f90effe07fffffffe0000000000000fc0003fff0000c000000',
+  '00000000000f04ffe0007fffffe000000000000700003fffe0000f000000',
+  '0000000007f0ceeff8001fffffc000000000001c0003ffffff3c02000000',
+  '800000000f7fc7cffe001fffff80000000000038077ffffffffcaff00000',
+  '000ffe80703ff1e7ffe01fffff80000007f800000fffffffffffffffe000',
+  '807ffffffffff379c7e007fffe0000001fffc013ffffffffffffffffffff',
+  'e03fffffffffffffc5fc0fffc00000007fffe6ffffffffffffffffffffff',
+  'fcfffffffffffffe03ec0fff00fe0000fffe1fffffffffffffffffffffff',
+  '081ffffffffffffbcff807f8007c0003fdfffffffffffffffffffffffffe',
+  '003fffffffffffe0807803f00000000ff3ffffffffffffffffffffffffff',
+  '007fffffffffffc00f8001f00000001ff3ffffffffffffffffffffffbff0',
+  '001fd87fffffff800fc800000000001ff1fffffffffffffffffffffe1e00',
+  '0001c00fffffffc00ffc000000000c0de0fffffffffffffffffffc007000',
+  '00064001fffffff807fe000000000e06e3fffffffffffffffffff800f800',
+  '00180000ffffffff8fff800000001e0783ffffffffffffffffffe000f000',
+  '000000017fffffff9fffe0000000370ffffffffffffffffffffffc00e000',
+  '000000003fffffffdfffe0000000379fffffffffffffffffffffff00c000',
+  '000000001fffffffffffe000000007fffffffffffffffffffffffd000000',
+  '000000000ffffffffff87000000001fffffffffffffffffffffffd000000',
+  '0000000007fffffffff87800000007fffffffffffffffffffffff8000000',
+  '0000000007ffffffffff0000000001ffffff7f9ffffffffffffff0000000',
+  '0000000007ffffffffee0000000001ff3ff37e3fffffffffffffe3000000',
+  '0000000007ffffffff80000000003ff99fe01f3fffffffffffffc7800000',
+  '0000000007ffffffff80000000003fc0e7e71f9ffffffffffffe04000000',
+  '0000000007fffffffe00000000003f06377fff9ffffffffffffc06000000',
+  '0000000003fffffffc00000000003f00237fff8ffffffffffe1c06000000',
+  '0000000003fffffffc00000000003e0a433fffcfffffffffff8c1c000000',
+  '0000000001fffffffc000000000009fe0002ffffffffffffff0c7c000000',
+  '0000000000fffffff000000000001ffe0000ffffffffffffff01f0000000',
+  '00000000003fffffe000000000003fffc201ffffffffffffff8300000000',
+  '00000000003fffffc000000000007fffe7ffffffffffffffff8000000000',
+  '000000000017fff9c000000000007fffffffffffffffffffff8000000000',
+  '00000000000fff00400000000000ffffffffffbfffffffffff8000000000',
+  '00000000000dfe00600000000001fffffffeff9fffffffffff0000000000',
+  '000000000005fe00000000000003fffffffe7fe5ffffffffff0000000000',
+  '0000000000027e00000000000007ffffffff7ffe07fffffffe8000000000',
+  '0000000000007e00f00000000007ffffffffbfff03fffffff00000000000',
+  '0000000000003e0c0c0000000007ffffffffbffe01ffc7fe400000000000',
+  '0000800000003f1c01c000000007ffffffff9ffe00ff83fec00000000000',
+  '0000000000000ff8080000000007ffffffffcff8007f01fe00c000000000',
+  '00000000000003f8000000000007ffffffffcfe0007e01ff00c000000000',
+  '000000000000003f80000000000fffffffffefc0007c007f808000000000',
+  '000000000000000f800000000007fffffffffe00003c007f80a000000000',
+  '000000000000000301c000000007fffffffff8400038002f801000000000',
+  '000000000000000187fe00000003ffffffffffc000180047016000000000',
+  '0000000000000000ffff00000001ffffffffffc000140060003000000000',
+  '00000000000000000fff80000000ffffffffff8000060020003000000000',
+  '00000000000000000ffff80000007f9fffffff8000000018061000000000',
+  '00000000000000000ffffc000000200fffffff00000000d80e0000000000',
+  '00000000000000000ffffc0000000003fffffe00000000783e0000000000',
+  '00000000000000001ffffe0000000003fffffc00000000387ea400000000',
+  '00000000000000003fffff0000000003fffff800000000387e0480000000',
+  '00000000000000003fffffc000000003fffff0000000001c7dc0d8000000',
+  '00000000000000003ffffffc00000001ffffe0000000000e3dc2ff000000',
+  '00000000000000003fffffff00000000ffffc0000000000600403f840000',
+  '00000000000000003fffffff80000000ffffc0000000000300000fd90000',
+  '00000000000000001fffffff80000000ffffc00000000001f8000fe00000',
+  '00000000000000001fffffff800000007fffe00000000000009002300000',
+  '00000000000000000fffffff000000007fffe00000000000000000000000',
+  '00000000000000000ffffffe000000007fffe000000000000001e3000000',
+  '000000000000000007fffffc00000000ffffe0c000000000000be3000000',
+  '000000000000000003fffffc00000000ffffe1c000000000001fe3800000',
+  '000000000000000001fffffc00000000ffffc78000000000003ffb800000',
+  '0000000000000000007ffffc00000000ffff878000000000007fffc00002',
+  '0000000000000000007ffffc00000000ffff07800000000000ffffe00000',
+  '0000000000000000007ffff8000000007fff07000000000007fffff00200',
+  '0000000000000000007ffff0000000007fff0700000000000ffffff80000',
+  '0000000000000000007fff80000000007fff0700000000000ffffff80000',
+  '0000000000000000007fff00000000003ffc0000000000000ffffffc0000',
+  '0000000000000000007fff00000000003ffc0000000000000ffffffc0000',
+  '000000000000000000fffe00000000001ffc0000000000000ffffffe0000',
+  '000000000000000000fffe00000000001ff800000000000007fffffc0000',
+  '000000000000000000fffc00000000000ff000000000000007fffffc0000',
+  '000000000000000000fff800000000000fe000000000000007e03ff80000',
+  '000000000000000000fff00000000000040000000000000006002ff80000',
+  '000000000000000001ffc000000000000000000000000000000007f00008',
+  '000000000000000001ffc000000000000000000000000000000007f0000e',
+  '000000000000000001fe000000000000000000000000000000000000000e',
+  '000000000000000001fc000000000000000000000000000000000020001c',
+  '000000000000000003f80000000000000000000000000000000000600030',
+  '000000000000000001f800000000000000000000000000000000000000e0',
+  '000000000000000003f000000000000000000000000000000000000001c0',
+  '000000000000000003f00000000000000000000000000000000000000080',
+  '000000000000000003f00000000000000000000000000000000000000000',
+  '000000000000000007e00000000000000000000002000000000000000000',
+  '000000000000000003c08000000000000000000000000000000000000000',
+  '000000000000000003e00000000000000000000000000000000000000000',
+  '000000000000000001f00000000000000000000000000000000000000000',
+  '000000000000000000000000000000000000000000000000000000000000',
+  '000000000000000000000000000000000000000000000000000000000000',
 ];
 
-bool _isLand(int r, int c) {
-  final hex = _land[r];
-  final nib = int.parse(hex[c ~/ 4], radix: 16);
-  return (nib >> (3 - c % 4)) & 1 == 1;
-}
+final _bits = () {
+  final b = List<List<bool>>.generate(_rows, (_) => List.filled(_cols, false));
+  for (var r = 0; r < _rows; r++) {
+    final hex = _land[r];
+    for (var c = 0; c < _cols; c++) {
+      final nib = int.parse(hex[c ~/ 4], radix: 16);
+      b[r][c] = (nib >> (3 - c % 4)) & 1 == 1;
+    }
+  }
+  return b;
+}();
 
-/// Примерные координаты (широта, долгота) сервера по коду страны —
-/// столица или крупный узел дата-центров.
-const kCountryPoint = <String, (double, double)>{
-  'ru': (55.8, 37.6), 'fi': (60.2, 24.9), 'it': (45.5, 9.2), 'nl': (52.4, 4.9),
-  'de': (50.1, 8.7), 'se': (59.3, 18.1), 'no': (59.9, 10.8), 'dk': (55.7, 12.6),
-  'pl': (52.2, 21.0), 'lt': (54.7, 25.3), 'lv': (56.9, 24.1), 'ee': (59.4, 24.8),
-  'fr': (48.9, 2.35), 'gb': (51.5, -0.1), 'ie': (53.3, -6.3), 'es': (40.4, -3.7),
-  'pt': (38.7, -9.1), 'ch': (47.4, 8.5), 'at': (48.2, 16.4), 'cz': (50.1, 14.4),
-  'sk': (48.1, 17.1), 'hu': (47.5, 19.0), 'ro': (44.4, 26.1), 'bg': (42.7, 23.3),
-  'gr': (38.0, 23.7), 'rs': (44.8, 20.5), 'md': (47.0, 28.9), 'ua': (50.4, 30.5),
-  'by': (53.9, 27.6), 'tr': (41.0, 29.0), 'ge': (41.7, 44.8), 'am': (40.2, 44.5),
-  'az': (40.4, 49.9), 'kz': (43.2, 76.9), 'uz': (41.3, 69.2), 'kg': (42.9, 74.6),
-  'us': (39.0, -77.5), 'ca': (43.7, -79.4), 'mx': (19.4, -99.1), 'br': (-23.5, -46.6),
-  'ar': (-34.6, -58.4), 'cl': (-33.4, -70.6), 'jp': (35.7, 139.7), 'kr': (37.6, 127.0),
-  'hk': (22.3, 114.2), 'tw': (25.0, 121.5), 'sg': (1.35, 103.8), 'in': (19.1, 72.9),
-  'ae': (25.2, 55.3), 'il': (32.1, 34.8), 'au': (-33.9, 151.2), 'nz': (-36.8, 174.8),
-  'za': (-26.2, 28.0), 'eg': (30.0, 31.2), 'id': (-6.2, 106.8), 'my': (3.1, 101.7),
-  'th': (13.8, 100.5), 'vn': (21.0, 105.8), 'ph': (14.6, 121.0), 'cy': (35.2, 33.4),
-  'is': (64.1, -21.9), 'lu': (49.6, 6.1), 'be': (50.8, 4.4), 'hr': (45.8, 16.0),
-  'si': (46.1, 14.5), 'al': (41.3, 19.8), 'mk': (42.0, 21.4), 'ba': (43.9, 18.4),
-  'me': (42.4, 19.3), 'cn': (31.2, 121.5), 'sa': (24.7, 46.7), 'qa': (25.3, 51.5),
+/// Город сервера по коду страны: столица или крупный узел дата-центров.
+/// (широта, долгота, по-русски, по-английски).
+const kCountryCity = <String, (double, double, String, String)>{
+  'ru': (55.75, 37.62, 'Москва', 'Moscow'),
+  'fi': (60.17, 24.94, 'Хельсинки', 'Helsinki'),
+  'it': (45.46, 9.19, 'Милан', 'Milan'),
+  'nl': (52.37, 4.9, 'Амстердам', 'Amsterdam'),
+  'de': (50.11, 8.68, 'Франкфурт', 'Frankfurt'),
+  'se': (59.33, 18.07, 'Стокгольм', 'Stockholm'),
+  'no': (59.91, 10.75, 'Осло', 'Oslo'),
+  'dk': (55.68, 12.57, 'Копенгаген', 'Copenhagen'),
+  'pl': (52.23, 21.01, 'Варшава', 'Warsaw'),
+  'lt': (54.69, 25.28, 'Вильнюс', 'Vilnius'),
+  'lv': (56.95, 24.11, 'Рига', 'Riga'),
+  'ee': (59.44, 24.75, 'Таллин', 'Tallinn'),
+  'fr': (48.86, 2.35, 'Париж', 'Paris'),
+  'gb': (51.51, -0.13, 'Лондон', 'London'),
+  'ie': (53.35, -6.26, 'Дублин', 'Dublin'),
+  'es': (40.42, -3.7, 'Мадрид', 'Madrid'),
+  'pt': (38.72, -9.14, 'Лиссабон', 'Lisbon'),
+  'ch': (47.38, 8.54, 'Цюрих', 'Zurich'),
+  'at': (48.21, 16.37, 'Вена', 'Vienna'),
+  'cz': (50.08, 14.44, 'Прага', 'Prague'),
+  'sk': (48.15, 17.11, 'Братислава', 'Bratislava'),
+  'hu': (47.5, 19.04, 'Будапешт', 'Budapest'),
+  'ro': (44.43, 26.1, 'Бухарест', 'Bucharest'),
+  'bg': (42.7, 23.32, 'София', 'Sofia'),
+  'gr': (37.98, 23.73, 'Афины', 'Athens'),
+  'rs': (44.79, 20.45, 'Белград', 'Belgrade'),
+  'md': (47.01, 28.86, 'Кишинёв', 'Chisinau'),
+  'ua': (50.45, 30.52, 'Киев', 'Kyiv'),
+  'by': (53.9, 27.56, 'Минск', 'Minsk'),
+  'tr': (41.01, 28.98, 'Стамбул', 'Istanbul'),
+  'ge': (41.72, 44.79, 'Тбилиси', 'Tbilisi'),
+  'am': (40.18, 44.51, 'Ереван', 'Yerevan'),
+  'az': (40.41, 49.87, 'Баку', 'Baku'),
+  'kz': (43.24, 76.89, 'Алматы', 'Almaty'),
+  'uz': (41.3, 69.24, 'Ташкент', 'Tashkent'),
+  'kg': (42.87, 74.59, 'Бишкек', 'Bishkek'),
+  'us': (39.04, -77.49, 'Эшберн', 'Ashburn'),
+  'ca': (43.65, -79.38, 'Торонто', 'Toronto'),
+  'mx': (19.43, -99.13, 'Мехико', 'Mexico City'),
+  'br': (-23.55, -46.63, 'Сан-Паулу', 'São Paulo'),
+  'ar': (-34.6, -58.38, 'Буэнос-Айрес', 'Buenos Aires'),
+  'cl': (-33.45, -70.67, 'Сантьяго', 'Santiago'),
+  'jp': (35.68, 139.69, 'Токио', 'Tokyo'),
+  'kr': (37.57, 126.98, 'Сеул', 'Seoul'),
+  'hk': (22.32, 114.17, 'Гонконг', 'Hong Kong'),
+  'tw': (25.03, 121.57, 'Тайбэй', 'Taipei'),
+  'sg': (1.35, 103.82, 'Сингапур', 'Singapore'),
+  'in': (19.08, 72.88, 'Мумбаи', 'Mumbai'),
+  'ae': (25.2, 55.27, 'Дубай', 'Dubai'),
+  'il': (32.09, 34.78, 'Тель-Авив', 'Tel Aviv'),
+  'au': (-33.87, 151.21, 'Сидней', 'Sydney'),
+  'nz': (-36.85, 174.76, 'Окленд', 'Auckland'),
+  'za': (-26.2, 28.05, 'Йоханнесбург', 'Johannesburg'),
+  'eg': (30.04, 31.24, 'Каир', 'Cairo'),
+  'id': (-6.21, 106.85, 'Джакарта', 'Jakarta'),
+  'my': (3.14, 101.69, 'Куала-Лумпур', 'Kuala Lumpur'),
+  'th': (13.76, 100.5, 'Бангкок', 'Bangkok'),
+  'vn': (21.03, 105.85, 'Ханой', 'Hanoi'),
+  'ph': (14.6, 120.98, 'Манила', 'Manila'),
+  'cy': (35.17, 33.36, 'Никосия', 'Nicosia'),
+  'is': (64.15, -21.94, 'Рейкьявик', 'Reykjavik'),
+  'lu': (49.61, 6.13, 'Люксембург', 'Luxembourg'),
+  'be': (50.85, 4.35, 'Брюссель', 'Brussels'),
+  'hr': (45.81, 15.98, 'Загреб', 'Zagreb'),
+  'si': (46.06, 14.51, 'Любляна', 'Ljubljana'),
+  'al': (41.33, 19.82, 'Тирана', 'Tirana'),
+  'mk': (41.99, 21.43, 'Скопье', 'Skopje'),
+  'ba': (43.86, 18.41, 'Сараево', 'Sarajevo'),
+  'me': (42.44, 19.26, 'Подгорица', 'Podgorica'),
+  'cn': (31.23, 121.47, 'Шанхай', 'Shanghai'),
+  'sa': (24.71, 46.68, 'Эр-Рияд', 'Riyadh'),
+  'qa': (25.29, 51.53, 'Доха', 'Doha'),
 };
 
-Offset? _pos((double, double)? p, Size size) {
-  if (p == null) return null;
-  final x = (p.$2 + 180) / 360 * size.width;
-  final y = (80 - p.$1) / 136 * size.height;
-  return Offset(x, y);
-}
-
-/// Карта с отмеченными серверами. [active] — подключено (точка «дышит»).
+/// Карта вокруг сервера. [codes] — коды стран: первый — текущий сервер,
+/// остальные — другие серверы (маленькие точки). [active] — подключено:
+/// точка сервера расходится волнами.
 class WorldMap extends StatefulWidget {
   const WorldMap({super.key, required this.codes, this.active = false});
 
-  /// Коды стран серверов (первый — текущий).
   final List<String> codes;
   final bool active;
 
@@ -107,7 +209,7 @@ class WorldMap extends StatefulWidget {
 class _WorldMapState extends State<WorldMap>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 2200));
+      vsync: this, duration: const Duration(milliseconds: 2600));
 
   @override
   void initState() {
@@ -122,7 +224,7 @@ class _WorldMapState extends State<WorldMap>
   }
 
   void _sync() {
-    // Анимация только при подключении — в покое карта не тратит батарею.
+    // Волны только при подключении — в покое карта не тратит батарею.
     if (widget.active && !_pulse.isAnimating) {
       _pulse.repeat();
     } else if (!widget.active && _pulse.isAnimating) {
@@ -139,16 +241,24 @@ class _WorldMapState extends State<WorldMap>
 
   @override
   Widget build(BuildContext context) {
+    final p = kCountryCity[widget.codes.isEmpty ? '' : widget.codes.first];
+    // Центр карты — сервер; при смене сервера карта плавно переезжает.
+    final target = Offset(p?.$2 ?? 20, (p?.$1 ?? 40).clamp(-20, 55).toDouble());
     return RepaintBoundary(
-      child: AspectRatio(
-        aspectRatio: _cols / (_rows * 1.0),
-        child: CustomPaint(
+      child: TweenAnimationBuilder<Offset>(
+        tween: Tween(end: target),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeInOutCubic,
+        builder: (_, center, __) => CustomPaint(
+          size: Size.infinite,
           painter: _MapPainter(
             codes: widget.codes,
-            active: widget.active,
+            center: center,
             pulse: _pulse,
-            dot: NX.text3.withValues(alpha: NX.light ? 0.35 : 0.28),
+            active: widget.active,
+            dot: NX.text3,
             accent: widget.active ? NX.mint : NX.violet,
+            other: NX.text2,
           ),
         ),
       ),
@@ -159,52 +269,103 @@ class _WorldMapState extends State<WorldMap>
 class _MapPainter extends CustomPainter {
   _MapPainter({
     required this.codes,
-    required this.active,
+    required this.center,
     required this.pulse,
+    required this.active,
     required this.dot,
     required this.accent,
+    required this.other,
   }) : super(repaint: pulse);
 
   final List<String> codes;
-  final bool active;
+
+  /// Центр вида: (долгота, широта).
+  final Offset center;
   final Animation<double> pulse;
-  final Color dot;
-  final Color accent;
+  final bool active;
+  final Color dot, accent, other;
+
+  /// Сколько градусов долготы помещается в ширину карты.
+  static const _spanLon = 120.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cw = size.width / _cols, ch = size.height / _rows;
-    final r = math.min(cw, ch) * 0.28;
-    final p = Paint()..color = dot;
-    for (var y = 0; y < _rows; y++) {
-      for (var x = 0; x < _cols; x++) {
-        if (_isLand(y, x)) {
-          canvas.drawCircle(Offset((x + 0.5) * cw, (y + 0.5) * ch), r, p);
+    final ppd = size.width / _spanLon; // пикселей на градус
+    final lon0 = center.dx - size.width / 2 / ppd;
+    final lat0 = center.dy + size.height / 2 / ppd;
+    Offset toPx(double lat, double lon) {
+      var dl = lon - lon0;
+      dl = ((dl % 360) + 360) % 360; // переход через 180°
+      return Offset(dl * ppd, (lat0 - lat) * ppd);
+    }
+
+    final sp = codes.isEmpty ? null : kCountryCity[codes.first];
+    final focus = sp == null ? null : toPx(sp.$1, sp.$2);
+    final cell = _step * ppd;
+    final r = cell * 0.3;
+    final paint = Paint();
+    // Суша: точки; рядом с сервером — ярче и в цвет сервера.
+    final c0 = ((lon0 + 180) / _step).floor();
+    final cn = (size.width / cell).ceil() + 1;
+    for (var row = 0; row < _rows; row++) {
+      final lat = _lat0 - (row + 0.5) * _step;
+      final y = (lat0 - lat) * ppd;
+      if (y < -cell || y > size.height + cell) continue;
+      for (var k = 0; k < cn; k++) {
+        final col = ((c0 + k) % _cols + _cols) % _cols;
+        if (!_bits[row][col]) continue;
+        final lon = -180 + (col + 0.5) * _step;
+        final o = toPx(lat, lon);
+        if (o.dx < -cell || o.dx > size.width + cell) continue;
+        var t = 0.0;
+        if (focus != null) {
+          final d = (o - focus).distance / (size.shortestSide * 0.55);
+          t = (1 - d).clamp(0.0, 1.0);
+          t = t * t;
         }
+        paint.color = Color.lerp(dot.withValues(alpha: 0.30), accent.withValues(alpha: 0.75), t * 0.6)!;
+        canvas.drawCircle(o, r, paint);
       }
     }
-    // Серверы: остальные из пула — маленькие точки, текущий — крупная
-    // с ореолом (при подключении ореол расходится волной).
-    for (var i = codes.length - 1; i >= 0; i--) {
-      final o = _pos(kCountryPoint[codes[i]], size);
-      if (o == null) continue;
-      final main = i == 0;
-      if (main) {
-        final t = active ? pulse.value : 0.0;
+
+    // Другие серверы — маленькие точки.
+    for (final code in codes.skip(1)) {
+      final p = kCountryCity[code];
+      if (p == null) continue;
+      final o = toPx(p.$1, p.$2);
+      canvas.drawCircle(o, r * 2.2, Paint()..color = other.withValues(alpha: 0.18));
+      canvas.drawCircle(o, r * 1.3, Paint()..color = other.withValues(alpha: 0.75));
+    }
+
+    if (focus == null) return;
+    // Текущий сервер: мягкое свечение, две волны и яркая точка.
+    canvas.drawCircle(
+        focus,
+        r * 9,
+        Paint()
+          ..shader = RadialGradient(colors: [
+            accent.withValues(alpha: 0.30),
+            accent.withValues(alpha: 0),
+          ]).createShader(Rect.fromCircle(center: focus, radius: r * 9)));
+    if (active) {
+      for (final ph in const [0.0, 0.5]) {
+        final t = (pulse.value + ph) % 1.0;
         canvas.drawCircle(
-            o,
-            r * (4 + 10 * t),
-            Paint()..color = accent.withValues(alpha: 0.35 * (1 - t)));
-        canvas.drawCircle(o, r * 3.2,
-            Paint()..color = accent.withValues(alpha: 0.25));
+            focus,
+            r * (2.5 + 9 * t),
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = math.max(1.0, r * 0.5)
+              ..color = accent.withValues(alpha: 0.55 * (1 - t)));
       }
-      canvas.drawCircle(o, main ? r * 2 : r * 1.4,
-          Paint()..color = main ? accent : accent.withValues(alpha: 0.6));
     }
+    canvas.drawCircle(focus, r * 2.6, Paint()..color = accent.withValues(alpha: 0.25));
+    canvas.drawCircle(focus, r * 1.7, Paint()..color = accent);
+    canvas.drawCircle(focus, r * 0.7, Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.9));
   }
 
   @override
   bool shouldRepaint(_MapPainter o) =>
-      o.active != active || o.dot != dot || o.accent != accent ||
-      o.codes.join() != codes.join();
+      o.center != center || o.active != active || o.dot != dot ||
+      o.accent != accent || o.codes.join() != codes.join();
 }

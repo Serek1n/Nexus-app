@@ -169,7 +169,7 @@ class HomeScreen extends StatelessWidget {
             children: [
               _ServerRow(onTap: onOpenServers),
               const _FavoritesStrip(),
-              const _MapCard(),
+              _MapCard(onTap: onOpenServers),
             ],
           )
         else
@@ -782,9 +782,11 @@ class _ServerRow extends StatelessWidget {
   }
 }
 
-/// Карта: где сервер (в режиме «Авто» — весь пул, текущий крупнее).
+/// Карта вокруг сервера: точка сервера (при подключении — волны),
+/// другие серверы подписки — маленькие точки. Нажатие — список серверов.
 class _MapCard extends StatelessWidget {
-  const _MapCard();
+  const _MapCard({required this.onTap});
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -792,21 +794,81 @@ class _MapCard extends StatelessWidget {
     final sel = app.selected;
     if (sel == null) return const SizedBox.shrink();
     final current = app.settings.autoMode ? (app.autoCurrent?.$1 ?? sel) : sel;
-    final codes = <String>[
-      if (current.countryCode != null) current.countryCode!,
-      if (app.settings.autoMode)
-        for (final s in app.activeAutoPool)
-          if (s.countryCode != null && s.countryCode != current.countryCode)
-            s.countryCode!,
-    ].where(kCountryPoint.containsKey).toSet().toList();
-    if (codes.isEmpty) return const SizedBox.shrink();
+    final code = current.countryCode;
+    final city = kCountryCity[code ?? ''];
+    if (city == null) return const SizedBox.shrink();
+    // Остальные страны: пул «Авто» или все серверы подписки.
+    final pool = app.settings.autoMode
+        ? app.activeAutoPool
+        : app.servers.where((s) => s.subscriptionId == sel.subscriptionId);
+    final codes = <String>{
+      code!,
+      for (final s in pool)
+        if (s.countryCode != null && kCountryCity.containsKey(s.countryCode))
+          s.countryCode!,
+    }.toList();
+    final on = app.state == ConnState.connected;
     return Padding(
       padding: const EdgeInsets.only(top: 10),
-      child: NeonCard(
-        padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
-        child: WorldMap(
-          codes: codes,
-          active: app.state == ConnState.connected,
+      child: Material(
+        color: NX.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: on ? NX.mint.withValues(alpha: 0.25) : NX.stroke),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 150,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Края карты плавно растворяются в карточке.
+                ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (r) => const LinearGradient(
+                    colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+                    stops: [0, 0.12, 0.88, 1],
+                  ).createShader(r),
+                  child: ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (r) => const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+                      stops: [0, 0.18, 0.82, 1],
+                    ).createShader(r),
+                    child: WorldMap(codes: codes, active: on),
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  bottom: 10,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(5, 5, 12, 5),
+                    decoration: BoxDecoration(
+                      color: NX.surface2.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NX.stroke),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      ServerAvatar(server: current, size: 22),
+                      const SizedBox(width: 8),
+                      Text(L10n.lang == 'ru' ? city.$3 : city.$4,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      if (codes.length > 1) ...[
+                        Text(
+                            '  ·  ${tr('ещё {0} {1}', [codes.length - 1, plural(codes.length - 1, tr('страна'), tr('страны'), tr('стран'))])}',
+                            style: TextStyle(color: NX.text3, fontSize: 12)),
+                      ],
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
