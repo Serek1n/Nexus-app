@@ -203,6 +203,19 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                   : tr('Будет добавлен сервер {0}.', [what]),
               style: TextStyle(color: NX.text2),
             ),
+            // Запасные адреса из ссылки — тоже на виду: подписка может
+            // обновляться с них, значит пользователь должен их видеть.
+            if (isSub && DeepLinks.peekMirrors(payload).isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                tr('Запасные адреса: {0}', [
+                  DeepLinks.peekMirrors(payload)
+                      .map((m) => Uri.tryParse(m)?.host ?? m)
+                      .join(', ')
+                ]),
+                style: TextStyle(color: NX.text2, fontSize: 13),
+              ),
+            ],
             if (payload.toLowerCase().startsWith('http://')) ...[
               const SizedBox(height: 12),
               Text(
@@ -222,7 +235,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (ok != true || !mounted) {
+      DeepLinks.dropMirrors(payload);
+      return;
+    }
     try {
       final msg = await AppScope.read(context).importText(payload);
       if (mounted) toast(context, msg);

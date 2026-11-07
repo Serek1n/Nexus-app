@@ -313,6 +313,8 @@ const kEn = <String, String>{
       'Backup addresses',
   'Запасные адреса ({0})':
       'Backup addresses ({0})',
+  'Запасные адреса: {0}':
+      'Backup addresses: {0}',
   'Запрет скриншотов и размытие в списке недавних приложений':
       'Blocks screenshots and blurs the app in recent apps',
   'Запросы зашифрованы и идут через сервер. AdGuard дополнительно отсекает рекламу на уровне DNS':
@@ -415,6 +417,8 @@ const kEn = <String, String>{
       'Couldn\'t measure the speed',
   'Не удалось открыть установщик':
       'Couldn\'t open the installer',
+  'Не удалось подготовить ядро в {0}: {1}':
+      'Couldn\'t prepare the core in {0}: {1}',
   'Не удалось подключиться за 30 секунд':
       'Couldn\'t connect within 30 seconds',
   'Не удалось построить QR-код — скопируйте ссылку':
@@ -485,6 +489,8 @@ const kEn = <String, String>{
       'Update subscriptions',
   'Обновляются автоматически при запуске':
       'Updated automatically on launch',
+  'Остановить проверку скорости':
+      'Stop the speed test',
   'Отдача':
       'Upload',
   'Откатить':

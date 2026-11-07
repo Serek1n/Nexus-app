@@ -34,6 +34,10 @@ const changelog = <(String, List<String>)>[
     'Windows: проверка скорости всех серверов',
     'Windows (TUN): с правами администратора запускается только проверенное ядро из защищённой папки',
     'Задержки после запуска меряются, когда подключение уже завершилось — без завышенных цифр',
+    'Карта приближена к серверу, плавно переезжает при смене сервера и почти не тратит батарею',
+    'PIN: пауза после ошибок сохраняется и после перезапуска Nexus; PIN не попадает в резервную копию',
+    'Запасные адреса из ссылки показываются в окне подтверждения',
+    'Windows: проверку скорости всех серверов можно остановить',
   ]),
   ('2.3.1', [
     'Убрано «Включать VPN в чужих Wi-Fi» — Nexus больше не просит доступ к геолокации',
@@ -241,6 +245,10 @@ const changelogEn = <String, List<String>>{
     'Windows: speed test of all servers',
     'Windows (TUN): with administrator rights only the verified core runs, from a protected folder',
     'Latencies after launch are measured once the connection has finished — no inflated numbers',
+    'The map zooms in on the server, glides when you switch servers and barely uses battery',
+    'PIN: the pause after wrong attempts survives restarting Nexus; the PIN is not included in backups',
+    'Backup addresses from a link are shown in the confirmation window',
+    'Windows: the speed test of all servers can be stopped',
   ],
   '2.3.1': [
     'Removed "Turn on VPN in unknown Wi-Fi" — Nexus no longer asks for location access',

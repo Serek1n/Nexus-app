@@ -16,6 +16,12 @@ class DeepLinks {
 
   static List<String> takeMirrors(String url) => _mirrors.remove(url) ?? const [];
 
+  /// Посмотреть, не забирая (для окна подтверждения).
+  static List<String> peekMirrors(String url) => _mirrors[url] ?? const [];
+
+  /// Пользователь отказался добавлять — запасные адреса тоже забываем.
+  static void dropMirrors(String url) => _mirrors.remove(url);
+
   /// Ссылка, пришедшая до того, как интерфейс был готов.
   static String? takePending() {
     final p = _pending;

@@ -249,18 +249,36 @@ class _WorldMapState extends State<WorldMap>
         tween: Tween(end: target),
         duration: const Duration(milliseconds: 900),
         curve: Curves.easeInOutCubic,
-        builder: (_, center, __) => CustomPaint(
-          size: Size.infinite,
-          painter: _MapPainter(
-            codes: widget.codes,
-            center: center,
-            pulse: _pulse,
-            active: widget.active,
-            dot: NX.text3,
-            accent: widget.active ? NX.mint : NX.violet,
-            other: NX.text2,
+        // Два слоя: суша (≈1000 точек) перерисовывается только при сдвиге
+        // карты, а волны — каждый кадр, но это пара кругов.
+        builder: (_, center, __) => Stack(fit: StackFit.expand, children: [
+          RepaintBoundary(
+            child: CustomPaint(
+              painter: _MapPainter(
+                land: true,
+                codes: widget.codes,
+                center: center,
+                pulse: null,
+                active: widget.active,
+                dot: NX.text3,
+                accent: widget.active ? NX.mint : NX.violet,
+                other: NX.text2,
+              ),
+            ),
           ),
-        ),
+          CustomPaint(
+            painter: _MapPainter(
+              land: false,
+              codes: widget.codes,
+              center: center,
+              pulse: _pulse,
+              active: widget.active,
+              dot: NX.text3,
+              accent: widget.active ? NX.mint : NX.violet,
+              other: NX.text2,
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -268,6 +286,7 @@ class _WorldMapState extends State<WorldMap>
 
 class _MapPainter extends CustomPainter {
   _MapPainter({
+    required this.land,
     required this.codes,
     required this.center,
     required this.pulse,
@@ -277,11 +296,13 @@ class _MapPainter extends CustomPainter {
     required this.other,
   }) : super(repaint: pulse);
 
+  /// true — слой суши, false — слой серверов и волн.
+  final bool land;
   final List<String> codes;
 
   /// Центр вида: (долгота, широта).
   final Offset center;
-  final Animation<double> pulse;
+  final Animation<double>? pulse;
   final bool active;
   final Color dot, accent, other;
 
@@ -303,6 +324,10 @@ class _MapPainter extends CustomPainter {
     final focus = sp == null ? null : toPx(sp.$1, sp.$2);
     final cell = _step * ppd;
     final r = cell * 0.3;
+    if (!land) {
+      _markers(canvas, toPx, focus, r);
+      return;
+    }
     final paint = Paint();
     // Суша: точки; рядом с сервером — ярче и в цвет сервера.
     final c0 = ((lon0 + 180) / _step).floor();
@@ -327,7 +352,10 @@ class _MapPainter extends CustomPainter {
         canvas.drawCircle(o, r, paint);
       }
     }
+  }
 
+  void _markers(Canvas canvas, Offset Function(double, double) toPx,
+      Offset? focus, double r) {
     // Другие серверы — маленькие точки.
     for (final code in codes.skip(1)) {
       final p = kCountryCity[code];
@@ -349,7 +377,7 @@ class _MapPainter extends CustomPainter {
           ]).createShader(Rect.fromCircle(center: focus, radius: r * 9)));
     if (active) {
       for (final ph in const [0.0, 0.5]) {
-        final t = (pulse.value + ph) % 1.0;
+        final t = ((pulse?.value ?? 0) + ph) % 1.0;
         canvas.drawCircle(
             focus,
             r * (2.5 + 9 * t),
@@ -366,6 +394,7 @@ class _MapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MapPainter o) =>
+      o.land != land ||
       o.center != center || o.active != active || o.dot != dot ||
       o.accent != accent || o.codes.join() != codes.join();
 }

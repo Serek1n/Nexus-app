@@ -116,6 +116,7 @@ class AppState extends ChangeNotifier {
     SubscriptionService.appVersion = appVersion;
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     locked = settings.pinHash != null;
+    _loadPinState();
     L10n.apply(settings.language, PlatformDispatcher.instance.locale.languageCode);
     language.value = L10n.lang;
     applyTheme();
@@ -487,14 +488,23 @@ class AppState extends ChangeNotifier {
 
   bool get canSpeedAll => isDesktop;
 
+  bool _speedStop = false;
+
+  /// Повторное нажатие во время проверки — остановить её.
   Future<void> speedTestAll() async {
-    if (!canSpeedAll || speedAllProgress != null) return;
+    if (!canSpeedAll) return;
+    if (speedAllProgress != null) {
+      _speedStop = true;
+      return;
+    }
+    _speedStop = false;
     final list = servers.where((s) => (s.ping ?? 0) >= 0).take(30).toList();
     if (list.isEmpty) return;
     speedAllProgress = (0, list.length);
     notifyListeners();
     var done = 0;
     for (final s in list) {
+      if (_speedStop) break;
       try {
         final r = await core.viaTunnel(
             s,
@@ -1164,12 +1174,11 @@ class AppState extends ChangeNotifier {
   /// Ярлык на значке приложения: «Подключить» или «Режим Авто».
   /// («Проверка связи» открывает экран — это делает интерфейс.)
   Future<void> runShortcut(String id) async {
-    if (!ready) {
-      await Future.doWhile(() async {
-        await Future.delayed(const Duration(milliseconds: 100));
-        return !ready;
-      });
+    // Ждём запуска приложения, но не дольше 15 с.
+    for (var i = 0; !ready && i < 150; i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
     }
+    if (!ready) return;
     if (id == 'auto' && !settings.autoMode && selected != null) {
       await setAutoMode(true);
     }
@@ -1579,7 +1588,9 @@ class AppState extends ChangeNotifier {
     final st = jsonDecode(settings.toJsonString()) as Map<String, dynamic>
       ..remove('lastCoreCheck')
       ..remove('lastAppCheck')
-      ..remove('skippedBuild');
+      ..remove('skippedBuild')
+      // PIN привязан к устройству: копия с чужим PIN заперла бы Nexus.
+      ..remove('pinHash');
     return Backup.encrypt({
       'v': 1,
       'subscriptions': [
@@ -1644,7 +1655,7 @@ class AppState extends ChangeNotifier {
         if (const [
           'lastCoreCheck', 'lastAppCheck', 'skippedBuild',
           // Привязано к конкретному устройству.
-          'launchAtStartup', 'windowsTun',
+          'launchAtStartup', 'windowsTun', 'pinHash',
         ].contains(k)) {
           continue;
         }
@@ -1788,6 +1799,7 @@ class AppState extends ChangeNotifier {
     locked = false;
     pinFails = 0;
     pinBlockedUntil = null;
+    unawaited(_prefs.remove('pinState'));
     traffic.clear();
     if (!isDesktop) {
       unawaited(AndroidSystem.saveTileConfig());
@@ -1837,6 +1849,7 @@ class AppState extends ChangeNotifier {
     if (await Pin.verify(pin, h)) {
       pinFails = 0;
       pinBlockedUntil = null;
+      _savePinState();
       locked = false;
       notifyListeners();
       return true;
@@ -1844,8 +1857,33 @@ class AppState extends ChangeNotifier {
     pinFails++;
     final d = Pin.delayAfter(pinFails);
     pinBlockedUntil = d == Duration.zero ? null : DateTime.now().add(d);
+    _savePinState();
     notifyListeners();
     return false;
+  }
+
+  /// Счётчик ошибок PIN переживает перезапуск: иначе паузу после 5 ошибок
+  /// обходили бы, закрывая и открывая Nexus.
+  void _savePinState() {
+    unawaited(_prefs.setString('pinState', jsonEncode({
+      'fails': pinFails,
+      'until': pinBlockedUntil?.millisecondsSinceEpoch,
+    })));
+  }
+
+  void _loadPinState() {
+    try {
+      final j = jsonDecode(_prefs.getString('pinState') ?? '{}') as Map;
+      pinFails = (j['fails'] as num?)?.toInt() ?? 0;
+      final u = (j['until'] as num?)?.toInt();
+      pinBlockedUntil = u == null ? null : DateTime.fromMillisecondsSinceEpoch(u);
+      // Часы перевели назад, чтобы снять паузу, — не даём: пауза не
+      // бывает дольше максимальной.
+      if (pinBlockedUntil != null &&
+          pinBlockedUntil!.difference(DateTime.now()) > const Duration(hours: 1)) {
+        pinBlockedUntil = DateTime.now().add(Pin.delayAfter(pinFails));
+      }
+    } catch (_) {}
   }
 
   // ─────────────────── горячая клавиша (Windows) ───────────────────
@@ -1867,6 +1905,9 @@ class AppState extends ChangeNotifier {
   /// Задать PIN (null — выключить вход по PIN-коду).
   Future<void> setPin(String? pin) async {
     final h = pin == null ? null : await Pin.hash(pin);
+    pinFails = 0;
+    pinBlockedUntil = null;
+    _savePinState();
     updateSettings((s) => s.pinHash = h);
   }
 

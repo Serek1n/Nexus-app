@@ -111,11 +111,15 @@ class WindowsCore extends VpnCore {
       await dst.writeAsBytes(bytes, flush: true);
     }
 
-    await dir.create(recursive: true);
     // Проверяем байты, которые сами же и записываем: подменить файл между
     // проверкой и запуском нельзя — в Program Files пишут только администраторы.
-    await put(kCoreExe, _coreSha);
-    if (_wintunSha.isNotEmpty) await put('wintun.dll', _wintunSha);
+    try {
+      await dir.create(recursive: true);
+      await put(kCoreExe, _coreSha);
+      if (_wintunSha.isNotEmpty) await put('wintun.dll', _wintunSha);
+    } on FileSystemException catch (e) {
+      throw Exception(tr('Не удалось подготовить ядро в {0}: {1}', [dir.path, e.osError?.message ?? e.message]));
+    }
     _safeDir = dir.path;
     _log(tr('Права администратора: ядро запускается из защищённой папки'));
   }

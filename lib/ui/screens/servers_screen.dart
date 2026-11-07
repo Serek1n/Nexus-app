@@ -125,11 +125,11 @@ class _ServersScreenState extends State<ServersScreen> {
                   if (app.canSpeedAll)
                     NxIconButton(
                       icon: Icons.download_rounded,
-                      tooltip: tr('Проверить скорость всех серверов'),
+                      tooltip: app.speedAllProgress != null
+                          ? tr('Остановить проверку скорости')
+                          : tr('Проверить скорость всех серверов'),
                       spinning: app.speedAllProgress != null,
-                      onPressed: app.servers.isEmpty || app.speedAllProgress != null
-                          ? null
-                          : app.speedTestAll,
+                      onPressed: app.servers.isEmpty ? null : app.speedTestAll,
                     ),
                   const SizedBox(width: 8),
                   NxIconButton(
