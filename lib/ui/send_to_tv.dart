@@ -113,8 +113,11 @@ class _SendToTvState extends State<_SendToTv> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final subs = app.subscriptions;
+    // Сразу выбрана подписка текущего сервера (или первая) — обычно
+    // остаётся только нажать «Отправить».
     final chosen = subs.where((s) => s.id == _subId).firstOrNull ??
-        (subs.length == 1 ? subs.first : null);
+        subs.where((s) => s.id == app.selected?.subscriptionId).firstOrNull ??
+        subs.firstOrNull;
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
       child: Column(
