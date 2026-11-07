@@ -702,6 +702,7 @@ class AppState extends ChangeNotifier {
   /// а прошлое уведомление было больше 3 дней назад.
   bool get batteryHintDue =>
       !isDesktop &&
+      !isTv &&
       batteryRestricted &&
       settings.autoReconnect &&
       state == ConnState.connected &&

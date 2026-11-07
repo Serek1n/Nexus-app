@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../models.dart';
 import '../../platform/links.dart';
 import '../add_sheet.dart';
+import '../send_to_tv.dart';
 import '../share_sheet.dart';
 import '../app_scope.dart';
 import '../theme.dart';
@@ -182,6 +185,8 @@ class _SubCard extends StatelessWidget {
                         text: sub.url,
                         warning: tr('По этой ссылке получают все серверы подписки и тратят её трафик. Делитесь только с теми, кому доверяете, и если владелец подписки не против.'),
                       );
+                    case 'tv':
+                      await scanAndSendToTv(context, sub: sub);
                     case 'copy':
                       await copySecret(sub.url);
                       if (context.mounted) toast(context, tr('Ссылка скопирована · буфер очистится через 2 мин'));
@@ -195,6 +200,9 @@ class _SubCard extends StatelessWidget {
                 },
                 itemBuilder: (_) => [
                   PopupMenuItem(value: 'share', child: Text(tr('Поделиться (QR)'))),
+                  // Телефон Android: сканер QR-кода телевизора.
+                  if (Platform.isAndroid && !app.isTv)
+                    PopupMenuItem(value: 'tv', child: Text(tr('Отправить на телевизор'))),
                   PopupMenuItem(value: 'copy', child: Text(tr('Скопировать ссылку'))),
                   PopupMenuItem(value: 'rename', child: Text(tr('Переименовать'))),
                   PopupMenuItem(

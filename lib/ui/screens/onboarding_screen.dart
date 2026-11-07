@@ -22,7 +22,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pages = PageController();
   int _page = 0;
 
-  int get _count => Platform.isAndroid ? 3 : 2;
+  /// Шаг «работа в фоне» — только телефоны и планшеты Android: на
+  /// телевизоре экономии батареи нет.
+  bool get _bgStep => Platform.isAndroid && !AppScope.read(context).isTv;
+
+  int get _count => _bgStep ? 3 : 2;
 
   void _go(int i) => _pages.animateToPage(i,
       duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
@@ -125,7 +129,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           )),
       _step('1 / ${_count - 1}', tr('Добавьте подписку'),
-          tr('Ссылку на подписку выдаёт бот NEXUS_VPN. Скопируйте её и нажмите кнопку — или отсканируйте QR-код.'),
+          AppScope.read(context).isTv
+              ? tr('Нажмите кнопку — на экране появится QR-код. Отсканируйте его камерой телефона с Nexus и выберите подписку, которую отправить на телевизор.')
+              : tr('Ссылку на подписку выдаёт бот NEXUS_VPN. Скопируйте её и нажмите кнопку — или отсканируйте QR-код.'),
           [
         if (added)
           NeonCard(
@@ -149,20 +155,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               await showAddSheet(context);
               if (!mounted) return;
               if (AppScope.read(context).servers.isNotEmpty) {
-                Platform.isAndroid ? _go(2) : _finish();
+                _bgStep ? _go(2) : _finish();
               }
             },
           ),
         const SizedBox(height: 12),
         if (added)
           NeonButton(
-            label: Platform.isAndroid ? tr('Дальше') : tr('Готово'),
+            label: _bgStep ? tr('Дальше') : tr('Готово'),
             icon: Icons.arrow_forward_rounded,
             expand: true,
-            onPressed: () => Platform.isAndroid ? _go(2) : _finish(),
+            onPressed: () => _bgStep ? _go(2) : _finish(),
           ),
       ]),
-      if (Platform.isAndroid)
+      if (_bgStep)
         _step('2 / 2', tr('Чтобы VPN не обрывался'),
             tr('Android любит экономить батарею и останавливать приложения в фоне. Разрешите Nexus работать без ограничений и показывать уведомление о подключении.'),
             [

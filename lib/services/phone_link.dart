@@ -24,6 +24,14 @@ import '../l10n.dart';
 /// * страница работает, только пока открыто окно добавления, принимает
 ///   одну ссылку и закрывается после неё, через 10 минут или после
 ///   серии неверных запросов.
+/// Телевизор, на который телефон отправляет ссылку (из его QR-кода).
+class TvTarget {
+  TvTarget(this.endpoint, this.key);
+  final Uri endpoint;
+  final List<int> key;
+  String get host => endpoint.host;
+}
+
 class PhoneLink {
   PhoneLink._(this._srv, this.url, this._token, this._key);
 
@@ -159,6 +167,79 @@ class PhoneLink {
     }
   }
 
+  // ───────────── Телефон: отправка на телевизор из Nexus ─────────────
+
+  /// QR-код телевизора (адрес его страницы приёма) или null.
+  /// Только http, только адрес домашней сети, путь — 32 hex, ключ — 32 байта.
+  static TvTarget? parseTarget(String? raw) {
+    final s = raw?.trim() ?? '';
+    if (s.isEmpty || s.length > 300) return null;
+    final u = Uri.tryParse(s);
+    if (u == null || u.scheme != 'http' || u.hasQuery || u.userInfo.isNotEmpty) {
+      return null;
+    }
+    if (!isPrivate(u.host) || !u.hasPort || u.port < 1 || u.port > 65535) {
+      return null;
+    }
+    if (!RegExp(r'^/[0-9a-f]{32}$').hasMatch(u.path)) return null;
+    if (!RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(u.fragment)) return null;
+    final List<int> key;
+    try {
+      key = base64Url.decode('${u.fragment}=');
+    } catch (_) {
+      return null;
+    }
+    if (key.length != 32) return null;
+    return TvTarget(
+        Uri(scheme: 'http', host: u.host, port: u.port, path: u.path), key);
+  }
+
+  /// Шифрует и подписывает [text] — то же, что seal() на странице.
+  static String seal(List<int> key, String text, List<int> nonce) {
+    final ek = sha256.convert([...utf8.encode('nexus-enc'), ...key]).bytes;
+    final mk = sha256.convert([...utf8.encode('nexus-mac'), ...key]).bytes;
+    final p = utf8.encode(text);
+    final c = Uint8List(p.length);
+    for (var i = 0; i < p.length; i += 32) {
+      final ctr = ByteData(4)..setUint32(0, i ~/ 32);
+      final ks =
+          sha256.convert([...ek, ...nonce, ...ctr.buffer.asUint8List()]).bytes;
+      for (var j = 0; j < 32 && i + j < p.length; j++) {
+        c[i + j] = p[i + j] ^ ks[j];
+      }
+    }
+    final t = Hmac(sha256, mk).convert([...nonce, ...c]).bytes;
+    return 'n=${_hex(nonce)}&c=${_hex(c)}&t=${_hex(t)}';
+  }
+
+  /// Отправляет ссылку на телевизор. Ошибка — исключение с понятным текстом.
+  static Future<void> send(TvTarget t, String text) async {
+    final r = Random.secure();
+    final nonce = List<int>.generate(16, (_) => r.nextInt(256));
+    final body = seal(t.key, text, nonce);
+    final c = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 6)
+      ..findProxy = (_) => 'DIRECT';
+    int code;
+    try {
+      final req = await c.postUrl(t.endpoint).timeout(const Duration(seconds: 8));
+      req.headers.contentType = ContentType('text', 'plain', charset: 'utf-8');
+      req.write(body);
+      final res = await req.close().timeout(const Duration(seconds: 10));
+      await res.drain<void>();
+      code = res.statusCode;
+    } catch (_) {
+      throw Exception(tr('Телевизор не отвечает. На нём должно быть открыто окно «Добавить», а телефон — в той же сети Wi-Fi.'));
+    } finally {
+      c.close(force: true);
+    }
+    if (code == 200) return;
+    if (code == 404) {
+      throw Exception(tr('QR-код на телевизоре устарел — откройте «Добавить» на телевизоре заново и отсканируйте новый.'));
+    }
+    throw Exception(tr('Телевизор не принял ссылку. Откройте «Добавить» на телевизоре заново.'));
+  }
+
   /// Проверяет подпись и расшифровывает «n=…&c=…&t=…». null — подделка.
   static String? open(List<int> key, String body) {
     final Map<String, String> q;
@@ -226,6 +307,10 @@ body{margin:0;background:#0d0d12;color:#ececf1;font:16px/1.45 system-ui,sans-ser
 main{width:100%;max-width:520px;padding:28px 20px}
 h1{font-size:22px;margin:0 0 6px}
 p{color:#9c9cad;margin:0 0 18px}
+.app{display:block;text-align:center;text-decoration:none;padding:16px;border-radius:14px;background:#8b7cf6;color:#fff;font-weight:700;font-size:17px;margin:8px 0 10px}
+.hint{font-size:14px;margin-bottom:22px}
+.or{color:#6e6e80;font-size:13px;text-align:center;margin:0 0 12px}
+#b{background:#2a2a35}
 textarea{box-sizing:border-box;width:100%;min-height:120px;padding:14px;border-radius:14px;border:1px solid #2a2a35;background:#16161d;color:#ececf1;font:15px/1.4 ui-monospace,monospace;resize:vertical}
 button{margin-top:14px;width:100%;padding:15px;border:0;border-radius:14px;background:#8b7cf6;color:#fff;font-weight:700;font-size:16px}
 button:disabled{opacity:.5}
@@ -233,8 +318,10 @@ button:disabled{opacity:.5}
 .ok{color:#3ddc97}.err{color:#f0566e}
 </style></head><body><main>
 <h1>${_esc(tr('Отправить на телевизор'))}</h1>
-<p>${_esc(tr('Вставьте ссылку на подписку или ключ сервера — она откроется в Nexus на телевизоре.'))}</p>
-<textarea id="t" placeholder="https://… / vless://…" autofocus></textarea>
+<a id="app" class="app" href="#">${_esc(tr('Выбрать подписку в Nexus'))}</a>
+<p class="hint">${_esc(tr('Nexus на телефоне откроется сам — выберите подписку и нажмите «Отправить».'))}</p>
+<div class="or">${_esc(tr('или вставьте ссылку вручную'))}</div>
+<textarea id="t" placeholder="https://… / vless://…"></textarea>
 <button id="b">${_esc(tr('Отправить'))}</button>
 <div id="s"></div>
 </main><script>
@@ -245,6 +332,7 @@ function hmac(k,m){const kb=new Uint8Array(64);kb.set(k);const i=kb.map(x=>x^0x3
 function hex(b){return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');}
 function seal(key,text,nonce){const te=new TextEncoder(),ek=sha256(cat(te.encode('nexus-enc'),key)),mk=sha256(cat(te.encode('nexus-mac'),key)),p=te.encode(text),c=new Uint8Array(p.length);for(let i=0;i<p.length;i+=32){const ctr=new Uint8Array(4);new DataView(ctr.buffer).setUint32(0,i/32);const ks=sha256(cat(ek,nonce,ctr));for(let j=0;j<32&&i+j<p.length;j++)c[i+j]=p[i+j]^ks[j];}return 'n='+hex(nonce)+'&c='+hex(c)+'&t='+hex(hmac(mk,cat(nonce,c)));}
 const S=document.getElementById('s'),B=document.getElementById('b');
+document.getElementById('app').href='nexus://tv?u='+encodeURIComponent(location.href);
 function msg(t,c){S.textContent=t;S.className=c;}
 function key(){try{const h=location.hash.slice(1).replace(/-/g,'+').replace(/_/g,'/');const b=atob(h+'='.repeat((4-h.length%4)%4));return Uint8Array.from(b,c=>c.charCodeAt(0));}catch(e){return null;}}
 B.onclick=async()=>{const t=document.getElementById('t').value.trim(),k=key();

@@ -6,10 +6,12 @@ import 'package:flutter/services.dart';
 
 import '../platform/android_system.dart';
 import '../services/backup.dart';
+import '../services/deep_links.dart';
 import '../services/phone_link.dart';
 import '../services/qr.dart';
 import 'app_scope.dart';
 import 'backup_sheet.dart';
+import 'send_to_tv.dart';
 import 'share_sheet.dart' show QrPainter;
 import 'theme.dart';
 import 'widgets.dart';
@@ -110,8 +112,13 @@ class _AddFormState extends State<_AddForm> {
       _linkFailed = l == null || qr == null;
     });
     if (l == null) return;
-    final text = await l.received;
+    var text = await l.received;
     if (!mounted || _link != l) return;
+    // С телефона подписка с запасными адресами приходит как nexus://add.
+    if (text.toLowerCase().startsWith('nexus://')) {
+      final p = DeepLinks.parse(text);
+      text = (p == null || PhoneLink.parseTarget(p) != null) ? '' : p;
+    }
     _ctrl.text = text;
     await _submit();
     // Не подошло (ошибка показана) — новый QR-код для следующей попытки.
@@ -155,6 +162,15 @@ class _AddFormState extends State<_AddForm> {
   }
 
   Future<void> _submit() async {
+    // QR-код телевизора (сканер или вставка) — это не подписка, а
+    // предложение отправить подписку с этого телефона на телевизор.
+    final tv = widget.tv ? null : PhoneLink.parseTarget(_ctrl.text);
+    if (tv != null) {
+      _ctrl.clear();
+      final sent = await sendToTv(context, tv);
+      if (sent && mounted) Navigator.of(context).pop();
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -249,7 +265,7 @@ class _AddFormState extends State<_AddForm> {
             )
           else ...[
             _step('1', tr('Отсканируйте QR-код камерой телефона')),
-            _step('2', tr('На открывшейся странице вставьте ссылку на подписку из бота')),
+            _step('2', tr('На открывшейся странице нажмите «Выбрать подписку в Nexus» — или вставьте ссылку из бота')),
             _step('3', tr('Нажмите «Отправить» — подписка появится здесь')),
             const SizedBox(height: 2),
             Text(tr('Телефон должен быть в той же сети Wi-Fi'),

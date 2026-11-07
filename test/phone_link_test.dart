@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexus/services/deep_links.dart';
 import 'package:nexus/services/phone_link.dart';
 
 void main() {
@@ -35,5 +36,45 @@ void main() {
     final html = PhoneLink.page();
     expect(html.contains('src="http'), isFalse);
     expect(html.contains('function seal'), isTrue);
+  });
+
+  const qr =
+      'http://192.168.0.3:38969/6d50d53856c64ad66c72fec4df875b64#NRuacqRli1MdiWRqw-zS47b2y0TNpwRmtD2uPG-AWbE';
+
+  test('QR-код телевизора распознаётся телефоном', () {
+    final t = PhoneLink.parseTarget(qr)!;
+    expect(t.host, '192.168.0.3');
+    expect(t.endpoint.toString(),
+        'http://192.168.0.3:38969/6d50d53856c64ad66c72fec4df875b64');
+    expect(t.key.length, 32);
+  });
+
+  test('чужие адреса и ссылки — не QR-код телевизора', () {
+    for (final bad in [
+      qr.replaceFirst('192.168.0.3', '8.8.8.8'),
+      qr.replaceFirst('http://', 'https://'),
+      qr.replaceFirst(':38969', ''),
+      qr.replaceFirst('#', '?x=1#'),
+      qr.split('#').first,
+      'https://sub.example.com/s/abc',
+      'vless://uuid@host:443',
+      '',
+    ]) {
+      expect(PhoneLink.parseTarget(bad), isNull, reason: bad);
+    }
+  });
+
+  test('шифрование телефона расшифровывает телевизор', () {
+    final k = List<int>.generate(32, (i) => i * 7 % 256);
+    final body = PhoneLink.seal(
+        k, 'nexus://add?url=https%3A%2F%2Fa.b%2Fs', List.filled(16, 5));
+    expect(PhoneLink.open(k, body), 'nexus://add?url=https%3A%2F%2Fa.b%2Fs');
+  });
+
+  test('кнопка «Выбрать подписку в Nexus» на странице телевизора', () {
+    final link = 'nexus://tv?u=${Uri.encodeComponent(qr)}';
+    expect(DeepLinks.parse(link), qr);
+    expect(DeepLinks.parse('nexus://tv?u=${Uri.encodeComponent('http://8.8.8.8:1/x#y')}'),
+        isNull);
   });
 }

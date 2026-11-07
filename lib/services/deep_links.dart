@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'phone_link.dart';
+
 /// Ссылки вида nexus://add/<подписка или ключ> и nexus://import?url=...
 /// Используются кнопками в Discord-боте и на сайте.
 class DeepLinks {
@@ -46,6 +48,13 @@ class DeepLinks {
     if (s.length > 8192) return null;
     final uri = Uri.tryParse(s);
     if (uri == null || uri.scheme.toLowerCase() != 'nexus') return null;
+    // nexus://tv?u=<адрес страницы телевизора> — кнопка «Выбрать подписку
+    // в Nexus» на этой странице. Отдаём сам адрес; что отправить,
+    // пользователь выбирает и подтверждает в окне отправки.
+    if (uri.host == 'tv') {
+      final u = uri.queryParameters['u'];
+      return PhoneLink.parseTarget(u) != null ? u!.trim() : null;
+    }
     String? value;
     if (uri.host == 'import' || uri.host == 'add') {
       value = uri.queryParameters['url'];

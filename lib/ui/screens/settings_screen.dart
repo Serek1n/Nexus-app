@@ -655,8 +655,10 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
           ),
-          SectionTitle(tr('Работа в фоне')),
-          NeonCard(
+          // На телевизоре нет батареи — экономия энергии VPN не мешает,
+          // а системного экрана «Без ограничений» там обычно нет.
+          if (!app.isTv) SectionTitle(tr('Работа в фоне')),
+          if (!app.isTv) NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: app.isDesktop
                 ? Column(

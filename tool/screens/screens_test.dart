@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:nexus/ui/send_to_tv.dart';
+import 'package:nexus/services/phone_link.dart';
 import 'package:nexus/core/vpn_core.dart';
 import 'package:nexus/l10n.dart';
 import 'package:nexus/main.dart';
@@ -277,6 +279,16 @@ void main() {
     showAddSheet(t.element(find.byType(Scaffold).first));
     await t.pump(const Duration(milliseconds: 500));
     await _shot(t, 'tv_5_add_from_phone');
+    // Телефон: окно «Отправить на телевизор» после сканирования QR-кода.
+    Navigator.of(t.element(find.byType(Scaffold).first)).pop();
+    await t.pump(const Duration(milliseconds: 400));
+    app.isTv = false;
+    _size(t, 412, 915);
+    await t.pump(const Duration(milliseconds: 400));
+    unawaited(sendToTv(t.element(find.byType(Scaffold).first),
+        PhoneLink.parseTarget(debugPhoneLinkUrl)!));
+    await t.pump(const Duration(milliseconds: 600));
+    await _shot(t, 'phone_send_to_tv');
     await t.runAsync(() => app.disconnect());
     debugPhoneLinkUrl = null;
     FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic;

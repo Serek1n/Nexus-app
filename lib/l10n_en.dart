@@ -37,6 +37,8 @@ const kEn = <String, String>{
       'IP seen by websites',
   'Nexus · Авто':
       'Nexus · Auto',
+  'Nexus на телефоне откроется сам — выберите подписку и нажмите «Отправить».':
+      'Nexus on your phone opens by itself — pick a subscription and tap “Send”.',
   'Nexus сам держит соединение через самый быстрый сервер подписки и незаметно переходит на другой, если этот упал':
       'Nexus keeps you on the fastest server of the subscription and quietly switches to another one if it goes down',
   'Nexus стартует свёрнутым в трей':
@@ -51,6 +53,8 @@ const kEn = <String, String>{
       'The PIN can\'t be recovered. You can erase all subscriptions, servers and settings, then add your subscription again (your VPN service has the link).',
   'PIN-коды не совпадают':
       'PINs don\'t match',
+  'QR-код на телевизоре устарел — откройте «Добавить» на телевизоре заново и отсканируйте новый.':
+      'The QR code on the TV has expired — open “Add” on the TV again and scan the new one.',
   'SOCKS-прокси с паролем':
       'Password-protected SOCKS proxy',
   'Telegram Desktop не всегда использует системный прокси — добавим ему прокси Nexus':
@@ -91,6 +95,8 @@ const kEn = <String, String>{
       '{0} uses UDP — checked by connecting',
   '{0} с':
       '{0} s',
+  '{0} серв.':
+      '{0} servers',
   '{0} ч {1} мин':
       '{0} h {1} min',
   '{0} через VPN':
@@ -207,8 +213,6 @@ const kEn = <String, String>{
       'Paste link',
   'Вставьте ссылку из бота NEXUS':
       'Paste the link from the NEXUS bot',
-  'Вставьте ссылку на подписку или ключ сервера — она откроется в Nexus на телевизоре.':
-      'Paste a subscription link or server key — it will open in Nexus on your TV.',
   'Всё работает.':
       'Everything works.',
   'Вход по PIN-коду':
@@ -221,6 +225,8 @@ const kEn = <String, String>{
       'Choose sites that always go through the VPN or directly',
   'Выбран: {0}':
       'Selected: {0}',
+  'Выбрать подписку в Nexus':
+      'Choose a subscription in Nexus',
   'Выход':
       'Quit',
   'ГБ':
@@ -351,6 +357,8 @@ const kEn = <String, String>{
       'KB',
   'Как в системе':
       'System default',
+  'Какую подписку отправить?':
+      'Which subscription to send?',
   'Канал не отвечает — переподключаюсь…':
       'Connection not responding — reconnecting…',
   'Ключ скопирован · буфер очистится через 2 мин':
@@ -379,8 +387,10 @@ const kEn = <String, String>{
       'Routing',
   'Маскировка соединения':
       'Connection masking',
-  'На открывшейся странице вставьте ссылку на подписку из бота':
-      'On the page that opens, paste the subscription link from the bot',
+  'На открывшейся странице нажмите «Выбрать подписку в Nexus» — или вставьте ссылку из бота':
+      'On the page that opens, tap “Choose a subscription in Nexus” — or paste the link from the bot',
+  'На этом телефоне ещё нет подписок. Добавьте подписку в Nexus на телефоне — и отправьте её на телевизор.':
+      'There are no subscriptions on this phone yet. Add one in Nexus on your phone, then send it to the TV.',
   'Наведите камеру на QR подписки или ключа':
       'Point the camera at a subscription or key QR code',
   'Надёжная':
@@ -389,6 +399,8 @@ const kEn = <String, String>{
       'Tap “Send” — the subscription will appear here',
   'Нажмите «Установить» — скачаем и проверим':
       'Tap “Install” — we\'ll download and verify it',
+  'Нажмите кнопку — на экране появится QR-код. Отсканируйте его камерой телефона с Nexus и выберите подписку, которую отправить на телевизор.':
+      'Press the button and a QR code will appear. Scan it with the camera of a phone that has Nexus and choose the subscription to send to the TV.',
   'Нажмите, чтобы подключиться':
       'Tap to connect',
   'Название подписки':
@@ -529,6 +541,10 @@ const kEn = <String, String>{
       'Send',
   'Отправить на телевизор':
       'Send to TV',
+  'Отправлено — подписка появится на телевизоре':
+      'Sent — the subscription will appear on the TV',
+  'Отправляю…':
+      'Sending…',
   'Отсканируйте QR-код камерой телефона':
       'Scan the QR code with your phone\'s camera',
   'Отчёт для поддержки':
@@ -897,8 +913,14 @@ const kEn = <String, String>{
       'The text is too long for a QR code',
   'Текущий PIN-код':
       'Current PIN',
+  'Телевизор в вашей сети: {0}':
+      'TV on your network: {0}',
+  'Телевизор не отвечает. На нём должно быть открыто окно «Добавить», а телефон — в той же сети Wi-Fi.':
+      'The TV isn\'t responding. Keep the Add window open on it and make sure the phone is on the same Wi-Fi.',
   'Телевизор не подключён к домашней сети по Wi-Fi или кабелю — введите ссылку вручную.':
       'The TV isn\'t connected to a home network over Wi-Fi or cable — enter the link manually.',
+  'Телевизор не принял ссылку. Откройте «Добавить» на телевизоре заново.':
+      'The TV didn\'t accept the link. Open “Add” on the TV again.',
   'Телефон должен быть в той же сети Wi-Fi':
       'The phone must be on the same Wi-Fi network',
   'Тест скорости: {0} Мбит/с через «{1}»':
@@ -963,6 +985,8 @@ const kEn = <String, String>{
       'This is an encrypted Happ link — only Happ can open it. Ask your service for a regular subscription link',
   'Это ключ доступа к серверу: с ним можно подключаться от вашего имени. Делитесь только с теми, кому доверяете.':
       'This is a server access key: anyone with it can connect as you. Share only with people you trust.',
+  'Это не QR-код телевизора. На телевизоре откройте Nexus → «Добавить» и отсканируйте код с экрана.':
+      'This isn\'t a TV QR code. On the TV, open Nexus → “Add” and scan the code on the screen.',
   'Это не резервная копия Nexus или она из новой версии':
       'This isn\'t a Nexus backup, or it\'s from a newer version',
   'Ядро':
@@ -1003,6 +1027,8 @@ const kEn = <String, String>{
       'not updated yet',
   'или вручную':
       'or manually',
+  'или вставьте ссылку вручную':
+      'or paste the link manually',
   'имена сайтов не находятся':
       'site names don\'t resolve',
   'июль':

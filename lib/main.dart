@@ -11,8 +11,10 @@ import 'models.dart';
 import 'platform/android_system.dart';
 import 'platform/windows_host.dart';
 import 'services/deep_links.dart';
+import 'services/phone_link.dart';
 import 'state/app_state.dart';
 import 'ui/add_sheet.dart';
+import 'ui/send_to_tv.dart';
 import 'ui/app_scope.dart';
 import 'ui/lock_screen.dart';
 import 'ui/screens/diagnostics_screen.dart';
@@ -203,6 +205,12 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Future<void> _onLink(String payload) async {
     final ctx = navigatorKey.currentContext;
     if (ctx == null) return;
+    // nexus://tv — со страницы телевизора: выбрать подписку и отправить.
+    final tv = PhoneLink.parseTarget(payload);
+    if (tv != null) {
+      await sendToTv(ctx, tv);
+      return;
+    }
     final isSub = payload.startsWith('http');
     final what = isSub
         ? (Uri.tryParse(payload)?.host ?? tr('подписку'))
