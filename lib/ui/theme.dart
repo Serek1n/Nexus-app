@@ -93,6 +93,8 @@ ThemeData buildTheme() {
     scaffoldBackgroundColor: NX.bg,
     fontFamily: NX.body,
     splashFactory: InkRipple.splashFactory,
+    // Выбранный пультом/клавиатурой элемент хорошо виден (Android TV).
+    focusColor: NX.violet.withValues(alpha: 0.24),
   );
   return base.copyWith(
     textTheme: base.textTheme.apply(

@@ -20,6 +20,8 @@ permissions:
 env:
   ORG: app.nexusvpn
   GEO_URL: https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download
+  # Список заблокированных в России сайтов для режима «Только заблокированное».
+  RF_URL: https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download
   # Куда публиковать релизы и откуда приложение берёт обновления.
   # Для закрытого репозитория задайте переменную RELEASES_REPO (открытый репозиторий)
   # и секрет RELEASES_TOKEN — см. README.
@@ -144,6 +146,20 @@ jobs:
             sha256sum -c $f.sha256sum
             rm $f.sha256sum
           done
+          # Из большой базы runetfreedom (~90 МБ) берём только ru-blocked (~1,5 МБ).
+          # Не скачалось — собираем без него, режим работает по встроенному списку.
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p /tmp/rf && cd /tmp/rf
+          if curl -fsSL -o geosite.dat $RF_URL/geosite.dat \
+             && curl -fsSL -o geosite.dat.sha256sum $RF_URL/geosite.dat.sha256sum \
+             && sha256sum -c geosite.dat.sha256sum \
+             && python3 "$GITHUB_WORKSPACE/tool/make_blocked_dat.py" geosite.dat "$GITHUB_WORKSPACE/android/app/src/main/assets/nexus-blocked.dat"; then
+            echo "BLOCKED_DAT=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Список заблокированных сайтов не собран — режим «Только заблокированное» по встроенному списку"
+            echo "BLOCKED_DAT=false" >> "$GITHUB_ENV"
+          fi
+          rm -rf /tmp/rf
 
       - name: Ключ подписи (если задан в секретах)
         env:
@@ -288,7 +304,7 @@ jobs:
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           echo "VER=$VER" >> $GITHUB_ENV
-          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL"
+          COMMON="--release --obfuscate --split-debug-info=build/symbols --build-name=$VER --build-number=$BUILD --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=BLOCKED_DAT=$BLOCKED_DAT"
           flutter build apk $COMMON --split-per-abi 2>&1 | tee -a ci.log
           flutter build apk $COMMON 2>&1 | tee -a ci.log
           mkdir -p dist
@@ -382,6 +398,22 @@ jobs:
           $wt = (Get-FileHash xray\wintun.dll -Algorithm SHA256).Hash.ToLower()
           "CORE_SHA256=$core" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "WINTUN_SHA256=$wt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # Список заблокированных сайтов (см. tool/make_blocked_dat.py).
+          $blocked = "false"
+          try {
+            Invoke-WebRequest "$env:RF_URL/geosite.dat" -OutFile rf-geosite.dat
+            Invoke-WebRequest "$env:RF_URL/geosite.dat.sha256sum" -OutFile rf-geosite.dat.sha256sum
+            $w = ((Get-Content rf-geosite.dat.sha256sum -Raw).Trim() -split '\s+')[0].ToLower()
+            $g = (Get-FileHash rf-geosite.dat -Algorithm SHA256).Hash.ToLower()
+            if ($w -ne $g) { throw "SHA-256 не совпал" }
+            python tool/make_blocked_dat.py rf-geosite.dat nexus-blocked.dat
+            if ($LASTEXITCODE -ne 0) { throw "make_blocked_dat.py" }
+            $blocked = "true"
+          } catch {
+            Write-Host "::warning::Список заблокированных сайтов не собран: $_"
+          }
+          Remove-Item rf-geosite.dat* -ErrorAction SilentlyContinue
+          "BLOCKED_DAT=$blocked" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Сборка
         shell: bash
@@ -389,7 +421,7 @@ jobs:
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
           flutter build windows --release --obfuscate --split-debug-info=build/symbols \
             --build-name=$VER --build-number=$BUILD \
-            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=CORE_SHA256=$CORE_SHA256 --dart-define=WINTUN_SHA256=$WINTUN_SHA256
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=CORE_SHA256=$CORE_SHA256 --dart-define=WINTUN_SHA256=$WINTUN_SHA256 --dart-define=BLOCKED_DAT=$BLOCKED_DAT
 
       - name: Ядро Xray и гео-базы
         shell: pwsh
@@ -400,6 +432,7 @@ jobs:
           # Драйвер виртуальной сетевой карты для режима TUN (идёт в архиве Xray).
           Copy-Item xray\wintun.dll "$rel\wintun.dll"
           Copy-Item xray\LICENSE-Wintun "$rel\LICENSE-Wintun.txt"
+          if (Test-Path nexus-blocked.dat) { Copy-Item nexus-blocked.dat "$rel\nexus-blocked.dat" }
           foreach ($g in "geoip.dat","geosite.dat") {
             Invoke-WebRequest "$env:GEO_URL/$g" -OutFile "$rel\$g"
             Invoke-WebRequest "$env:GEO_URL/$g.sha256sum" -OutFile "$g.sha256sum"

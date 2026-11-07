@@ -15,6 +15,7 @@ import 'package:nexus/l10n.dart';
 import 'package:nexus/main.dart';
 import 'package:nexus/models.dart';
 import 'package:nexus/state/app_state.dart';
+import 'package:nexus/ui/add_sheet.dart';
 
 class FakeCore extends VpnCore {
   final _st = StreamController<ConnState>.broadcast();
@@ -192,6 +193,11 @@ void main() {
     await _tab(t, tr('Настройки'));
     _size(t, 412, 5600);
     await _shot(t, 'light_3_settings');
+    _size(t, 412, 915);
+    await _tab(t, tr('Подписки'));
+    await _shot(t, 'light_4_subscriptions');
+    showAddSheet(t.element(find.byType(Scaffold).first));
+    await _shot(t, 'light_5_add_sheet');
     await t.runAsync(() => app.disconnect());
     app.setTheme('dark');
     await t.pumpWidget(const SizedBox());
@@ -224,6 +230,9 @@ void main() {
     final app = await t.runAsync(() => _state(fresh: true));
     await t.pumpWidget(NexusApp(state: app!));
     await _shot(t, 'phone_0_onboarding');
+    app.setTheme('light');
+    await _shot(t, 'light_0_onboarding');
+    app.setTheme('dark');
     await t.pumpWidget(const SizedBox());
     app.dispose();
   });

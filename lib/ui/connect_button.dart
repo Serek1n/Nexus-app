@@ -32,6 +32,9 @@ class _ConnectButtonState extends State<ConnectButton>
       vsync: this, duration: const Duration(milliseconds: 1100));
   bool _pressed = false;
 
+  /// Кнопка выбрана клавиатурой или пультом телевизора.
+  bool _focused = false;
+
   bool get _busy =>
       widget.state == ConnState.connecting ||
       widget.state == ConnState.disconnecting;
@@ -70,7 +73,17 @@ class _ConnectButtonState extends State<ConnectButton>
             ? const Color(0xFF06261A)
             : (_busy ? NX.text : NX.text2);
 
-    return Semantics(
+    // Пульт телевизора и клавиатура: кнопку можно выбрать стрелками и
+    // нажать OK / Enter / пробелом; выбранная — с фиолетовым кольцом.
+    return FocusableActionDetector(
+      onShowFocusHighlight: (v) => setState(() => _focused = v),
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
+          if (widget.state != ConnState.disconnecting) widget.onTap();
+          return null;
+        }),
+      },
+      child: Semantics(
       button: true,
       label: _on ? tr('Отключить') : tr('Подключить'),
       child: GestureDetector(
@@ -96,12 +109,14 @@ class _ConnectButtonState extends State<ConnectButton>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: widget.blocked
-                            ? NX.red.withValues(alpha: 0.3)
-                            : _on
-                                ? NX.mint.withValues(alpha: 0.25)
-                                : NX.stroke,
-                        width: 1,
+                        color: _focused
+                            ? NX.violet
+                            : widget.blocked
+                                ? NX.red.withValues(alpha: 0.3)
+                                : _on
+                                    ? NX.mint.withValues(alpha: 0.25)
+                                    : NX.stroke,
+                        width: _focused ? 3 : 1,
                       ),
                     ),
                   ),
@@ -140,6 +155,7 @@ class _ConnectButtonState extends State<ConnectButton>
           ),
         ),
       ),
+    ),
     );
   }
 }

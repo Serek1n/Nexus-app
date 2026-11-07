@@ -1172,6 +1172,15 @@ class WindowsCore extends VpnCore {
           File('$_exeDir\\$g').copySync('$_updDir\\$g');
         }
       }
+      // Список заблокированных сайтов приходит с приложением, а не с
+      // ядром — держим его копию рядом с обновлённым ядром свежей.
+      final bl = File('$_exeDir\\$kBlockedListFile');
+      if (bl.existsSync() && File('$_updDir\\$kCoreExe').existsSync()) {
+        final t = File('$_updDir\\$kBlockedListFile');
+        if (!t.existsSync() || t.lengthSync() != bl.lengthSync()) {
+          bl.copySync(t.path);
+        }
+      }
     } catch (e) {
       _log(tr('Не удалось применить обновление ядра: {0}', [e]));
     }

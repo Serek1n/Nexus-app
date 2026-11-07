@@ -127,6 +127,7 @@ class AppState extends ChangeNotifier {
       unawaited(AndroidSystem.setTileLabels());
       unawaited(AndroidSystem.setShortcuts());
       unawaited(AndroidSystem.cancelStopTimer());
+      unawaited(AndroidSystem.hideInRecents(pinEnabled));
     }
     traffic.load(_prefs);
     try {
@@ -1909,6 +1910,7 @@ class AppState extends ChangeNotifier {
     pinBlockedUntil = null;
     _savePinState();
     updateSettings((s) => s.pinHash = h);
+    if (!isDesktop) unawaited(AndroidSystem.hideInRecents(h != null));
   }
 
   void clearError() {

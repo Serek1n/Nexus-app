@@ -430,16 +430,19 @@ class _Notice extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        // Спокойная карточка: цвет несёт только значок, без жёлтой заливки.
-        decoration: BoxDecoration(
-          color: NX.surface,
+  // Спокойная карточка: цвет несёт только значок, без жёлтой заливки.
+  // Material + InkWell — чтобы карточку можно было выбрать пультом.
+  Widget build(BuildContext context) => Material(
+        color: NX.surface,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NX.stroke),
+          side: BorderSide(color: NX.stroke),
         ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+        onTap: onTap,
+        child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(
           children: [
             Icon(icon, color: NX.amber, size: 18),
@@ -453,6 +456,7 @@ class _Notice extends StatelessWidget {
                   color: NX.text3, size: 18),
           ],
         ),
+      ),
       ),
       );
 }
@@ -794,7 +798,11 @@ class _MapCard extends StatelessWidget {
     final sel = app.selected;
     if (sel == null) return const SizedBox.shrink();
     final current = app.settings.autoMode ? (app.autoCurrent?.$1 ?? sel) : sel;
-    final code = current.countryCode;
+    // Флага в названии сервера нет — берём страну по IP выхода (известна
+    // после подключения).
+    final exit = app.exitInfo?.country.toLowerCase();
+    final code = current.countryCode ??
+        (exit != null && exit.isNotEmpty ? exit : null);
     final city = kCountryCity[code ?? ''];
     if (city == null) return const SizedBox.shrink();
     // Остальные страны: пул «Авто» или все серверы подписки.

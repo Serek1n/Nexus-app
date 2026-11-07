@@ -99,6 +99,9 @@ class AndroidSystem {
         'offLabel': tr('Отключено'),
       });
 
+  /// Скрыть миниатюру Nexus в списке недавних приложений (Android 13+).
+  static Future<void> hideInRecents(bool on) => _call('hideInRecents', on);
+
   /// Копирует строку с пометкой «секрет» (Android). false — не вышло.
   static Future<bool> copySecret(String text) async =>
       await _call<bool>('copySecret', text) == true;

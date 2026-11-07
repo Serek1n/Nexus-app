@@ -138,6 +138,24 @@ def patch_always_on(base: pathlib.Path) -> bool:
     return True
 
 
+ASSETS_OLD = 'String geo = "geosite.dat,geoip.dat";'
+ASSETS_NEW = 'String geo = "geosite.dat,geoip.dat,nexus-blocked.dat";'
+
+
+def patch_assets(base: pathlib.Path) -> bool:
+    """Плагин копирует из APK только geosite.dat и geoip.dat — добавляем
+    nexus-blocked.dat (список для режима «Только заблокированное»)."""
+    f = base / 'android/src/main/java/dev/amirzr/flutter_v2ray_client/v2ray/utils/Utilities.java'
+    src = f.read_text(encoding='utf-8')
+    if ASSETS_NEW in src:
+        return True
+    if ASSETS_OLD not in src:
+        return False
+    f.write_text(src.replace(ASSETS_OLD, ASSETS_NEW), encoding='utf-8')
+    print(f'{f.name}: + nexus-blocked.dat')
+    return True
+
+
 def main() -> int:
     base = plugin_dir() / 'android/src/main/java/dev/amirzr/flutter_v2ray_client'
     total = 0
@@ -160,6 +178,9 @@ def main() -> int:
         return 1
     if not patch_always_on(base):
         print('Не удалось исправить запуск постоянной VPN — плагин изменился')
+        return 1
+    if not patch_assets(base):
+        print('Не удалось добавить список заблокированных сайтов — плагин изменился')
         return 1
     return 0
 

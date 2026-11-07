@@ -295,7 +295,13 @@ String buildXrayConfig(
     rules.addAll([
       {
         'type': 'field',
-        'domain': [..._alwaysProxy, ..._blockedOnly],
+        'domain': [
+          ..._alwaysProxy,
+          ..._blockedOnly,
+          // Полный список заблокированных в России сайтов (runetfreedom,
+          // обновляется с каждой сборкой Nexus), если он есть в сборке.
+          if (kHasBlockedList) 'ext:$kBlockedListFile:ru-blocked',
+        ],
         'outboundTag': 'proxy',
       },
       {
@@ -776,6 +782,11 @@ const _alwaysProxy = [
   'domain:signal.org', 'domain:telegram.org', 'domain:t.me',
   'domain:patreon.com', 'domain:soundcloud.com',
 ];
+
+/// Файл со списком заблокированных сайтов (tool/make_blocked_dat.py).
+/// Сборка на GitHub кладёт его рядом с гео-базами и ставит BLOCKED_DAT=true.
+const kBlockedListFile = 'nexus-blocked.dat';
+const kHasBlockedList = bool.fromEnvironment('BLOCKED_DAT');
 
 /// Дополнительно для «Только заблокированное»: сервисы, которые сами не
 /// пускают пользователей из России (в «Умном режиме» они и так идут

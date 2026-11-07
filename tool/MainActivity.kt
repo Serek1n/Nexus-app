@@ -214,6 +214,16 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "hideInRecents" -> {
+                        // Включён PIN: в списке недавних приложений вместо
+                        // миниатюры с серверами — пустое окно (Android 13+).
+                        // Скриншоты при этом не запрещаются.
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            setRecentsScreenshotEnabled(call.arguments != true)
+                        }
+                        result.success(null)
+                    }
+
                     "copySecret" -> {
                         // Ключ помечается как секрет: Android 13+ не показывает
                         // его в превью буфера, клавиатуры не сохраняют в историю.
