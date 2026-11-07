@@ -30,3 +30,4 @@ github-secrets.txt
 .vscode/
 *.iml
 .DS_Store
+__pycache__/
