@@ -145,7 +145,7 @@ ASSETS_NEW = 'String geo = "geosite.dat,geoip.dat,nexus-blocked.dat";'
 def patch_assets(base: pathlib.Path) -> bool:
     """Плагин копирует из APK только geosite.dat и geoip.dat — добавляем
     nexus-blocked.dat (список для режима «Только заблокированное»)."""
-    f = base / 'android/src/main/java/dev/amirzr/flutter_v2ray_client/v2ray/utils/Utilities.java'
+    f = base / 'v2ray/utils/Utilities.java'
     src = f.read_text(encoding='utf-8')
     if ASSETS_NEW in src:
         return True

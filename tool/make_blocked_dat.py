@@ -9,6 +9,12 @@ GeoSite { string country_code = 1; ... }. Записи копируются ба
 """
 import sys
 
+# В консоли Windows кодировка cp1252 — русский текст в print() ронял сборку.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
 WANT = {b"RU-BLOCKED"}
 
 
