@@ -100,7 +100,7 @@ class NexusApp extends StatelessWidget {
         builder: (_, light, __) => ValueListenableBuilder<String>(
         valueListenable: state.language,
         builder: (_, lang, __) => MaterialApp(
-        key: ValueKey('$lang|$light'),
+        key: ValueKey(_lookChanged('$lang|$light')),
         title: 'Nexus',
         debugShowCheckedModeBanner: false,
         theme: _themes[light] ??= buildTheme(),
@@ -124,6 +124,26 @@ class NexusApp extends StatelessWidget {
 }
 
 final navigatorKey = GlobalKey<NavigatorState>();
+
+/// Навигатор держится на GlobalKey, поэтому при смене темы или языка его
+/// экраны переносятся, а не создаются заново, — и неизменяемые (const)
+/// виджеты остались бы в старых цветах и на старом языке. После такой
+/// смены пересобираем всё дерево один раз.
+String? _look;
+String _lookChanged(String look) {
+  if (_look != null && _look != look) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      void mark(Element e) {
+        e.markNeedsBuild();
+        e.visitChildren(mark);
+      }
+
+      WidgetsBinding.instance.rootElement?.visitChildren(mark);
+    });
+  }
+  _look = look;
+  return look;
+}
 
 /// Темы создаются по одному разу (тёмная и светлая).
 final _themes = <bool, ThemeData>{};
