@@ -248,13 +248,19 @@ void main() {
         FocusHighlightStrategy.alwaysTraditional;
     await t.pumpWidget(NexusApp(state: app));
     await t.pump(const Duration(milliseconds: 400));
+    // Вкладка запоминается между тестами — начинаем с главной, кнопка
+    // подключения должна оказаться выбранной сама.
+    await _tab(t, tr('Главная'));
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(NexusApp(state: app));
+    await t.pump(const Duration(milliseconds: 400));
     await _shot(t, 'tv_1_home');
     await t.runAsync(() => app.connect());
     await t.pump(const Duration(milliseconds: 400));
     await _shot(t, 'tv_2_home_connected');
     await _tab(t, tr('Серверы'));
     // Пультом: вниз несколько раз — выбор уходит на список серверов.
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 11; i++) {
       await t.sendKeyEvent(LogicalKeyboardKey.tab);
       await t.pump(const Duration(milliseconds: 60));
     }
