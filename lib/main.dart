@@ -64,6 +64,12 @@ Future<void> main(List<String> args) async {
   final state = AppState();
   runApp(NexusApp(state: state));
   await state.init();
+  // Телевизор: управление только пультом — выбранный элемент подсвечен
+  // всегда, а не только после первого нажатия стрелки.
+  if (state.isTv) {
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+  }
   // После перезапуска от администратора (режим TUN) — сразу подключаемся.
   if (args.contains('--connect') && state.selected != null) {
     unawaited(state.connect());
@@ -358,7 +364,14 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             ],
           );
 
-    return Scaffold(
+    // «Назад» (пульт, жест) на других вкладках возвращает на главную,
+    // а не закрывает приложение.
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _tab != 0) setState(() => _tab = 0);
+      },
+      child: Scaffold(
       backgroundColor: NX.bg,
       body: NeonBackground(
         live: live,
@@ -368,6 +381,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             Expanded(child: body),
           ],
         ),
+      ),
       ),
     );
   }

@@ -38,6 +38,46 @@ class NeonBackground extends StatelessWidget {
 }
 
 /// Карточка: сплошная поверхность и тонкая граница.
+/// Кольцо вокруг элемента, выбранного пультом телевизора или клавиатурой.
+/// Подсветка InkWell у карточек скрыта их фоном, а у фиолетовых кнопок
+/// сливается с цветом — поэтому рисуем рамку поверх.
+class FocusRing extends StatefulWidget {
+  const FocusRing({super.key, required this.child, this.radius = 16});
+  final Widget child;
+  final double radius;
+
+  @override
+  State<FocusRing> createState() => _FocusRingState();
+}
+
+class _FocusRingState extends State<FocusRing> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final show = _focused &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (v) {
+        if (v != _focused) setState(() => _focused = v);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.radius),
+          border: Border.all(
+            color: show ? NX.violet : Colors.transparent,
+            width: 2.5,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class NeonCard extends StatelessWidget {
   const NeonCard({
     super.key,
@@ -61,8 +101,18 @@ class NeonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final br = BorderRadius.circular(radius);
-    return Material(
-      color: Colors.transparent,
+    // Фон и рамку рисует сам Material: подсветка выбора (пульт, мышь)
+    // у этой карточки и у строк внутри неё видна поверх фона, а не под ним.
+    // Смену цвета Material анимирует сам.
+    final card = Material(
+      color: active
+          ? Color.alphaBlend(accent.withValues(alpha: 0.07), NX.surface)
+          : NX.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: br,
+        side: BorderSide(
+            color: active ? accent.withValues(alpha: 0.55) : NX.stroke),
+      ),
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -70,20 +120,12 @@ class NeonCard extends StatelessWidget {
         splashColor: accent.withValues(alpha: 0.08),
         highlightColor: NX.hover,
         hoverColor: NX.hover,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: padding,
-          decoration: BoxDecoration(
-            borderRadius: br,
-            color: active ? Color.alphaBlend(accent.withValues(alpha: 0.07), NX.surface) : NX.surface,
-            border: Border.all(
-              color: active ? accent.withValues(alpha: 0.55) : NX.stroke,
-            ),
-          ),
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
+    return onTap == null && onLongPress == null
+        ? card
+        : FocusRing(radius: radius, child: card);
   }
 }
 
@@ -294,9 +336,13 @@ class NeonButton extends StatelessWidget {
     this.expand = false,
     this.secondary = false,
     this.danger = false,
+    this.autofocus = false,
   });
   final String label;
   final VoidCallback? onPressed;
+
+  /// Выбрана сразу (пульт телевизора).
+  final bool autofocus;
   final IconData? icon;
   final bool loading;
   final bool expand;
@@ -315,6 +361,8 @@ class NeonButton extends StatelessWidget {
             : Colors.white;
     return Opacity(
       opacity: enabled ? 1 : 0.5,
+      child: FocusRing(
+      radius: 12,
       child: Material(
         color: danger
             ? NX.red.withValues(alpha: 0.1)
@@ -324,6 +372,7 @@ class NeonButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
+          autofocus: autofocus,
           onTap: enabled ? onPressed : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -347,6 +396,7 @@ class NeonButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

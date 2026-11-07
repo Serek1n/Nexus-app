@@ -103,6 +103,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             tr('Ключи зашифрованы, реклама и трекеры блокируются')),
         const SizedBox(height: 28),
         NeonButton(
+          autofocus: AppScope.read(context).isTv,
           label: tr('Начать'),
           icon: Icons.arrow_forward_rounded,
           expand: true,
@@ -140,6 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           )
         else
           NeonButton(
+            autofocus: AppScope.read(context).isTv,
             label: tr('Добавить подписку'),
             icon: Icons.add_link_rounded,
             expand: true,

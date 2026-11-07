@@ -207,6 +207,8 @@ const kEn = <String, String>{
       'Paste link',
   'Вставьте ссылку из бота NEXUS':
       'Paste the link from the NEXUS bot',
+  'Вставьте ссылку на подписку или ключ сервера — она откроется в Nexus на телевизоре.':
+      'Paste a subscription link or server key — it will open in Nexus on your TV.',
   'Всё работает.':
       'Everything works.',
   'Вход по PIN-коду':
@@ -237,6 +239,8 @@ const kEn = <String, String>{
       'Done',
   'Готово к установке':
       'Ready to install',
+  'Готово — смотрите на телевизор':
+      'Done — check your TV',
   'Готово: серверов — {0}':
       'Done: {0} servers',
   'ДЕНЬ':
@@ -375,10 +379,14 @@ const kEn = <String, String>{
       'Routing',
   'Маскировка соединения':
       'Connection masking',
+  'На открывшейся странице вставьте ссылку на подписку из бота':
+      'On the page that opens, paste the subscription link from the bot',
   'Наведите камеру на QR подписки или ключа':
       'Point the camera at a subscription or key QR code',
   'Надёжная':
       'Reliable',
+  'Нажмите «Отправить» — подписка появится здесь':
+      'Tap “Send” — the subscription will appear here',
   'Нажмите «Установить» — скачаем и проверим':
       'Tap “Install” — we\'ll download and verify it',
   'Нажмите, чтобы подключиться':
@@ -417,6 +425,8 @@ const kEn = <String, String>{
       'Couldn\'t measure the speed',
   'Не удалось открыть установщик':
       'Couldn\'t open the installer',
+  'Не удалось отправить. Окно добавления на телевизоре должно быть открыто, а телефон — в той же сети Wi-Fi.':
+      'Couldn\'t send. Keep the Add window open on your TV and make sure the phone is on the same Wi-Fi.',
   'Не удалось подготовить ядро в {0}: {1}':
       'Couldn\'t prepare the core in {0}: {1}',
   'Не удалось подключиться за 30 секунд':
@@ -507,6 +517,8 @@ const kEn = <String, String>{
       'Turn off battery saving for Nexus so the VPN doesn\'t drop',
   'Отключить':
       'Disconnect',
+  'Откройте страницу заново по QR-коду с телевизора':
+      'Open this page again from the QR code on your TV',
   'Открыть':
       'Open',
   'Открыть Nexus':
@@ -515,6 +527,10 @@ const kEn = <String, String>{
       'Cancel',
   'Отправить':
       'Send',
+  'Отправить на телевизор':
+      'Send to TV',
+  'Отсканируйте QR-код камерой телефона':
+      'Scan the QR code with your phone\'s camera',
   'Отчёт для поддержки':
       'Report for support',
   'Отчёт скопирован — отправьте его в поддержку. Ключей и ссылок подписок в нём нет':
@@ -721,6 +737,8 @@ const kEn = <String, String>{
       'Russian — direct',
   'С правами администратора используется ядро из сборки Nexus — оно обновляется вместе с приложением':
       'With administrator rights Nexus uses its bundled core — it updates together with the app',
+  'С телефона':
+      'From your phone',
   'Сайты видят ваш российский IP — трафик идёт мимо VPN. Нажмите, чтобы переподключиться':
       'Sites see your Russian IP — traffic is bypassing the VPN. Tap to reconnect',
   'Сайты видят российский IP — трафик идёт мимо VPN. Переподключитесь или выберите другой сервер.':
@@ -879,6 +897,10 @@ const kEn = <String, String>{
       'The text is too long for a QR code',
   'Текущий PIN-код':
       'Current PIN',
+  'Телевизор не подключён к домашней сети по Wi-Fi или кабелю — введите ссылку вручную.':
+      'The TV isn\'t connected to a home network over Wi-Fi or cable — enter the link manually.',
+  'Телефон должен быть в той же сети Wi-Fi':
+      'The phone must be on the same Wi-Fi network',
   'Тест скорости: {0} Мбит/с через «{1}»':
       'Speed test: {0} Mbps via “{1}”',
   'Только заблокированное':

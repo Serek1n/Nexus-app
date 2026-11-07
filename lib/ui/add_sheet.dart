@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,16 +6,33 @@ import 'package:flutter/services.dart';
 
 import '../platform/android_system.dart';
 import '../services/backup.dart';
+import '../services/phone_link.dart';
+import '../services/qr.dart';
 import 'app_scope.dart';
 import 'backup_sheet.dart';
+import 'share_sheet.dart' show QrPainter;
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
 
+/// Для снимков экрана: QR-код с этим адресом, без настоящей страницы.
+@visibleForTesting
+String? debugPhoneLinkUrl;
+
 /// Окно добавления подписки / сервера.
 Future<void> showAddSheet(BuildContext context) async {
   final wide = MediaQuery.sizeOf(context).width >= 760;
-  if (wide) {
+  if (AppScope.read(context).isTv) {
+    // Телевизор: QR-код для отправки с телефона + ввод вручную.
+    await showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (_) => const Dialog(
+        insetPadding: EdgeInsets.all(24),
+        child: SizedBox(width: 760, child: _AddForm(tv: true)),
+      ),
+    );
+  } else if (wide) {
     await showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.6),
@@ -44,8 +62,9 @@ Future<void> showAddSheet(BuildContext context) async {
 }
 
 class _AddForm extends StatefulWidget {
-  const _AddForm({this.sheet = false});
+  const _AddForm({this.sheet = false, this.tv = false});
   final bool sheet;
+  final bool tv;
 
   @override
   State<_AddForm> createState() => _AddFormState();
@@ -56,8 +75,52 @@ class _AddFormState extends State<_AddForm> {
   bool _loading = false;
   String? _error;
 
+  // ── Android TV: приём ссылки с телефона ──
+  PhoneLink? _link;
+  QrCode? _linkQr;
+  bool _linkFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.tv) _startLink();
+  }
+
+  Future<void> _startLink() async {
+    _link?.stop();
+    final demo = debugPhoneLinkUrl;
+    if (demo != null) {
+      setState(() => _linkQr = QrCode.text(demo));
+      return;
+    }
+    final l = await PhoneLink.start();
+    if (!mounted) {
+      l?.stop();
+      return;
+    }
+    QrCode? qr;
+    if (l != null) {
+      try {
+        qr = QrCode.text(l.url);
+      } catch (_) {}
+    }
+    setState(() {
+      _link = l;
+      _linkQr = qr;
+      _linkFailed = l == null || qr == null;
+    });
+    if (l == null) return;
+    final text = await l.received;
+    if (!mounted || _link != l) return;
+    _ctrl.text = text;
+    await _submit();
+    // Не подошло (ошибка показана) — новый QR-код для следующей попытки.
+    if (mounted && _error != null) unawaited(_startLink());
+  }
+
   @override
   void dispose() {
+    _link?.stop();
     _ctrl.dispose();
     super.dispose();
   }
@@ -125,8 +188,86 @@ class _AddFormState extends State<_AddForm> {
     }
   }
 
+  Widget _step(String n, String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: NX.violet.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: Text(n,
+                style: const TextStyle(
+                    color: NX.violet, fontWeight: FontWeight.w800, fontSize: 12.5)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(color: NX.text2, fontSize: 14, height: 1.35)),
+          ),
+        ]),
+      );
+
+  /// Телевизор: QR-код страницы, куда с телефона вставляют ссылку.
+  Widget _phoneBlock() {
+    final qr = _linkQr;
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 196,
+        height: 196,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: qr != null
+            ? CustomPaint(painter: QrPainter(qr))
+            : Center(
+                child: _linkFailed
+                    ? const Icon(Icons.wifi_off_rounded,
+                        color: Color(0xFF8E8E9C), size: 40)
+                    : const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                      ),
+              ),
+      ),
+      const SizedBox(width: 22),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tr('С телефона'),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+          const SizedBox(height: 12),
+          if (_linkFailed)
+            Text(
+              tr('Телевизор не подключён к домашней сети по Wi-Fi или кабелю — введите ссылку вручную.'),
+              style: TextStyle(color: NX.text2, fontSize: 14, height: 1.35),
+            )
+          else ...[
+            _step('1', tr('Отсканируйте QR-код камерой телефона')),
+            _step('2', tr('На открывшейся странице вставьте ссылку на подписку из бота')),
+            _step('3', tr('Нажмите «Отправить» — подписка появится здесь')),
+            const SizedBox(height: 2),
+            Text(tr('Телефон должен быть в той же сети Wi-Fi'),
+                style: TextStyle(color: NX.text3, fontSize: 12.5)),
+          ],
+        ]),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final body = _body(context);
+    // Экран телевизора невысокий — окно прокручивается пультом.
+    return widget.tv ? SingleChildScrollView(child: body) : body;
+  }
+
+  Widget _body(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(22, widget.sheet ? 12 : 24, 22, 22),
       child: Column(
@@ -155,8 +296,9 @@ class _AddFormState extends State<_AddForm> {
             style: TextStyle(color: NX.text2, fontSize: 13.5, height: 1.4),
           ),
           const SizedBox(height: 18),
+          if (widget.tv) _phoneBlock(),
           // Большая кнопка «из буфера» — основной сценарий.
-          NeonCard(
+          if (!widget.tv) NeonCard(
             onTap: _loading ? null : _paste,
             active: true,
             accent: NX.violet,
@@ -182,7 +324,7 @@ class _AddFormState extends State<_AddForm> {
               ],
             ),
           ),
-          if (Platform.isAndroid) ...[
+          if (Platform.isAndroid && !widget.tv) ...[
             const SizedBox(height: 10),
             NeonCard(
               onTap: _loading ? null : _scan,

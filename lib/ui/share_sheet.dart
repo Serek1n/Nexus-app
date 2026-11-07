@@ -104,7 +104,7 @@ class _ShareBody extends StatelessWidget {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: CustomPaint(painter: _QrPainter(qr!)),
+                child: CustomPaint(painter: QrPainter(qr!)),
               ),
             )
           else
@@ -158,8 +158,8 @@ class _ShareBody extends StatelessWidget {
   }
 }
 
-class _QrPainter extends CustomPainter {
-  _QrPainter(this.qr);
+class QrPainter extends CustomPainter {
+  QrPainter(this.qr);
   final QrCode qr;
 
   @override
@@ -180,5 +180,5 @@ class _QrPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _QrPainter old) => old.qr != qr;
+  bool shouldRepaint(covariant QrPainter old) => old.qr != qr;
 }

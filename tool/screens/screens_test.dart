@@ -237,6 +237,47 @@ void main() {
     app.dispose();
   });
 
+  testWidgets('tv', (t) async {
+    // Android TV: 1920×1080 при плотности 2 — 960×540 точек.
+    _size(t, 960, 540);
+    final app = await t.runAsync(() => _state());
+    app!.isTv = true;
+    debugPhoneLinkUrl =
+        'http://192.168.1.42:41873/6d50d53856c64ad66c72fec4df875b64#NRuacqRli1MdiWRqw-zS47b2y0TNpwRmtD2uPG-AWbE';
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+    await t.pumpWidget(NexusApp(state: app));
+    await t.pump(const Duration(milliseconds: 400));
+    await _shot(t, 'tv_1_home');
+    await t.runAsync(() => app.connect());
+    await t.pump(const Duration(milliseconds: 400));
+    await _shot(t, 'tv_2_home_connected');
+    await _tab(t, tr('Серверы'));
+    // Пультом: вниз несколько раз — выбор уходит на список серверов.
+    for (var i = 0; i < 6; i++) {
+      await t.sendKeyEvent(LogicalKeyboardKey.tab);
+      await t.pump(const Duration(milliseconds: 60));
+    }
+    await t.pump(const Duration(milliseconds: 300));
+    await _shot(t, 'tv_3_servers_focus');
+    await _tab(t, tr('Настройки'));
+    for (var i = 0; i < 3; i++) {
+      await t.sendKeyEvent(LogicalKeyboardKey.tab);
+      await t.pump(const Duration(milliseconds: 60));
+    }
+    await t.pump(const Duration(milliseconds: 300));
+    await _shot(t, 'tv_4_settings_focus');
+    await _tab(t, tr('Подписки'));
+    showAddSheet(t.element(find.byType(Scaffold).first));
+    await t.pump(const Duration(milliseconds: 500));
+    await _shot(t, 'tv_5_add_from_phone');
+    await t.runAsync(() => app.disconnect());
+    debugPhoneLinkUrl = null;
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic;
+    await t.pumpWidget(const SizedBox());
+    app.dispose();
+  });
+
   testWidgets('desktop', (t) async {
     _size(t, 1180, 760, 1.25);
     final app = await t.runAsync(() => _state(desktop: true));

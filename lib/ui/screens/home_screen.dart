@@ -34,6 +34,7 @@ class HomeScreen extends StatelessWidget {
         _StatusPill(state: app.state, blocked: app.blocked),
         const SizedBox(height: 28),
         ConnectButton(
+          autofocus: app.isTv,
           state: app.state,
           blocked: app.blocked,
           size: wide ? 220 : 196,

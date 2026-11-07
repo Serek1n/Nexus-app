@@ -4,7 +4,9 @@ import android.Manifest
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.app.UiModeManager
 import android.content.Context
+import android.content.res.Configuration
 import android.os.PersistableBundle
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -212,6 +214,16 @@ class MainActivity : FlutterActivity() {
                         NexusTile.saveLabels(this, m?.get("onLabel") as? String, m?.get("offLabel") as? String)
                         NexusTile.refreshViews(this)
                         result.success(null)
+                    }
+
+                    "isTv" -> {
+                        // Android TV / Google TV: режим «телевизор» или
+                        // поддержка Leanback-интерфейса.
+                        val ui = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+                        result.success(
+                            ui?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+                                packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+                        )
                     }
 
                     "hideInRecents" -> {

@@ -14,7 +14,11 @@ class ConnectButton extends StatefulWidget {
       required this.state,
       required this.onTap,
       this.size = 200,
-      this.blocked = false});
+      this.blocked = false,
+      this.autofocus = false});
+
+  /// Выбрана сразу после запуска (пульт телевизора).
+  final bool autofocus;
   final ConnState state;
 
   /// Kill switch сработал — кнопка красная.
@@ -76,6 +80,7 @@ class _ConnectButtonState extends State<ConnectButton>
     // Пульт телевизора и клавиатура: кнопку можно выбрать стрелками и
     // нажать OK / Enter / пробелом; выбранная — с фиолетовым кольцом.
     return FocusableActionDetector(
+      autofocus: widget.autofocus,
       onShowFocusHighlight: (v) => setState(() => _focused = v),
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {

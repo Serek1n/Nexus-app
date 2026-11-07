@@ -124,6 +124,7 @@ class AppState extends ChangeNotifier {
       if (settings.theme == 'system') applyTheme();
     };
     if (!isDesktop) {
+      isTv = await AndroidSystem.isTv();
       unawaited(AndroidSystem.setTileLabels());
       unawaited(AndroidSystem.setShortcuts());
       unawaited(AndroidSystem.cancelStopTimer());
@@ -1839,6 +1840,10 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Android TV: управление пультом, нет камеры и буфера обмена —
+  /// подписку добавляют с телефона по QR-коду.
+  bool isTv = false;
 
   // ─────────────────── PIN-код ───────────────────
 
