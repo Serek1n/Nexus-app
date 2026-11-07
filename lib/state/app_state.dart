@@ -771,7 +771,24 @@ class AppState extends ChangeNotifier {
     _healthTimer = Timer(d, _healthCheck);
   }
 
+  bool _healthBusy = false;
+
+  /// Проверки не идут параллельно: смена сети во время идущей проверки
+  /// иначе запускала бы вторую, и обе переподключали бы соединение.
   Future<void> _healthCheck() async {
+    if (_healthBusy) {
+      _scheduleHealth(const Duration(seconds: 3));
+      return;
+    }
+    _healthBusy = true;
+    try {
+      await _healthCheckNow();
+    } finally {
+      _healthBusy = false;
+    }
+  }
+
+  Future<void> _healthCheckNow() async {
     final s = selected;
     if (state != ConnState.connected) return;
     if (s == null || core.blocked) {
@@ -1434,19 +1451,14 @@ class AppState extends ChangeNotifier {
       if (!isTransportError(e)) rethrow;
       Object last = e;
       // Основной адрес недоступен (заблокирован, упал) — пробуем запасные.
-      final main = sub.url;
+      // Адрес подписки не подменяем даже на время: параллельное сохранение
+      // записало бы запасной адрес вместо основного.
       for (final m in sub.mirrors) {
         try {
-          sub.url = m;
-          return await SubscriptionService.fetch(sub);
+          return await SubscriptionService.fetch(sub, url: m);
         } catch (e2) {
-          if (!isTransportError(e2)) {
-            sub.url = main;
-            rethrow;
-          }
+          if (!isTransportError(e2)) rethrow;
           last = e2;
-        } finally {
-          sub.url = main;
         }
       }
       final via = state == ConnState.connected ? core.activeProxy : null;
@@ -1795,6 +1807,8 @@ class AppState extends ChangeNotifier {
     subscriptions.clear();
     servers.clear();
     selectedId = null;
+    // Незаконченная запись не должна вернуть ключи после очистки.
+    await _saveChain;
     await _prefs.clear();
     settings = AppSettings();
     locked = false;
@@ -1847,6 +1861,12 @@ class AppState extends ChangeNotifier {
     if (pinBlockedUntil != null && DateTime.now().isBefore(pinBlockedUntil!)) {
       return false;
     }
+    // Попытка засчитывается до проверки: закрыв Nexus во время проверки,
+    // её не «отменить».
+    final fails = pinFails + 1;
+    final d = Pin.delayAfter(fails);
+    final until = d == Duration.zero ? null : DateTime.now().add(d);
+    _savePinState(fails, until);
     if (await Pin.verify(pin, h)) {
       pinFails = 0;
       pinBlockedUntil = null;
@@ -1855,20 +1875,18 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    pinFails++;
-    final d = Pin.delayAfter(pinFails);
-    pinBlockedUntil = d == Duration.zero ? null : DateTime.now().add(d);
-    _savePinState();
+    pinFails = fails;
+    pinBlockedUntil = until;
     notifyListeners();
     return false;
   }
 
   /// Счётчик ошибок PIN переживает перезапуск: иначе паузу после 5 ошибок
   /// обходили бы, закрывая и открывая Nexus.
-  void _savePinState() {
+  void _savePinState([int? fails, DateTime? until]) {
     unawaited(_prefs.setString('pinState', jsonEncode({
-      'fails': pinFails,
-      'until': pinBlockedUntil?.millisecondsSinceEpoch,
+      'fails': fails ?? pinFails,
+      'until': (fails == null ? pinBlockedUntil : until)?.millisecondsSinceEpoch,
     })));
   }
 

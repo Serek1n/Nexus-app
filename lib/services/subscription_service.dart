@@ -213,8 +213,10 @@ class SubscriptionService {
   }
 
   /// Загружает подписку и обновляет [sub] (трафик, срок, название).
-  static Future<FetchResult> fetch(Subscription sub, {String? proxy}) async {
-    final uri = Uri.tryParse(sub.url);
+  /// [url] — запасной адрес вместо основного (сама подписка не меняется).
+  static Future<FetchResult> fetch(Subscription sub,
+      {String? proxy, String? url}) async {
+    final uri = Uri.tryParse(url ?? sub.url);
     if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
       throw Exception(tr('Ссылка подписки должна начинаться с https://'));
     }

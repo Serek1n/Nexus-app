@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
@@ -34,7 +35,12 @@ class Pin {
     }
   }
 
-  static Future<List<int>> _derive(String pin, List<int> salt, int it) async {
+  /// Считается в отдельном потоке: на телефоне это около секунды,
+  /// и в основном потоке экран ввода PIN на это время замирал бы.
+  static Future<List<int>> _derive(String pin, List<int> salt, int it) =>
+      Isolate.run(() => _deriveNow(pin, List<int>.of(salt), it));
+
+  static Future<List<int>> _deriveNow(String pin, List<int> salt, int it) async {
     final k = await Pbkdf2(
       macAlgorithm: Hmac.sha256(),
       iterations: it,

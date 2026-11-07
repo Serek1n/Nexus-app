@@ -4,7 +4,7 @@
 String redactSecrets(String text) {
   var t = text;
   t = t.replaceAll(
-      RegExp(r'\b(vless|vmess|trojan|ss|socks|hysteria2?|hy2?|wireguard|wg)://\S+',
+      RegExp(r'\b(vless|vmess|trojan|ss|ssr|socks|hysteria2?|hy2?|tuic|anytls|wireguard|wg)://\S+',
           caseSensitive: false),
       '<ключ скрыт>');
   t = t.replaceAllMapped(RegExp(r'\bhttps?://([^/\s:]+)(:\d+)?\S*'),
