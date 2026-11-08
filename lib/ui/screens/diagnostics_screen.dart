@@ -56,7 +56,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       return tr('Интернет есть, но имена сайтов не находятся — переподключите Wi-Fi или перезагрузите роутер.');
     }
     if (bad('server')) {
-      return tr('Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения».');
+      return tr('Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения» (Настройки → «Про»).');
     }
     final via = _items.where((e) => e.id == 'site' && e.ok != null);
     if (via.isNotEmpty && via.every((e) => e.ok == false)) {

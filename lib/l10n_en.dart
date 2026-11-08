@@ -775,6 +775,8 @@ const kEn = <String, String>{
       'Backup',
   'Результат проверки попадает в «Отчёт для поддержки».':
       'The result is included in the "Support report".',
+  'Рекламные сети и трекеры не загружаются — страницы открываются быстрее, меньше трафика. Если сайт сломался, выключите блокировку':
+      'Ad networks and trackers don\'t load — pages open faster and use less traffic. If a site breaks, turn blocking off',
   'Рекламные сети и трекеры не загружаются — страницы открываются быстрее, меньше трафика. Если сайт сломался, добавьте его в «Свои правила»':
       'Ad networks and trackers don\'t load — pages open faster and use less traffic. If a site breaks, add it to “Custom rules”',
   'Релиз не подписан — пропущен':
@@ -839,8 +841,8 @@ const kEn = <String, String>{
       'Server',
   'Сервер «{0}»':
       'Server “{0}”',
-  'Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения».':
-      'The server doesn\'t respond — pick another server or turn on "Connection masking".',
+  'Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения» (Настройки → «Про»).':
+      'The server doesn\'t respond — pick another server or turn on "Connection masking" (Settings → Pro).',
   'Сервер ответил кодом {0}':
       'Server responded with code {0}',
   'Сервер подписки':

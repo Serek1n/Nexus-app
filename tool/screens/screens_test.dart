@@ -178,16 +178,25 @@ void main() {
       await _tab(t, tr('Настройки'));
       _size(t, 412, 5200);
       // Режим «Пользователь» (по умолчанию для новых установок) и «Про».
-      app.updateSettings((s) => s.proMode = false);
-      await t.runAsync(() => app.flushSaves());
+      // Сохранение — в настоящем времени, иначе тест ждёт его вечно.
+      await t.runAsync(() async {
+        app.updateSettings((s) => s.proMode = false);
+        await app.flushSaves();
+      });
       await t.pump(const Duration(milliseconds: 300));
       await _shot(t, 'phone_5_settings');
-      app.updateSettings((s) => s.proMode = true);
-      await t.runAsync(() => app.flushSaves());
+      // Сохранение — в настоящем времени, иначе тест ждёт его вечно.
+      await t.runAsync(() async {
+        app.updateSettings((s) => s.proMode = true);
+        await app.flushSaves();
+      });
       await t.pump(const Duration(milliseconds: 300));
       await _shot(t, 'phone_5b_settings_pro');
-      app.updateSettings((s) => s.proMode = false);
-      await t.runAsync(() => app.flushSaves());
+      // Сохранение — в настоящем времени, иначе тест ждёт его вечно.
+      await t.runAsync(() async {
+        app.updateSettings((s) => s.proMode = false);
+        await app.flushSaves();
+      });
       _size(t, 412, 915);
       await _tab(t, tr('Главная'));
       await t.runAsync(() => app.disconnect());
