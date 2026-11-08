@@ -141,8 +141,8 @@ jobs:
           mkdir -p android/app/src/main/assets
           cd android/app/src/main/assets
           for f in geoip.dat geosite.dat; do
-            curl -fsSL -o $f $GEO_URL/$f
-            curl -fsSL -o $f.sha256sum $GEO_URL/$f.sha256sum
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o $f $GEO_URL/$f
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o $f.sha256sum $GEO_URL/$f.sha256sum
             sha256sum -c $f.sha256sum
             rm $f.sha256sum
           done
@@ -150,8 +150,8 @@ jobs:
           # Не скачалось — собираем без него, режим работает по встроенному списку.
           cd "$GITHUB_WORKSPACE"
           mkdir -p /tmp/rf && cd /tmp/rf
-          if curl -fsSL -o geosite.dat $RF_URL/geosite.dat \
-             && curl -fsSL -o geosite.dat.sha256sum $RF_URL/geosite.dat.sha256sum \
+          if curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o geosite.dat $RF_URL/geosite.dat \
+             && curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o geosite.dat.sha256sum $RF_URL/geosite.dat.sha256sum \
              && sha256sum -c geosite.dat.sha256sum \
              && python3 "$GITHUB_WORKSPACE/tool/make_blocked_dat.py" geosite.dat "$GITHUB_WORKSPACE/android/app/src/main/assets/nexus-blocked.dat"; then
             echo "BLOCKED_DAT=true" >> "$GITHUB_ENV"
@@ -511,8 +511,8 @@ jobs:
         run: |
           set -e
           base=https://github.com/XTLS/Xray-core/releases/latest/download
-          curl -fsSL -o xray.zip "$base/Xray-linux-64.zip"
-          curl -fsSL -o xray.dgst "$base/Xray-linux-64.zip.dgst"
+          curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o xray.zip "$base/Xray-linux-64.zip"
+          curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o xray.dgst "$base/Xray-linux-64.zip.dgst"
           want=$(grep -oE 'SHA2-256=\s*[0-9a-fA-F]{64}' xray.dgst | grep -oE '[0-9a-fA-F]{64}' | tr A-F a-f)
           got=$(sha256sum xray.zip | cut -d' ' -f1)
           [ "$want" = "$got" ] || { echo "Контрольная сумма Xray не совпала"; exit 1; }
@@ -520,7 +520,7 @@ jobs:
           # Отпечаток ядра вшивается в Nexus: для режима TUN ставится только оно.
           echo "CORE_SHA256=$(sha256sum xray/xray | cut -d' ' -f1)" >> $GITHUB_ENV
           BLOCKED=false
-          if curl -fsSL -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
+          if curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
              && [ "$(cut -d' ' -f1 rf.sum)" = "$(sha256sum rf.dat | cut -d' ' -f1)" ] \
              && python3 tool/make_blocked_dat.py rf.dat nexus-blocked.dat; then
             BLOCKED=true
@@ -545,8 +545,8 @@ jobs:
           install -m 755 xray/xray "$B/nexus-core"
           [ -f nexus-blocked.dat ] && cp nexus-blocked.dat "$B/"
           for g in geoip.dat geosite.dat; do
-            curl -fsSL -o "$B/$g" "$GEO_URL/$g"
-            curl -fsSL -o "$g.sum" "$GEO_URL/$g.sha256sum"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "$B/$g" "$GEO_URL/$g"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "$g.sum" "$GEO_URL/$g.sha256sum"
             [ "$(cut -d' ' -f1 $g.sum)" = "$(sha256sum $B/$g | cut -d' ' -f1)" ] || { echo "Контрольная сумма $g не совпала"; exit 1; }
           done
           "$B/nexus-core" version
@@ -660,8 +660,8 @@ jobs:
           set -e
           base=https://github.com/XTLS/Xray-core/releases/latest/download
           for a in macos-64 macos-arm64-v8a; do
-            curl -fsSL -o "x-$a.zip" "$base/Xray-$a.zip"
-            curl -fsSL -o "x-$a.dgst" "$base/Xray-$a.zip.dgst"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "x-$a.zip" "$base/Xray-$a.zip"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "x-$a.dgst" "$base/Xray-$a.zip.dgst"
             want=$(grep -oE 'SHA2-256=\s*[0-9a-fA-F]{64}' "x-$a.dgst" | grep -oE '[0-9a-fA-F]{64}' | tr A-F a-f)
             got=$(shasum -a 256 "x-$a.zip" | cut -d' ' -f1)
             [ "$want" = "$got" ] || { echo "Контрольная сумма Xray $a не совпала"; exit 1; }
@@ -672,7 +672,7 @@ jobs:
           chmod 755 nexus-core
           cp x-macos-arm64-v8a/geoip.dat x-macos-arm64-v8a/geosite.dat . 2>/dev/null || true
           BLOCKED=false
-          if curl -fsSL -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
+          if curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
              && [ "$(cut -d' ' -f1 rf.sum)" = "$(shasum -a 256 rf.dat | cut -d' ' -f1)" ] \
              && python3 tool/make_blocked_dat.py rf.dat nexus-blocked.dat; then
             BLOCKED=true
@@ -724,8 +724,8 @@ jobs:
           R="$APP/Contents/Resources"
           [ -f nexus-blocked.dat ] && cp nexus-blocked.dat "$R/"
           for g in geoip.dat geosite.dat; do
-            curl -fsSL -o "$R/$g" "$GEO_URL/$g"
-            curl -fsSL -o "$g.sum" "$GEO_URL/$g.sha256sum"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "$R/$g" "$GEO_URL/$g"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "$g.sum" "$GEO_URL/$g.sha256sum"
             [ "$(cut -d' ' -f1 $g.sum)" = "$(shasum -a 256 $R/$g | cut -d' ' -f1)" ] || { echo "Контрольная сумма $g не совпала"; exit 1; }
           done
           "$APP/Contents/MacOS/nexus-core" version
@@ -832,8 +832,8 @@ jobs:
         run: |
           set -e
           for g in geoip.dat geosite.dat; do
-            curl -fsSL -o "full-$g" "$GEO_URL/$g"
-            curl -fsSL -o "$g.sum" "$GEO_URL/$g.sha256sum"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "full-$g" "$GEO_URL/$g"
+            curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "$g.sum" "$GEO_URL/$g.sha256sum"
             [ "$(cut -d' ' -f1 $g.sum)" = "$(shasum -a 256 full-$g | cut -d' ' -f1)" ] || { echo "Контрольная сумма $g не совпала"; exit 1; }
           done
           # Память VPN-расширения на iPhone ограничена (~50 МБ) — полные базы
@@ -841,7 +841,7 @@ jobs:
           python3 tool/make_blocked_dat.py full-geosite.dat ios/Runner/geosite.dat category-ads-all
           python3 tool/make_blocked_dat.py full-geoip.dat ios/Runner/geoip.dat ru,telegram,private
           BLOCKED=false
-          if curl -fsSL -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
+          if curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
              && [ "$(cut -d' ' -f1 rf.sum)" = "$(shasum -a 256 rf.dat | cut -d' ' -f1)" ] \
              && python3 tool/make_blocked_dat.py rf.dat ios/Runner/nexus-blocked.dat; then
             BLOCKED=true
@@ -857,6 +857,12 @@ jobs:
           echo "VER=$VER" >> $GITHUB_ENV
           cp -R LibXray.xcframework ios/
           ruby tool/ios/add_tunnel.rb "$VER" "$BUILD"
+          # Podfile из шаблона Flutter с явной платформой (LibXray — iOS 15+).
+          sed "s/^# platform :ios.*/platform :ios, '15.0'/" \
+            "$FLUTTER_ROOT/packages/flutter_tools/templates/cocoapods/Podfile-ios" > ios/Podfile
+          grep -n "^platform" ios/Podfile
+          flutter pub get
+          (cd ios && pod install)
 
       - name: Сборка
         env:
