@@ -464,10 +464,11 @@ def macos():
         (d / name).write_text(MAC_ENTITLEMENTS, encoding="utf-8")
     patch("macos/Runner/Configs/AppInfo.xcconfig", [
         (re.compile(r"PRODUCT_NAME = .*"), "PRODUCT_NAME = Nexus"),
-        (re.compile(r"PRODUCT_BUNDLE_IDENTIFIER = .*"),
-         "PRODUCT_BUNDLE_IDENTIFIER = app.nexusvpn.nexus"),
-        (re.compile(r"PRODUCT_COPYRIGHT = .*"), "PRODUCT_COPYRIGHT = NEXUS_VPN"),
     ])
+    # Идентификатор (app.nexusvpn.nexus) задаёт flutter create --org; копирайт — по желанию.
+    patch("macos/Runner/Configs/AppInfo.xcconfig", [
+        (re.compile(r"PRODUCT_COPYRIGHT = .*"), "PRODUCT_COPYRIGHT = NEXUS_VPN"),
+    ], required=False)
     patch("macos/Runner/Info.plist", [
         ("</dict>\n</plist>",
          "\t<key>CFBundleURLTypes</key>\n"
