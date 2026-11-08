@@ -96,6 +96,9 @@ abstract class VpnCore {
   /// Окно видно пользователю (на Windows без окна статистику не опрашиваем).
   void setForeground(bool visible) {}
 
+  /// «Сбросить всё»: стереть то, что ядро хранит вне настроек Nexus.
+  Future<void> forgetSaved() async {}
+
   Future<void> dispose() async {}
 }
 

@@ -16,6 +16,7 @@ import 'package:nexus/core/vpn_core.dart';
 import 'package:nexus/l10n.dart';
 import 'package:nexus/main.dart';
 import 'package:nexus/models.dart';
+import 'package:nexus/platform/keyring_box.dart';
 import 'package:nexus/state/app_state.dart';
 import 'package:nexus/ui/add_sheet.dart';
 
@@ -123,6 +124,8 @@ Future<AppState> _state({bool fresh = false, bool desktop = false}) async {
             '"favorites":["🇳🇱 Нидерланды|203.0.113.2:443","🇩🇪 Германия|203.0.113.3:443"]}',
   });
   AppState.debugDesktop = desktop;
+  // Без системной связки ключей (на сервере сборки её нет).
+  KeyringBox.debugKey = List<int>.filled(32, 1);
   final app = AppState.withCore(FakeCore());
   await app.init();
   if (!fresh) {

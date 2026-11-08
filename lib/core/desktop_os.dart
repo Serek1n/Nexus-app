@@ -390,7 +390,10 @@ class LinuxOs extends DesktopOs {
         await _hasCaps(bundledCore)) {
       return bundledCore;
     }
-    if (await DesktopOs.shaOk(_tunCore, want) && await _hasCaps()) {
+    final gid = await _gid();
+    if (await DesktopOs.shaOk(_tunCore, want) &&
+        await _hasCaps() &&
+        await _privateTo(gid)) {
       return _tunCore;
     }
     if (!await DesktopOs.shaOk(bundledCore, want)) {
@@ -405,11 +408,15 @@ class LinuxOs extends DesktopOs {
       'install -o root -g root -m 0700 "\$1" $_tunDir/.new',
       'echo "$want  $_tunDir/.new" | sha256sum -c --status',
       'mv -f $_tunDir/.new $_tunCore',
-      'chmod 0755 $_tunCore',
+      // Запускать ядро с правом на сеть может только группа пользователя,
+      // а не любой пользователь компьютера.
+      'case "\$2" in ""|*[!0-9]*) G=0;; *) G="\$2";; esac',
+      'chown root:"\$G" $_tunCore',
+      'chmod 0750 $_tunCore',
       'setcap cap_net_admin,cap_net_raw+ep $_tunCore',
     ].join('\n');
-    final r = await Process.run(
-            'pkexec', ['/bin/sh', '-c', script, 'nexus-tun', bundledCore])
+    final r = await Process.run('pkexec',
+            ['/bin/sh', '-c', script, 'nexus-tun', bundledCore, gid ?? ''])
         .timeout(const Duration(minutes: 3));
     if (r.exitCode == 126 || r.exitCode == 127) {
       throw Exception(tr('Установка ядра для TUN отменена'));
@@ -421,6 +428,21 @@ class LinuxOs extends DesktopOs {
       throw Exception(tr('Не удалось подготовить ядро для TUN{0}', [err.isEmpty ? '' : ': $err']));
     }
     return _tunCore;
+  }
+
+  /// Основная группа текущего пользователя.
+  Future<String?> _gid() async {
+    final r = await DesktopOs.run('id', ['-g']);
+    final g = '${r?.stdout ?? ''}'.trim();
+    return RegExp(r'^\d+$').hasMatch(g) ? g : null;
+  }
+
+  /// Ядро для TUN закрыто от остальных пользователей (0750, группа
+  /// пользователя). Старые установки с 0755 переустанавливаются.
+  Future<bool> _privateTo(String? gid) async {
+    if (gid == null) return true;
+    final r = await DesktopOs.run('stat', ['-c', '%a %g', _tunCore]);
+    return '${r?.stdout ?? ''}'.trim() == '750 $gid';
   }
 
   Future<bool> _hasCaps([String path = _tunCore]) async {
@@ -589,6 +611,10 @@ class MacOs extends DesktopOs {
     // Копия ядра в папке root: от root запускается проверенный файл,
     // который пользовательские программы подменить не могут.
     final want = DesktopOs.coreSha;
+    // Конфиг тоже сверяется по SHA-256 уже в папке root: подменить его
+    // между записью и запуском (и заставить ядро от root писать в чужие
+    // файлы) посторонняя программа не может.
+    final cfgSha = sha256.convert(utf8.encode(config)).toString();
     String q(String s) => "'${s.replaceAll("'", "'\\''")}'";
     const root = '/Library/Application Support/Nexus/core';
     final sh = [
@@ -599,9 +625,12 @@ class MacOs extends DesktopOs {
       '[ "\$(shasum -a 256 ${q('$root/.new')} | cut -d" " -f1)" = "$want" ]',
       'mv -f ${q('$root/.new')} ${q('$root/nexus-core')}',
       'chmod 755 ${q('$root/nexus-core')}',
-      'XRAY_LOCATION_ASSET=${q(assetDir)} ${q('$root/nexus-core')} run -c ${q(cfg.path)} >/dev/null 2>&1 &',
+      'install -o root -g wheel -m 0600 ${q(cfg.path)} ${q('$root/run.json')}',
+      'rm -f ${q(cfg.path)}',
+      '[ "\$(shasum -a 256 ${q('$root/run.json')} | cut -d" " -f1)" = "$cfgSha" ] || { rm -f ${q('$root/run.json')}; exit 1; }',
+      'XRAY_LOCATION_ASSET=${q(assetDir)} ${q('$root/nexus-core')} run -c ${q('$root/run.json')} >/dev/null 2>&1 &',
       'CORE=\$!',
-      'sleep 2; rm -f ${q(cfg.path)}',
+      'sleep 2; rm -f ${q('$root/run.json')}',
       'while kill -0 $pid 2>/dev/null && kill -0 \$CORE 2>/dev/null && [ ! -e ${q(stop.path)} ]; do sleep 1; done',
       'kill \$CORE 2>/dev/null || true',
     ].join('\n');

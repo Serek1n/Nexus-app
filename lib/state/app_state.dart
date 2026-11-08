@@ -890,6 +890,8 @@ class AppState extends ChangeNotifier {
       for (final i in list) {
         final n = i.name.toLowerCase();
         if (n.startsWith('tun') ||
+            n.startsWith('utun') ||
+            n.startsWith('nexus') ||
             n.startsWith('ppp') ||
             n.contains('wintun') ||
             n.contains('wireguard') ||
@@ -897,7 +899,10 @@ class AppState extends ChangeNotifier {
           continue;
         }
         for (final a in i.addresses) {
-          if (!a.isLinkLocal) parts.add('${i.name}=${a.address}');
+          // 172.19.0.x — адрес TUN самого Nexus.
+          if (!a.isLinkLocal && !a.address.startsWith('172.19.0.')) {
+            parts.add('${i.name}=${a.address}');
+          }
         }
       }
       parts.sort();
@@ -1853,6 +1858,7 @@ class AppState extends ChangeNotifier {
     pinBlockedUntil = null;
     unawaited(_prefs.remove('pinState'));
     traffic.clear();
+    await core.forgetSaved();
     if (!isDesktop) {
       unawaited(AndroidSystem.saveTileConfig());
       unawaited(AndroidSystem.scheduleExpiry(const []));

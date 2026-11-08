@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:ffi/ffi.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../core/desktop_os.dart';
 import '../models.dart';
 import 'win_admin.dart';
 import '../services/deep_links.dart';
@@ -30,35 +32,86 @@ class WindowsHost with TrayListener, WindowListener {
 
   /// Гарантирует один запущенный экземпляр. Если Nexus уже открыт —
   /// просит его показать окно и возвращает false.
+  ///
+  /// Linux и macOS: сокет в личной папке пользователя — у каждого
+  /// пользователя компьютера свой Nexus, чужие программы до него не
+  /// достучатся. Windows: порт на 127.0.0.1. Ссылки (nexus:link:…)
+  /// принимаются только с секретом из личной папки — подсунуть подписку
+  /// через этот канал посторонняя программа не может.
   static Future<bool> claimSingleInstance([String? link]) async {
-    try {
-      _instanceServer =
-          await ServerSocket.bind(InternetAddress.loopbackIPv4, _instancePort);
-      _instanceServer!.listen((client) {
-        client.listen((data) {
-          // Только короткие команды от второй копии Nexus.
-          if (data.length > 8192) return client.destroy();
-          final msg = utf8.decode(data, allowMalformed: true).trim();
-          if (msg == 'nexus:show') {
-            _showRequests.add(null);
-          } else if (msg.startsWith('nexus:link:')) {
-            _showRequests.add(null);
-            DeepLinks.handle(msg.substring('nexus:link:'.length));
-          }
-        }, onError: (_) {}, cancelOnError: true);
-        Future.delayed(const Duration(seconds: 2), client.destroy);
-      });
-      return true;
-    } on SocketException {
+    final token = _instanceToken();
+    final unix = !Platform.isWindows;
+    final addr = unix
+        ? InternetAddress('${DesktopOs.current.dataDir}/instance.sock',
+            type: InternetAddressType.unix)
+        : InternetAddress.loopbackIPv4;
+    final port = unix ? 0 : _instancePort;
+    Future<bool> send() async {
       try {
-        final s = await Socket.connect(InternetAddress.loopbackIPv4,
-            _instancePort,
+        final s = await Socket.connect(addr, port,
             timeout: const Duration(seconds: 2));
-        s.add(utf8.encode(link != null ? 'nexus:link:$link' : 'nexus:show'));
+        s.add(utf8.encode(link != null && token != null
+            ? 'nexus:$token:link:$link'
+            : 'nexus:show'));
         await s.flush();
         await s.close();
-      } catch (_) {}
-      return false;
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        _instanceServer = await ServerSocket.bind(addr, port);
+        break;
+      } on SocketException {
+        if (await send()) return false;
+        // Сокет остался после аварийного завершения — убираем и занимаем.
+        if (!unix || attempt > 0) return false;
+        try {
+          File(addr.address).deleteSync();
+        } catch (_) {
+          return false;
+        }
+      }
+    }
+    final srv = _instanceServer;
+    if (srv == null) return false;
+    srv.listen((client) {
+      client.listen((data) {
+        // Только короткие команды от второй копии Nexus.
+        if (data.length > 8192) return client.destroy();
+        final msg = utf8.decode(data, allowMalformed: true).trim();
+        final linkPrefix = token == null ? null : 'nexus:$token:link:';
+        if (msg == 'nexus:show') {
+          _showRequests.add(null);
+        } else if (linkPrefix != null && msg.startsWith(linkPrefix)) {
+          _showRequests.add(null);
+          DeepLinks.handle(msg.substring(linkPrefix.length));
+        }
+      }, onError: (_) {}, cancelOnError: true);
+      Future.delayed(const Duration(seconds: 2), client.destroy);
+    });
+    return true;
+  }
+
+  /// Секрет канала между копиями Nexus (файл в личной папке пользователя).
+  static String? _instanceToken() {
+    try {
+      final f = File('${DesktopOs.current.dataDir}${Platform.pathSeparator}instance.key');
+      if (f.existsSync()) {
+        final t = f.readAsStringSync().trim();
+        if (RegExp(r'^[a-z0-9]{32}$').hasMatch(t)) return t;
+      }
+      final r = Random.secure();
+      final t = List.generate(
+          32, (_) => 'abcdefghijklmnopqrstuvwxyz0123456789'[r.nextInt(36)]).join();
+      f.writeAsStringSync(t, flush: true);
+      if (!Platform.isWindows) Process.runSync('chmod', ['600', f.path]);
+      return t;
+    } catch (_) {
+      return null;
     }
   }
 

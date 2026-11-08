@@ -66,7 +66,11 @@ class IosCore extends VpnCore {
     _last = s;
     _states.add(s);
     if (s == ConnState.connected) {
-      _startPolling();
+      // Адрес служебного входа берём у самого туннеля: VPN мог подняться
+      // без приложения (Настройки iOS, автоподключение) или до его запуска.
+      unawaited(_fetchProbe().whenComplete(() {
+        if (_last == ConnState.connected) _startPolling();
+      }));
     } else if (s == ConnState.disconnected) {
       _poll?.cancel();
       _poll = null;
@@ -207,7 +211,11 @@ class IosCore extends VpnCore {
     final full = await _forTunnel(config);
     note(tr('Запуск: {0}', [remark]));
     try {
-      await _ch.invokeMethod('start', {'config': full, 'remark': remark});
+      await _ch.invokeMethod('start', {
+        'config': full,
+        'remark': remark,
+        'onDemand': settings.autoReconnect,
+      });
     } on PlatformException catch (e) {
       _set(ConnState.disconnected);
       if (e.code == 'denied') {
@@ -225,6 +233,18 @@ class IosCore extends VpnCore {
     _startedAt = null;
     _probe = null;
     _set(ConnState.disconnected);
+  }
+
+  Future<void> _fetchProbe() async {
+    try {
+      final p = await _ch
+          .invokeMethod<String>('probe')
+          .timeout(const Duration(seconds: 3));
+      if (p != null &&
+          RegExp(r'^[a-z0-9]+:[a-z0-9]+@127\.0\.0\.1:\d+$').hasMatch(p)) {
+        _probe = p;
+      }
+    } catch (_) {}
   }
 
   void _startPolling() {
@@ -360,6 +380,13 @@ class IosCore extends VpnCore {
     } catch (_) {
       return '—';
     }
+  }
+
+  @override
+  Future<void> forgetSaved() async {
+    try {
+      await _ch.invokeMethod('forget');
+    } catch (_) {}
   }
 
   @override

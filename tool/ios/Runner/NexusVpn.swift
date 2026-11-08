@@ -82,10 +82,41 @@ final class NexusVpn: NSObject {
         result(FlutterError(code: "args", message: "no config", details: nil))
         return
       }
-      start(config, result)
+      start(config, onDemand: args?["onDemand"] as? Bool ?? false, result)
     case "stop":
-      manager?.connection.stopVPNTunnel()
-      result(nil)
+      // Сначала выключаем автоподключение — иначе iOS сразу поднимет VPN снова.
+      guard let m = manager else {
+        result(nil)
+        return
+      }
+      if m.isOnDemandEnabled {
+        m.isOnDemandEnabled = false
+        m.saveToPreferences { _ in
+          DispatchQueue.main.async {
+            m.connection.stopVPNTunnel()
+            result(nil)
+          }
+        }
+      } else {
+        m.connection.stopVPNTunnel()
+        result(nil)
+      }
+    case "probe":
+      guard let session = manager?.connection as? NETunnelProviderSession,
+        session.status == .connected
+      else {
+        result(nil)
+        return
+      }
+      do {
+        try session.sendProviderMessage(Data("probe".utf8)) { data in
+          DispatchQueue.main.async {
+            result(data.flatMap { String(data: $0, encoding: .utf8) })
+          }
+        }
+      } catch {
+        result(nil)
+      }
     case "pingBatch":
       guard let req = args?["request"] as? String,
         let payload = try? JSONSerialization.jsonObject(with: Data(req.utf8))
@@ -103,12 +134,22 @@ final class NexusVpn: NSObject {
       result(((j?["data"] as? [String: Any])?["version"] as? String) ?? "—")
     case "logs":
       result(Self.logTail())
+    case "forget":
+      // «Сбросить всё»: последний конфиг туннеля и журнал ядра.
+      if let dir = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: Self.appGroup)
+      {
+        for name in ["tunnel.json", "xray.log"] {
+          try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+        }
+      }
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }
   }
 
-  private func start(_ config: String, _ result: @escaping FlutterResult) {
+  private func start(_ config: String, onDemand: Bool, _ result: @escaping FlutterResult) {
     let m = manager ?? NETunnelProviderManager()
     let p = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
     p.providerBundleIdentifier = Self.tunnelId
@@ -117,6 +158,11 @@ final class NexusVpn: NSObject {
     m.protocolConfiguration = p
     m.localizedDescription = "Nexus"
     m.isEnabled = true
+    // «Держать соединение»: если VPN оборвался (iOS выгрузила расширение,
+    // сменилась сеть), система поднимет его сама. Отключение из Nexus или
+    // из Настроек iOS выключает это правило.
+    m.onDemandRules = onDemand ? [NEOnDemandRuleConnect()] : nil
+    m.isOnDemandEnabled = onDemand
     // Первое сохранение показывает системный запрос «Добавить VPN».
     m.saveToPreferences { [weak self] err in
       if let err = err as NSError? {

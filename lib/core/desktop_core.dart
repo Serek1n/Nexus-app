@@ -416,6 +416,9 @@ class DesktopCore extends VpnCore {
   Future<void> _tick() async {
     _tickN++;
     if (_blocked || _recovering) return;
+    // Минута стабильной работы после перезапуска — счётчик сбрасывается:
+    // редкие сбои за долгий день не исчерпывают три попытки.
+    if (_tickN == 60 && !_exited) _restarts = 0;
     // Падение ядра ловит exitCode; порт дополнительно проверяем раз в 5 секунд.
     final portDead =
         !_exited && _tickN % 5 == 0 && !await _portOpen(_httpPort);
@@ -599,9 +602,9 @@ class DesktopCore extends VpnCore {
   /// В режиме TUN временные ядра проверки задержки привязываем к обычной
   /// сетевой карте — иначе их трафик ушёл бы в туннель через текущий сервер
   /// и задержка всех серверов оказалась бы завышенной.
-  Future<void> _bypassTun(List? outbounds) async {
+  Future<void> _bypassTun(List? outbounds, {String? iface}) async {
     if (!_tun || outbounds == null) return;
-    final iface = await _physicalInterface();
+    iface ??= await _physicalInterface();
     if (iface == null) return;
     for (final ob in outbounds) {
       if (ob is! Map<String, dynamic>) continue;
@@ -622,6 +625,8 @@ class DesktopCore extends VpnCore {
         final n = i.name.toLowerCase();
         if (n == 'nexus' ||
             n == os.tunName.toLowerCase() ||
+            n.startsWith('utun') ||
+            n.startsWith('tun') ||
             n.contains('wintun') ||
             n.contains('vpn')) {
           continue;
@@ -785,7 +790,6 @@ class DesktopCore extends VpnCore {
       String Function(ServerProfile) config) async {
     if (servers.isEmpty || !File(_corePath).existsSync()) return null;
     Process? p;
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
       final rnd = math.Random.secure();
       String token() =>
@@ -796,6 +800,8 @@ class DesktopCore extends VpnCore {
       final rules = <Map<String, dynamic>>[];
       final ports = <String, int>{};
       Map<String, dynamic>? base;
+      // Сетевую карту для обхода TUN определяем один раз на весь замер.
+      final iface = _tun ? await _physicalInterface() : null;
       for (var i = 0; i < servers.length; i++) {
         final s = servers[i];
         Map<String, dynamic> cfg;
@@ -813,7 +819,7 @@ class DesktopCore extends VpnCore {
         ports[s.id] = port;
         ob['tag'] = 'p$i';
         outbounds.add(ob);
-        await _bypassTun([ob]);
+        await _bypassTun([ob], iface: iface);
         inbounds.add({
           'tag': 'in$i',
           'listen': '127.0.0.1',
@@ -882,7 +888,6 @@ class DesktopCore extends VpnCore {
     } catch (_) {
       return null;
     } finally {
-      client.close(force: true);
       if (p != null) Process.killPid(p.pid);
     }
   }
@@ -896,7 +901,6 @@ class DesktopCore extends VpnCore {
     Process? p;
     String? failReason;
     var probeOut = <String>[];
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
       final port = await _freePort();
       final rnd = math.Random.secure();
@@ -961,7 +965,6 @@ class DesktopCore extends VpnCore {
       failReason = e is TimeoutException ? tr('сервер не ответил за 6 с') : '$e';
       return -1;
     } finally {
-      client.close(force: true);
       if (p != null) Process.killPid(p.pid);
       if (failReason != null) {
         final why = probeOut

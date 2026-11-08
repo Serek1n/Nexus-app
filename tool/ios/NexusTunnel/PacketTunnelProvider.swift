@@ -5,7 +5,9 @@ import NetworkExtension
 /// Nexus для iOS: VPN-расширение. Система отдаёт туннель (utun), а Xray
 /// (libXray) работает прямо на нём — дескриптор туннеля передаётся ядру
 /// через env конфига («xray.tun.fd»). Конфиг приходит из приложения при
-/// каждом подключении и на диск не пишется.
+/// каждом подключении; последний сохраняется в общей папке Nexus (с защитой iOS), чтобы
+/// VPN поднимался и без приложения — переключателем в Настройках iOS и
+/// при автоподключении («Держать соединение»).
 final class PacketTunnelProvider: NEPacketTunnelProvider {
   static let appGroup = "group.app.nexusvpn.nexus"
 
@@ -23,13 +25,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   override func startTunnel(
     options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void
   ) {
-    guard let text = options?["config"] as? String,
+    let fresh = options?["config"] as? String
+    guard let text = fresh ?? Self.savedConfig(),
       let data = text.data(using: .utf8),
       var cfg = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     else {
       completionHandler(Self.err("Подключитесь из приложения Nexus"))
       return
     }
+    if let f = fresh { Self.saveConfig(f) }
+    probe = Self.probeAddress(cfg)
     let dns = Self.dnsServer(cfg)
     let s = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
     let v4 = NEIPv4Settings(addresses: ["172.19.0.1"], subnetMasks: ["255.255.255.252"])
@@ -76,6 +81,50 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         completionHandler(nil)
       }
     }
+  }
+
+  /// Адрес служебного входа для проверок и статистики («логин:пароль@
+  /// 127.0.0.1:порт»): приложение спрашивает его, если открылось, когда
+  /// VPN уже работал.
+  private var probe: String?
+
+  override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
+    if String(data: messageData, encoding: .utf8) == "probe" {
+      completionHandler?(probe.flatMap { $0.data(using: .utf8) })
+    } else {
+      completionHandler?(nil)
+    }
+  }
+
+  static func probeAddress(_ cfg: [String: Any]) -> String? {
+    for case let ib as [String: Any] in (cfg["inbounds"] as? [Any] ?? []) {
+      guard ib["tag"] as? String == "nexus-probe", let port = ib["port"] as? Int,
+        let acc = ((ib["settings"] as? [String: Any])?["accounts"] as? [[String: Any]])?.first,
+        let u = acc["user"] as? String, let p = acc["pass"] as? String
+      else { continue }
+      return "\(u):\(p)@127.0.0.1:\(port)"
+    }
+    return nil
+  }
+
+  // ── последний конфиг: файл в общей папке Nexus, защита iOS «до первой
+  // разблокировки». Удаляется вместе с приложением и кнопкой «Сбросить всё».
+
+  private static var savedURL: URL? {
+    FileManager.default
+      .containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
+      .appendingPathComponent("tunnel.json")
+  }
+
+  static func saveConfig(_ text: String) {
+    guard let url = savedURL else { return }
+    try? Data(text.utf8).write(
+      to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+  }
+
+  static func savedConfig() -> String? {
+    guard let url = savedURL, let d = try? Data(contentsOf: url) else { return nil }
+    return String(data: d, encoding: .utf8)
   }
 
   override func stopTunnel(

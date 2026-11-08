@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -18,6 +19,11 @@ class KeyringBox {
 
   static List<int>? _key;
 
+  /// Хранилище не ответило за минуту (служба зависла, окно разблокировки
+  /// никто не видит) — до перезапуска больше не ждём его при каждом сохранении.
+  static bool _stuck = false;
+  static const _wait = Duration(seconds: 60);
+
   static bool get supported =>
       Platform.isMacOS || Platform.isIOS || Platform.isLinux;
 
@@ -31,6 +37,7 @@ class KeyringBox {
   /// НЕ создаётся, иначе старые данные стало бы нечем расшифровать.
   static Future<List<int>?> _loadKey({required bool create}) async {
     if (_key != null) return _key;
+    if (_stuck) return null;
     try {
       var k = Platform.isLinux ? await _linuxGet() : await _appleGet();
       if (k == null && create) {
@@ -44,6 +51,9 @@ class KeyringBox {
       }
       if (k != null && k.length == 32) _key = k;
       return _key;
+    } on TimeoutException {
+      _stuck = true;
+      return null;
     } catch (_) {
       return null;
     }
@@ -52,16 +62,19 @@ class KeyringBox {
   // ── Apple: Keychain через Swift (канал nexus/keychain) ──
 
   static Future<List<int>?> _appleGet() async =>
-      await _ch.invokeMethod<Uint8List>('get');
+      await _ch.invokeMethod<Uint8List>('get').timeout(_wait);
 
   static Future<bool> _appleSet(List<int> k) async =>
-      await _ch.invokeMethod<bool>('set', Uint8List.fromList(k)) == true;
+      await _ch
+          .invokeMethod<bool>('set', Uint8List.fromList(k))
+          .timeout(_wait) ==
+      true;
 
   // ── Linux: secret-tool (libsecret); ключ передаётся через stdin ──
 
   static Future<List<int>?> _linuxGet() async {
     final r = await Process.run('secret-tool',
-        ['lookup', 'service', _service, 'account', _account]);
+        ['lookup', 'service', _service, 'account', _account]).timeout(_wait);
     final out = '${r.stdout}'.trim();
     if (r.exitCode == 0 && out.isNotEmpty) return base64.decode(out);
     // «Не найдено» — пустой ответ без ошибки; иначе хранилище недоступно.
@@ -80,7 +93,12 @@ class KeyringBox {
     ]);
     p.stdin.write(base64.encode(k));
     await p.stdin.close();
-    return await p.exitCode.timeout(const Duration(seconds: 20)) == 0;
+    try {
+      return await p.exitCode.timeout(_wait) == 0;
+    } on TimeoutException {
+      p.kill();
+      rethrow;
+    }
   }
 
   static final _aes = AesGcm.with256bits();
