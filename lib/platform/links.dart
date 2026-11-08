@@ -25,6 +25,14 @@ Future<bool> openWebLink(String url) async {
       return false;
     }
   }
+  if (Platform.isLinux || Platform.isMacOS) {
+    try {
+      final r = await Process.run(Platform.isMacOS ? '/usr/bin/open' : 'xdg-open', [url]);
+      return r.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
   return false;
 }
 

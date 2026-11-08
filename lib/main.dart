@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'models.dart';
 import 'platform/android_system.dart';
+import 'platform/mac_links.dart';
 import 'platform/windows_host.dart';
 import 'services/deep_links.dart';
 import 'services/phone_link.dart';
@@ -32,7 +33,8 @@ Future<void> main(List<String> args) async {
   final startHidden = args.contains('--minimized');
   final link = args.where((a) => a.toLowerCase().startsWith('nexus:')).firstOrNull;
 
-  if (Platform.isWindows) {
+  final desktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  if (desktop) {
     // Второй запуск просто показывает уже открытое окно (и передаёт ссылку).
     var claimed = await WindowsHost.claimSingleInstance(link);
     // Перезапуск с правами администратора: ждём, пока старая копия закроется.
@@ -51,7 +53,9 @@ Future<void> main(List<String> args) async {
       center: true,
       title: 'Nexus',
       backgroundColor: NX.bg,
-      titleBarStyle: TitleBarStyle.hidden,
+      // Свой заголовок окна — на Windows; на Linux и macOS — системный.
+      titleBarStyle:
+          Platform.isWindows ? TitleBarStyle.hidden : TitleBarStyle.normal,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
       if (!startHidden) {
@@ -76,6 +80,7 @@ Future<void> main(List<String> args) async {
   if (args.contains('--connect') && state.selected != null) {
     unawaited(state.connect());
   }
+  unawaited(MacLinks.listen(DeepLinks.handle));
   unawaited(AndroidSystem.listenLinks(DeepLinks.handle,
       onToggle: () => unawaited(state.toggle()),
       onShortcut: (id) {
@@ -86,7 +91,7 @@ Future<void> main(List<String> args) async {
           unawaited(state.runShortcut(id));
         }
       }));
-  if (Platform.isWindows) {
+  if (desktop) {
     state.setWindowVisible(!startHidden);
     await WindowsHost(state).init();
   }

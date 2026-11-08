@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../state/app_state.dart' show platformName;
 import '../../changelog.dart';
 import '../../models.dart';
 import '../../services/pin.dart';
@@ -174,7 +175,8 @@ class SettingsScreen extends StatelessWidget {
   /// Включение TUN: без прав администратора — перезапуск через окно UAC.
   Future<void> _toggleTun(BuildContext context, bool on) async {
     final app = AppScope.read(context);
-    if (!on || WinAdmin.isAdmin) {
+    // Linux и macOS: права нужны только ядру — их спросят при подключении.
+    if (!on || WinAdmin.isAdmin || !Platform.isWindows) {
       app.updateSettings((s) => s.windowsTun = on);
       // Автозапуск: с TUN — задачей с правами администратора.
       Autostart.apply(app.settings.launchAtStartup, tun: on);
@@ -457,7 +459,7 @@ class SettingsScreen extends StatelessWidget {
                   switchRow(
                     Icons.lan_rounded,
                     tr('Системный прокси'),
-                    tr('Браузеры и программы Windows автоматически пойдут через Nexus'),
+                    tr('Браузеры и программы {0} автоматически пойдут через Nexus', [platformName()]),
                     st.windowsSystemProxy,
                     (v) async {
                       app.updateSettings((s) => s.windowsSystemProxy = v);
@@ -469,10 +471,14 @@ class SettingsScreen extends StatelessWidget {
                     Icons.lan_outlined,
                     tr('Режим TUN'),
                     st.windowsTun
-                        ? (WinAdmin.isAdmin
+                        ? (!Platform.isWindows || WinAdmin.isAdmin
                             ? tr('Через Nexus идут все программы: Telegram, игры, всё, что не смотрит на прокси')
                             : tr('Включён, но Nexus запущен без прав администратора — работает системный прокси'))
-                        : tr('Все программы через Nexus, как VPN на телефоне. Нужны права администратора'),
+                        : Platform.isLinux
+                            ? tr('Все программы через Nexus, как VPN на телефоне. Один раз попросит пароль, чтобы дать ядру право управлять сетью')
+                            : Platform.isMacOS
+                                ? tr('Все программы через Nexus, как VPN на телефоне. При подключении macOS спросит пароль администратора')
+                                : tr('Все программы через Nexus, как VPN на телефоне. Нужны права администратора'),
                     st.windowsTun,
                     (v) => _toggleTun(context, v),
                   ),
@@ -673,7 +679,7 @@ class SettingsScreen extends StatelessWidget {
                       const Divider(height: 14),
                       switchRow(
                         Icons.power_rounded,
-                        tr('Запускать вместе с Windows'),
+                        tr('Запускать вместе с {0}', [platformName()]),
                         tr('Nexus стартует свёрнутым в трей'),
                         st.launchAtStartup,
                         (v) {
@@ -681,6 +687,7 @@ class SettingsScreen extends StatelessWidget {
                           Autostart.apply(v, tun: st.windowsTun);
                         },
                       ),
+                      if (Platform.isWindows) ...[
                       const Divider(height: 14),
                       switchRow(
                         Icons.keyboard_rounded,
@@ -694,6 +701,7 @@ class SettingsScreen extends StatelessWidget {
                           await app.applyHotkey();
                         },
                       ),
+                      ],
                     ],
                   )
                 : const _AndroidBackground(),
@@ -1117,7 +1125,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 _InfoRow(tr('Версия'), appVersionLabel),
                 _InfoRow(tr('Ядро'), app.coreVersion),
-                _InfoRow(tr('Платформа'), app.isDesktop ? 'Windows' : 'Android'),
+                _InfoRow(tr('Платформа'), platformName()),
                 const SizedBox(height: 14),
                 Wrap(
                   spacing: 10,

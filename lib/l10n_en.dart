@@ -37,6 +37,8 @@ const kEn = <String, String>{
       'IP seen by websites',
   'Nexus · Авто':
       'Nexus · Auto',
+  'Nexus включает режим TUN: весь трафик Mac пойдёт через VPN.':
+      'Nexus is turning on TUN mode: all Mac traffic will go through the VPN.',
   'Nexus на телефоне откроется сам — выберите подписку и нажмите «Отправить».':
       'Nexus on your phone opens by itself — pick a subscription and tap “Send”.',
   'Nexus сам держит соединение через самый быстрый сервер подписки и незаметно переходит на другой, если этот упал':
@@ -73,6 +75,8 @@ const kEn = <String, String>{
       'Windows didn\'t grant administrator rights — TUN is not enabled',
   'https://… или vless://…':
       'https://… or vless://…',
+  'macOS не дал изменить прокси: нужна учётная запись администратора':
+      'macOS didn\'t allow changing the proxy: an administrator account is required',
   '{0} {1} назад':
       '{0} {1} ago',
   '{0} · без лимита':
@@ -101,6 +105,8 @@ const kEn = <String, String>{
       '{0} h {1} min',
   '{0} через VPN':
       '{0} via VPN',
+  '{0} — пока Nexus работает через системный прокси':
+      '{0} — Nexus is using the system proxy for now',
   '{0}/с':
       '{0}/s',
   '{0}:{1} · порт открыт · {2}':
@@ -143,8 +149,8 @@ const kEn = <String, String>{
       'No earlier versions yet',
   'Больше {0} приложений: банки, Госуслуги, VK, Яндекс, маркетплейсы. Список обновляется сам':
       'Over {0} apps: banks, Gosuslugi, VK, Yandex, marketplaces. The list updates itself',
-  'Браузеры и программы Windows автоматически пойдут через Nexus':
-      'Browsers and Windows programs will go through Nexus automatically',
+  'Браузеры и программы {0} автоматически пойдут через Nexus':
+      'Browsers and {0} apps will automatically go through Nexus',
   'Будет добавлен сервер {0}.':
       'Server {0} will be added.',
   'Будут удалены все подписки, серверы и настройки.':
@@ -155,8 +161,10 @@ const kEn = <String, String>{
       'Fast',
   'В QR-коде нет текста':
       'The QR code has no text',
-  'В архиве нет xray.exe':
-      'xray.exe is missing from the archive',
+  'В архиве нет {0}':
+      'The archive has no {0}',
+  'В архиве обновления нет Nexus.app':
+      'The update archive has no Nexus.app',
   'В избранное':
       'Add to favorites',
   'В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 8 символов.':
@@ -167,10 +175,12 @@ const kEn = <String, String>{
       'No servers found in the subscription',
   'В режиме TUN системный прокси не нужен — HTTP-прокси закрыт паролем, им пользуется только Nexus':
       'In TUN mode the system proxy isn\'t needed — the HTTP proxy is password-protected and used only by Nexus',
-  'В релизе {0} нет сборки для Windows':
-      'Release {0} has no Windows build',
+  'В релизе {0} нет сборки для этой системы':
+      'Release {0} has no build for this system',
   'В релизе нет файла для этого устройства':
       'The release has no file for this device',
+  'В системе нет /dev/net/tun — режим TUN недоступен':
+      'The system has no /dev/net/tun — TUN mode is unavailable',
   'Введите PIN-код':
       'Enter PIN',
   'Введите пароль':
@@ -201,6 +211,10 @@ const kEn = <String, String>{
       'All apps through the VPN',
   'Все программы через Nexus, как VPN на телефоне. Нужны права администратора':
       'All programs through Nexus, like a VPN on a phone. Requires administrator rights',
+  'Все программы через Nexus, как VPN на телефоне. Один раз попросит пароль, чтобы дать ядру право управлять сетью':
+      'All apps through Nexus, like a VPN on a phone. Asks for your password once to let the core manage the network',
+  'Все программы через Nexus, как VPN на телефоне. При подключении macOS спросит пароль администратора':
+      'All apps through Nexus, like a VPN on a phone. macOS will ask for an administrator password when connecting',
   'Всегда напрямую':
       'Always direct',
   'Всегда через VPN':
@@ -261,6 +275,10 @@ const kEn = <String, String>{
       'Data',
   'Держать соединение':
       'Keep connection alive',
+  'Для режима TUN нужен pkexec (polkit), чтобы один раз установить ядро с правом управления сетью':
+      'TUN mode needs pkexec (polkit) to install the core with network permissions once',
+  'Для этого процессора ядро обновляется вместе с приложением':
+      'On this processor the core is updated together with the app',
   'До {0}':
       'Until {0}',
   'Добавить':
@@ -333,8 +351,8 @@ const kEn = <String, String>{
       'Startup',
   'Запуск ядра: {0}':
       'Starting core: {0}',
-  'Запускать вместе с Windows':
-      'Start with Windows',
+  'Запускать вместе с {0}':
+      'Launch with {0}',
   'Защита':
       'Protection',
   'ИСТЕКЛА':
@@ -441,6 +459,8 @@ const kEn = <String, String>{
       'Couldn\'t send. Keep the Add window open on your TV and make sure the phone is on the same Wi-Fi.',
   'Не удалось подготовить ядро в {0}: {1}':
       'Couldn\'t prepare the core in {0}: {1}',
+  'Не удалось подготовить ядро для TUN{0}':
+      'Couldn\'t prepare the core for TUN{0}',
   'Не удалось подключиться за 30 секунд':
       'Couldn\'t connect within 30 seconds',
   'Не удалось построить QR-код — скопируйте ссылку':
@@ -453,6 +473,8 @@ const kEn = <String, String>{
       'Couldn\'t parse any server in the subscription',
   'Не удалось разобрать ссылки из подписки':
       'Couldn\'t parse the links in the subscription',
+  'Не удалось распаковать обновление: {0}':
+      'Couldn\'t unpack the update: {0}',
   'Не удалось узнать последнюю версию (код {0})':
       'Couldn\'t get the latest version (code {0})',
   'Не удалось установить защищённое соединение с сервером подписки — похоже, адрес блокирует провайдер. Подключитесь к VPN и повторите':
@@ -719,6 +741,8 @@ const kEn = <String, String>{
       'Allow notifications',
   'Режим TUN':
       'TUN mode',
+  'Режим TUN доступен только в сборке Nexus из релиза':
+      'TUN mode is only available in release builds of Nexus',
   'Режим TUN работает только с правами администратора — пока Nexus работает через системный прокси. Включите TUN в настройках ещё раз, чтобы перезапустить Nexus от администратора':
       'TUN mode needs administrator rights — for now Nexus uses the system proxy. Turn TUN on in settings again to restart Nexus as administrator',
   'Режим TUN создаёт виртуальную сетевую карту, и для этого Windows просит права администратора. Nexus перезапустится — подтвердите запрос Windows. Подписки и настройки сохранятся.':
@@ -953,6 +977,8 @@ const kEn = <String, String>{
       'Install and restart',
   'Установить обновление':
       'Install update',
+  'Установка ядра для TUN отменена':
+      'Installing the core for TUN was cancelled',
   'Установлена последняя версия':
       'The latest version is installed',
   'Файл {0} изменён после установки — запуск с правами администратора отменён. Переустановите Nexus':

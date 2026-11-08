@@ -13,7 +13,8 @@ import '../services/deep_links.dart';
 import '../state/app_state.dart';
 import '../l10n.dart';
 
-/// Windows: трей, сворачивание вместо закрытия, автозапуск, один экземпляр.
+/// Компьютеры (Windows, Linux, macOS): трей, сворачивание вместо закрытия,
+/// автозапуск, один экземпляр.
 class WindowsHost with TrayListener, WindowListener {
   WindowsHost(this.app);
   final AppState app;
@@ -73,8 +74,8 @@ class WindowsHost with TrayListener, WindowListener {
         tun: app.settings.windowsTun);
     // Ссылки nexus:// открывают Nexus.
     Autostart.registerProtocol();
-    // Ctrl+Alt+N — подключить/отключить из любой программы.
-    unawaited(app.applyHotkey());
+    // Ctrl+Alt+N — подключить/отключить из любой программы (Windows).
+    if (Platform.isWindows) unawaited(app.applyHotkey());
   }
 
   Future<void> show() async {
@@ -120,8 +121,9 @@ class WindowsHost with TrayListener, WindowListener {
 
     final on = st == ConnState.connected;
     try {
+      final ext = Platform.isWindows ? 'ico' : 'png';
       await trayManager.setIcon(
-          on ? 'assets/icon/tray_on.ico' : 'assets/icon/tray_off.ico');
+          on ? 'assets/icon/tray_on.$ext' : 'assets/icon/tray_off.$ext');
       final status = switch (st) {
         ConnState.connected => tr('подключено'),
         ConnState.connecting => tr('подключение…'),
@@ -248,7 +250,10 @@ class Autostart {
       int Function(int, Pointer<Utf16>, Pointer<Utf16>)>('RegDeleteKeyValueW');
 
   /// HKCU\Software\Classes\nexus — обработчик ссылок nexus://
+  /// (Linux — ярлык .desktop; macOS — Info.plist приложения).
   static void registerProtocol() {
+    if (Platform.isLinux) return unawaited(LinuxDesktop.install());
+    if (!Platform.isWindows) return;
     final exe = Platform.resolvedExecutable;
     void set(String key, String name, String value) {
       final k = key.toNativeUtf16();
@@ -277,6 +282,8 @@ class Autostart {
   /// Планировщика с наивысшими правами (создать её можно только от
   /// администратора). Иначе — обычный ключ Run.
   static void apply(bool enabled, {bool tun = false}) {
+    if (Platform.isLinux) return unawaited(LinuxDesktop.autostart(enabled));
+    if (Platform.isMacOS) return unawaited(MacAutostart.apply(enabled));
     // TUN включён, но Nexus сейчас без прав администратора: задачу не
     // создать и не проверить — оставляем автозапуск как есть.
     if (enabled && tun && !WinAdmin.isAdmin) return;
@@ -319,5 +326,91 @@ class Autostart {
       calloc.free(sub);
       calloc.free(name);
     }
+  }
+}
+
+
+/// Linux: ярлык в меню приложений (и обработчик ссылок nexus://) и
+/// автозапуск через ~/.config/autostart.
+class LinuxDesktop {
+  static String get _home => Platform.environment['HOME'] ?? '/tmp';
+
+  static String _entry({bool autostart = false}) {
+    final exe = Platform.resolvedExecutable;
+    String q(String s) => '"${s.replaceAll('"', '\\"')}"';
+    final icon = '${File(exe).parent.path}/data/flutter_assets/assets/icon/logo_mark.png';
+    return [
+      '[Desktop Entry]',
+      'Type=Application',
+      'Name=Nexus',
+      'Comment=VPN',
+      'Exec=${q(exe)}${autostart ? ' --minimized' : ' %u'}',
+      'Icon=$icon',
+      'Terminal=false',
+      'Categories=Network;',
+      if (!autostart) 'MimeType=x-scheme-handler/nexus;',
+      if (autostart) 'X-GNOME-Autostart-enabled=true',
+      'StartupWMClass=nexus',
+      '',
+    ].join('\n');
+  }
+
+  static Future<void> install() async {
+    try {
+      final base = Platform.environment['XDG_DATA_HOME'] ?? '$_home/.local/share';
+      final f = File('$base/applications/nexus.desktop');
+      final text = _entry();
+      if (!f.existsSync() || f.readAsStringSync() != text) {
+        await f.create(recursive: true);
+        await f.writeAsString(text);
+        await Process.run('xdg-mime', ['default', 'nexus.desktop', 'x-scheme-handler/nexus']);
+        await Process.run('update-desktop-database', ['$base/applications']);
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> autostart(bool enabled) async {
+    try {
+      final base = Platform.environment['XDG_CONFIG_HOME'] ?? '$_home/.config';
+      final f = File('$base/autostart/nexus.desktop');
+      if (enabled) {
+        await f.create(recursive: true);
+        await f.writeAsString(_entry(autostart: true));
+      } else if (f.existsSync()) {
+        await f.delete();
+      }
+    } catch (_) {}
+  }
+}
+
+/// macOS: автозапуск через LaunchAgent пользователя.
+class MacAutostart {
+  static const _label = 'app.nexusvpn.nexus';
+
+  static Future<void> apply(bool enabled) async {
+    try {
+      final home = Platform.environment['HOME'] ?? '/tmp';
+      final f = File('$home/Library/LaunchAgents/$_label.plist');
+      if (!enabled) {
+        if (f.existsSync()) await f.delete();
+        return;
+      }
+      String x(String s) => s
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;');
+      await f.create(recursive: true);
+      await f.writeAsString('''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$_label</string>
+  <key>ProgramArguments</key>
+  <array><string>${x(Platform.resolvedExecutable)}</string><string>--minimized</string></array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+''');
+    } catch (_) {}
   }
 }

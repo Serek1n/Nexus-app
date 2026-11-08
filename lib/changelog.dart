@@ -5,7 +5,7 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.4.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.5.0');
 
 /// Сборка из ветки beta (передаётся сборкой).
 const isBetaBuild = String.fromEnvironment('APP_CHANNEL') == 'beta';
@@ -18,6 +18,10 @@ const appVersionLabel = isBetaBuild
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.5.0', [
+    'Nexus для Linux и macOS: подписки, Авто, умный режим, трей, автообновление',
+    'Режим TUN на Linux и macOS — весь трафик компьютера через VPN',
+  ]),
   ('2.4.0', [
     'Режим «Только заблокированное»: через VPN — только заблокированные сайты (полный список, обновляется с каждой версией), остальное напрямую',
     'Вход по PIN-коду, светлая тема, карта сервера на главной',
@@ -218,6 +222,10 @@ const changelog = <(String, List<String>)>[
 
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
+  '2.5.0': [
+    'Nexus for Linux and macOS: subscriptions, Auto, smart mode, tray, auto-update',
+    'TUN mode on Linux and macOS — all computer traffic through the VPN',
+  ],
   '2.4.0': [
     '"Blocked only" mode: only blocked sites go via VPN (full list, updated with every version), everything else directly',
     'PIN lock, light theme, server map on the home screen',

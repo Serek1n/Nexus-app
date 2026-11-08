@@ -462,9 +462,261 @@ jobs:
           name: Nexus-Windows
           path: dist/*
 
+  linux:
+    name: Linux (x64)
+    needs: [check, code]
+    if: needs.check.outputs.run == 'true'
+    # Новая платформа: её сбой не задерживает релиз Android и Windows.
+    continue-on-error: true
+    # Ubuntu 22.04 — сборка запустится и на дистрибутивах постарше.
+    runs-on: ubuntu-22.04
+    env:
+      BUILD: ${{ needs.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Системные пакеты
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libayatana-appindicator3-dev libstdc++-12-dev
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Сгенерировать платформу Linux
+        run: |
+          flutter create --platforms=linux --org $ORG --project-name nexus .
+          rm -f test/widget_test.dart
+          python3 tool/patch_platforms.py
+          flutter pub get
+
+      - name: Ключ проверки обновлений
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            echo "$UPDATE_SIGNING_KEY" | base64 -d > upd.pem
+            PUB=$(openssl pkey -in upd.pem -pubout -outform DER | tail -c 32 | base64 -w0)
+            rm upd.pem
+            echo "UPDATE_PUBKEY=$PUB" >> $GITHUB_ENV
+          else
+            echo "::warning::Секрет UPDATE_SIGNING_KEY не задан — подпись обновлений отключена"
+          fi
+
+      - name: Ядро Xray (скачать и проверить)
+        run: |
+          set -e
+          base=https://github.com/XTLS/Xray-core/releases/latest/download
+          curl -fsSL -o xray.zip "$base/Xray-linux-64.zip"
+          curl -fsSL -o xray.dgst "$base/Xray-linux-64.zip.dgst"
+          want=$(grep -oE 'SHA2-256=\s*[0-9a-fA-F]{64}' xray.dgst | grep -oE '[0-9a-fA-F]{64}' | tr A-F a-f)
+          got=$(sha256sum xray.zip | cut -d' ' -f1)
+          [ "$want" = "$got" ] || { echo "Контрольная сумма Xray не совпала"; exit 1; }
+          mkdir xray && unzip -q xray.zip -d xray
+          # Отпечаток ядра вшивается в Nexus: для режима TUN ставится только оно.
+          echo "CORE_SHA256=$(sha256sum xray/xray | cut -d' ' -f1)" >> $GITHUB_ENV
+          BLOCKED=false
+          if curl -fsSL -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
+             && [ "$(cut -d' ' -f1 rf.sum)" = "$(sha256sum rf.dat | cut -d' ' -f1)" ] \
+             && python3 tool/make_blocked_dat.py rf.dat nexus-blocked.dat; then
+            BLOCKED=true
+          else
+            echo "::warning::Список заблокированных сайтов не собран"
+          fi
+          rm -f rf.dat rf.sum
+          echo "BLOCKED_DAT=$BLOCKED" >> $GITHUB_ENV
+
+      - name: Сборка
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          echo "VER=$VER" >> $GITHUB_ENV
+          flutter build linux --release --obfuscate --split-debug-info=build/symbols \
+            --build-name=$VER --build-number=$BUILD \
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=CORE_SHA256=$CORE_SHA256 --dart-define=BLOCKED_DAT=$BLOCKED_DAT
+
+      - name: Ядро, гео-базы и архив
+        run: |
+          set -e
+          B=build/linux/x64/release/bundle
+          install -m 755 xray/xray "$B/nexus-core"
+          [ -f nexus-blocked.dat ] && cp nexus-blocked.dat "$B/"
+          for g in geoip.dat geosite.dat; do
+            curl -fsSL -o "$B/$g" "$GEO_URL/$g"
+            curl -fsSL -o "$g.sum" "$GEO_URL/$g.sha256sum"
+            [ "$(cut -d' ' -f1 $g.sum)" = "$(sha256sum $B/$g | cut -d' ' -f1)" ] || { echo "Контрольная сумма $g не совпала"; exit 1; }
+          done
+          "$B/nexus-core" version
+          install -m 755 tool/linux/install.sh "$B/install.sh"
+          mkdir -p dist stage
+          cp -a "$B" stage/nexus
+          tar -C stage -czf dist/Nexus-Linux-x64.tar.gz nexus
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: Nexus-Linux
+          path: dist/*
+
+  macos:
+    name: macOS (Apple Silicon + Intel)
+    needs: [check, code]
+    if: needs.check.outputs.run == 'true'
+    continue-on-error: true
+    runs-on: macos-15
+    env:
+      BUILD: ${{ needs.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Сгенерировать платформу macOS
+        run: |
+          flutter create --platforms=macos --org $ORG --project-name nexus .
+          rm -f test/widget_test.dart
+          python3 tool/patch_platforms.py
+          flutter pub get
+          cat > icons-macos.yaml <<'YML'
+          flutter_launcher_icons:
+            image_path: "assets/icon/app_icon.png"
+            macos:
+              generate: true
+              image_path: "assets/icon/app_icon.png"
+          YML
+          dart run flutter_launcher_icons -f icons-macos.yaml || echo "::warning::Иконка macOS не сгенерирована"
+
+      - name: Ключ проверки обновлений
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            python3 -c "import base64,os,sys; sys.stdout.buffer.write(base64.b64decode(os.environ['UPDATE_SIGNING_KEY']))" > upd.pem
+            PUB=$(openssl pkey -in upd.pem -pubout -outform DER | tail -c 32 | base64 | tr -d '\n')
+            rm upd.pem
+            echo "UPDATE_PUBKEY=$PUB" >> $GITHUB_ENV
+          fi
+
+      - name: Ядро Xray (универсальное, с проверкой)
+        run: |
+          set -e
+          base=https://github.com/XTLS/Xray-core/releases/latest/download
+          for a in macos-64 macos-arm64-v8a; do
+            curl -fsSL -o "x-$a.zip" "$base/Xray-$a.zip"
+            curl -fsSL -o "x-$a.dgst" "$base/Xray-$a.zip.dgst"
+            want=$(grep -oE 'SHA2-256=\s*[0-9a-fA-F]{64}' "x-$a.dgst" | grep -oE '[0-9a-fA-F]{64}' | tr A-F a-f)
+            got=$(shasum -a 256 "x-$a.zip" | cut -d' ' -f1)
+            [ "$want" = "$got" ] || { echo "Контрольная сумма Xray $a не совпала"; exit 1; }
+            mkdir "x-$a" && unzip -q "x-$a.zip" -d "x-$a"
+          done
+          # Одно ядро для Apple Silicon и Intel.
+          lipo -create -output nexus-core x-macos-64/xray x-macos-arm64-v8a/xray
+          chmod 755 nexus-core
+          cp x-macos-arm64-v8a/geoip.dat x-macos-arm64-v8a/geosite.dat . 2>/dev/null || true
+          BLOCKED=false
+          if curl -fsSL -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
+             && [ "$(cut -d' ' -f1 rf.sum)" = "$(shasum -a 256 rf.dat | cut -d' ' -f1)" ] \
+             && python3 tool/make_blocked_dat.py rf.dat nexus-blocked.dat; then
+            BLOCKED=true
+          fi
+          rm -f rf.dat rf.sum
+          echo "BLOCKED_DAT=$BLOCKED" >> $GITHUB_ENV
+
+      - name: Подпись ядра
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          # Ядро подписывается до сборки: его отпечаток (уже подписанного)
+          # вшивается в Nexus, и в режиме TUN запустится только оно.
+          if [ -n "$MACOS_CERT_P12" ]; then
+            KC=$RUNNER_TEMP/nexus.keychain-db
+            KP=$(openssl rand -hex 16)
+            security create-keychain -p "$KP" "$KC"
+            security set-keychain-settings -lut 21600 "$KC"
+            security unlock-keychain -p "$KP" "$KC"
+            python3 -c "import base64,os,sys; sys.stdout.buffer.write(base64.b64decode(os.environ['MACOS_CERT_P12']))" > cert.p12
+            security import cert.p12 -k "$KC" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+            rm cert.p12
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KC" >/dev/null
+            security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+            IDENT=$(security find-identity -v -p codesigning "$KC" | grep "Developer ID Application" | head -1 | awk '{print $2}')
+            [ -n "$IDENT" ] || { echo "::error::В сертификате нет «Developer ID Application»"; exit 1; }
+            echo "IDENT=$IDENT" >> $GITHUB_ENV
+            codesign --force --options runtime --timestamp --sign "$IDENT" nexus-core
+          else
+            echo "::warning::Секрет MACOS_CERT_P12 не задан — сборка macOS без подписи Apple"
+            codesign --force --sign - nexus-core
+          fi
+          echo "CORE_SHA256=$(shasum -a 256 nexus-core | cut -d' ' -f1)" >> $GITHUB_ENV
+
+      - name: Сборка
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          echo "VER=$VER" >> $GITHUB_ENV
+          flutter build macos --release --obfuscate --split-debug-info=build/symbols \
+            --build-name=$VER --build-number=$BUILD \
+            --dart-define=UPDATE_REPO=$UPDATE_REPO --dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=UPDATE_PUBKEY=$UPDATE_PUBKEY --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=CORE_SHA256=$CORE_SHA256 --dart-define=BLOCKED_DAT=$BLOCKED_DAT
+
+      - name: Ядро, гео-базы, подпись приложения
+        run: |
+          set -e
+          APP=build/macos/Build/Products/Release/Nexus.app
+          cp nexus-core "$APP/Contents/MacOS/nexus-core"
+          R="$APP/Contents/Resources"
+          [ -f nexus-blocked.dat ] && cp nexus-blocked.dat "$R/"
+          for g in geoip.dat geosite.dat; do
+            curl -fsSL -o "$R/$g" "$GEO_URL/$g"
+            curl -fsSL -o "$g.sum" "$GEO_URL/$g.sha256sum"
+            [ "$(cut -d' ' -f1 $g.sum)" = "$(shasum -a 256 $R/$g | cut -d' ' -f1)" ] || { echo "Контрольная сумма $g не совпала"; exit 1; }
+          done
+          "$APP/Contents/MacOS/nexus-core" version
+          ENT=macos/Runner/Release.entitlements
+          # Изнутри наружу: библиотеки, затем само приложение. Ядро уже
+          # подписано (его отпечаток вшит в Nexus) — его не трогаем, поэтому
+          # без --deep.
+          if [ -n "$IDENT" ]; then OPTS="--options runtime --timestamp --sign $IDENT"; else OPTS="--sign -"; fi
+          find "$APP/Contents/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -print0 |
+            xargs -0 -I{} codesign --force $OPTS {}
+          codesign --force $OPTS --entitlements "$ENT" "$APP"
+          [ "$(shasum -a 256 "$APP/Contents/MacOS/nexus-core" | cut -d' ' -f1)" = "$CORE_SHA256" ] || { echo "Ядро изменилось при подписи"; exit 1; }
+          codesign --verify --deep --strict "$APP"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" dist/Nexus-macOS.zip
+
+      - name: Нотаризация Apple
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ -z "$IDENT" ] || [ -z "$APPLE_API_KEY_P8" ]; then
+            echo "::warning::Нотаризация пропущена (нет подписи или ключа App Store Connect)"
+            exit 0
+          fi
+          python3 -c "import base64,os,sys; sys.stdout.buffer.write(base64.b64decode(os.environ['APPLE_API_KEY_P8']))" > key.p8
+          xcrun notarytool submit dist/Nexus-macOS.zip --key key.p8 --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+          rm key.p8
+          APP=build/macos/Build/Products/Release/Nexus.app
+          xcrun stapler staple "$APP"
+          rm dist/Nexus-macOS.zip
+          ditto -c -k --keepParent "$APP" dist/Nexus-macOS.zip
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: Nexus-macOS
+          path: dist/*
+
   release:
     name: Релиз
-    needs: [check, android, windows]
+    # Linux и macOS — необязательные (continue-on-error): их сбой не задерживает релиз.
+    needs: [check, android, windows, linux, macos]
     if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -532,6 +784,12 @@ jobs:
             fi
             echo "**Android:** Nexus-arm64.apk — большинство телефонов, Nexus-armv7.apk — старые, Nexus-universal.apk — любой."
             echo "**Windows:** Nexus-Setup-$VER.exe — установщик, Nexus-Windows-x64.zip — портативная версия."
+            if [ -f out/Nexus-Linux-x64.tar.gz ]; then
+              echo "**Linux:** Nexus-Linux-x64.tar.gz — распакуйте и запустите install.sh."
+            fi
+            if [ -f out/Nexus-macOS.zip ]; then
+              echo "**macOS:** Nexus-macOS.zip — распакуйте и перенесите Nexus в «Программы»."
+            fi
             echo
             echo "<!--"
             echo "nexus-build: $BUILD"

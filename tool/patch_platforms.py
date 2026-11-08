@@ -1,5 +1,5 @@
 """
-Донастраивает папки android/ и windows/, которые CI генерирует командой
+Донастраивает папки android/, windows/, linux/ и macos/, которые CI генерирует командой
 `flutter create`. Запускается после неё: python tool/patch_platforms.py
 Падает с ошибкой, если шаблон Flutter изменился и патч не применился.
 """
@@ -359,8 +359,135 @@ def windows():
     ], required=False)
 
 
-android()
-windows()
+def linux():
+    """Окно «Nexus» нужного размера."""
+    patch("linux/runner/my_application.cc", [
+        (re.compile(r'gtk_header_bar_set_title\(header_bar, "[^"]*"\)'),
+         'gtk_header_bar_set_title(header_bar, "Nexus")'),
+        (re.compile(r'gtk_window_set_title\(window, "[^"]*"\)'),
+         'gtk_window_set_title(window, "Nexus")'),
+        (re.compile(r'gtk_window_set_default_size\(window, \d+, \d+\)'),
+         'gtk_window_set_default_size(window, 1120, 720)'),
+    ])
+
+
+MAC_WINDOW = """import Cocoa
+import FlutterMacOS
+
+// Nexus: ссылки nexus:// (Apple Event «открыть URL») — в Dart через канал
+// nexus/links; клик по значку в Dock показывает спрятанное окно.
+final class NexusLinks: NSObject {
+  static let shared = NexusLinks()
+  private var channel: FlutterMethodChannel?
+  private var pending: [String] = []
+  weak var window: NSWindow?
+
+  func attach(_ messenger: FlutterBinaryMessenger) {
+    let ch = FlutterMethodChannel(name: "nexus/links", binaryMessenger: messenger)
+    ch.setMethodCallHandler { [weak self] call, result in
+      if call.method == "initialLinks" {
+        result(self?.pending ?? [])
+        self?.pending = []
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    channel = ch
+    NSAppleEventManager.shared().setEventHandler(
+      self, andSelector: #selector(handle(_:withReply:)),
+      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(activated),
+      name: NSApplication.didBecomeActiveNotification, object: nil)
+  }
+
+  @objc func handle(_ event: NSAppleEventDescriptor, withReply reply: NSAppleEventDescriptor) {
+    guard let s = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+          s.lowercased().hasPrefix("nexus:"), s.count <= 8192 else { return }
+    if let ch = channel { ch.invokeMethod("link", arguments: s) } else { pending.append(s) }
+    show()
+  }
+
+  @objc func activated() {
+    if let w = window, !w.isVisible { show() }
+  }
+
+  func show() {
+    window?.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
+  }
+}
+
+class MainFlutterWindow: NSWindow {
+  override func awakeFromNib() {
+    let flutterViewController = FlutterViewController()
+    let windowFrame = self.frame
+    self.contentViewController = flutterViewController
+    self.setFrame(windowFrame, display: true)
+
+    RegisterGeneratedPlugins(registry: flutterViewController)
+    NexusLinks.shared.window = self
+    NexusLinks.shared.attach(flutterViewController.engine.binaryMessenger)
+
+    super.awakeFromNib()
+  }
+}
+"""
+
+MAC_ENTITLEMENTS = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Без песочницы: Nexus запускает ядро Xray, меняет системный прокси
+	     (networksetup) и для режима TUN просит права администратора. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>
+"""
+
+
+def macos():
+    """Имя Nexus, идентификатор, ссылки nexus://, работа без песочницы."""
+    d = ROOT / "macos/Runner"
+    (d / "MainFlutterWindow.swift").write_text(MAC_WINDOW, encoding="utf-8")
+    # Закрытие окна не завершает Nexus — он остаётся в строке меню.
+    patch("macos/Runner/AppDelegate.swift", [
+        (re.compile(r"(applicationShouldTerminateAfterLastWindowClosed[^{]*\{\s*return )true"),
+         r"\1false"),
+    ])
+    for name in ("DebugProfile.entitlements", "Release.entitlements"):
+        (d / name).write_text(MAC_ENTITLEMENTS, encoding="utf-8")
+    patch("macos/Runner/Configs/AppInfo.xcconfig", [
+        (re.compile(r"PRODUCT_NAME = .*"), "PRODUCT_NAME = Nexus"),
+        (re.compile(r"PRODUCT_BUNDLE_IDENTIFIER = .*"),
+         "PRODUCT_BUNDLE_IDENTIFIER = app.nexusvpn.nexus"),
+        (re.compile(r"PRODUCT_COPYRIGHT = .*"), "PRODUCT_COPYRIGHT = NEXUS_VPN"),
+    ])
+    patch("macos/Runner/Info.plist", [
+        ("</dict>\n</plist>",
+         "\t<key>CFBundleURLTypes</key>\n"
+         "\t<array>\n\t\t<dict>\n"
+         "\t\t\t<key>CFBundleURLName</key>\n\t\t\t<string>app.nexusvpn.nexus</string>\n"
+         "\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array><string>nexus</string></array>\n"
+         "\t\t</dict>\n\t</array>\n"
+         "\t<key>LSApplicationCategoryType</key>\n\t<string>public.app-category.utilities</string>\n"
+         "</dict>\n</plist>"),
+    ])
+
+
+if (ROOT / "android").is_dir():
+    android()
+if (ROOT / "windows").is_dir():
+    windows()
+if (ROOT / "linux").is_dir():
+    linux()
+if (ROOT / "macos").is_dir():
+    macos()
 
 if errors:
     print("\nОШИБКИ ПАТЧА:\n  " + "\n  ".join(errors))

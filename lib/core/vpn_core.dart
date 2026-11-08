@@ -3,13 +3,13 @@ import 'dart:io';
 
 import '../models.dart';
 import 'android_core.dart';
-import 'windows_core.dart';
+import 'desktop_core.dart';
 import '../l10n.dart';
 
-/// Общий интерфейс ядра для Android и Windows.
+/// Общий интерфейс ядра для Android и компьютеров.
 abstract class VpnCore {
   static VpnCore create() =>
-      Platform.isWindows ? WindowsCore() : AndroidCore();
+      Platform.isAndroid ? AndroidCore() : DesktopCore();
 
   /// Поток изменений состояния.
   Stream<ConnState> get states;

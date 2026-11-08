@@ -1,7 +1,7 @@
 name: nexus
 description: "Nexus — клиент для подписок Xray/V2Ray (VLESS, VMess, Trojan, Shadowsocks)."
 publish_to: 'none'
-version: 2.4.0+42
+version: 2.5.0+43
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -36,6 +36,8 @@ flutter:
     - assets/icon/logo_mark.png
     - assets/icon/tray_on.ico
     - assets/icon/tray_off.ico
+    - assets/icon/tray_on.png
+    - assets/icon/tray_off.png
     - assets/flags/
   fonts:
     - family: Manrope

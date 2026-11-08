@@ -1,25 +1,29 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
-import 'package:ffi/ffi.dart';
 import 'package:http/http.dart' as http;
 
 import '../models.dart';
 import '../platform/win_admin.dart';
 import '../services/config_builder.dart';
+import 'desktop_os.dart';
 import 'vpn_core.dart';
 import '../l10n.dart';
 
-const kCoreExe = 'nexus-core.exe';
+export 'desktop_os.dart' show kCoreExe;
+
 const kApiPort = 10085;
 
-/// Windows: ядро Xray (nexus-core.exe рядом с nexus.exe) + системный прокси.
-class WindowsCore extends VpnCore {
+/// Компьютеры (Windows, Linux, macOS): ядро Xray рядом с Nexus + системный
+/// прокси или режим TUN. Различия систем — в [DesktopOs].
+class DesktopCore extends VpnCore {
+  final DesktopOs os = DesktopOs.current;
+  String get _sep => os.sep;
+
   final _states = StreamController<ConnState>.broadcast();
   final _stats = StreamController<ConnStats>.broadcast();
   final List<String> _logs = [];
@@ -60,15 +64,18 @@ class WindowsCore extends VpnCore {
   String? get activeProxy =>
       _proc != null && !_blocked ? '${_httpAuth}127.0.0.1:$activeHttpPort' : null;
 
-  String get _exeDir => File(Platform.resolvedExecutable).parent.path;
+  String get _exeDir => os.exeDir;
 
-  /// Папка обновляемого ядра (%APPDATA%\\Nexus\\core).
-  String get _updDir => '$_dataDir\\core';
+  /// Ядро из сборки (для режима TUN на Linux/macOS — только оно).
+  String get _bundledCore => '$_exeDir$_sep$kCoreExe';
+
+  /// Папка обновляемого ядра (Windows: %APPDATA%\\Nexus\\core).
+  String get _updDir => '$_dataDir${_sep}core';
 
   /// Если ядро уже обновлялось — берём обновлённое, иначе встроенное.
   String get _coreDir =>
-      File('$_updDir\\$kCoreExe').existsSync() ? _updDir : _exeDir;
-  String get _corePath => '$_coreDir\\$kCoreExe';
+      File('$_updDir${_sep}$kCoreExe').existsSync() ? _updDir : _exeDir;
+  String get _corePath => '$_coreDir${_sep}$kCoreExe';
 
   // ── Права администратора (режим TUN) ──
   // Nexus стоит в папке пользователя, куда может писать любая его
@@ -76,7 +83,7 @@ class WindowsCore extends VpnCore {
   // с правами администратора ядро запускается только проверенное (та же
   // SHA-256, что у ядра из сборки) и из папки, куда пишут лишь
   // администраторы (Program Files\Nexus\core).
-  static const _coreSha = String.fromEnvironment('CORE_SHA256');
+  static const _coreSha = DesktopOs.coreSha;
   static const _wintunSha = String.fromEnvironment('WINTUN_SHA256');
   String? _safeDir;
 
@@ -84,17 +91,20 @@ class WindowsCore extends VpnCore {
 
   /// Путь к ядру для запуска; с правами администратора — проверенная копия.
   Future<String> _runCore() async {
-    if (WinAdmin.isAdmin && _coreSha.isNotEmpty && _safeDir == null) {
+    if (Platform.isWindows &&
+        WinAdmin.isAdmin &&
+        _coreSha.isNotEmpty &&
+        _safeDir == null) {
       await _prepareSafeCore();
     }
-    return '$_runDir\\$kCoreExe';
+    return '$_runDir${_sep}$kCoreExe';
   }
 
   Future<void> _prepareSafeCore() async {
     final pf = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
-    final dir = Directory('$pf\\Nexus\\core');
+    final dir = Directory('$pf${_sep}Nexus${_sep}core');
     Future<void> put(String name, String want) async {
-      final src = File('$_exeDir\\$name');
+      final src = File('$_exeDir${_sep}$name');
       if (!src.existsSync()) {
         if (name == kCoreExe) throw Exception(tr('Не найдено ядро {0} рядом с программой. Переустановите Nexus из архива целиком.', [kCoreExe]));
         return;
@@ -103,7 +113,7 @@ class WindowsCore extends VpnCore {
       if (sha256.convert(bytes).toString() != want) {
         throw Exception(tr('Файл {0} изменён после установки — запуск с правами администратора отменён. Переустановите Nexus', [name]));
       }
-      final dst = File('${dir.path}\\$name');
+      final dst = File('${dir.path}${_sep}$name');
       if (dst.existsSync() &&
           sha256.convert(await dst.readAsBytes()).toString() == want) {
         return;
@@ -124,14 +134,9 @@ class WindowsCore extends VpnCore {
     _log(tr('Права администратора: ядро запускается из защищённой папки'));
   }
   String get _assetDir =>
-      File('$_coreDir\\geoip.dat').existsSync() ? _coreDir : _exeDir;
+      File('$_coreDir${_sep}geoip.dat').existsSync() ? _coreDir : os.resDir;
 
-  String get _dataDir {
-    final base = Platform.environment['APPDATA'] ?? _exeDir;
-    final d = Directory('$base\\Nexus');
-    if (!d.existsSync()) d.createSync(recursive: true);
-    return d.path;
-  }
+  String get _dataDir => os.dataDir;
 
   @override
   Stream<ConnState> get states => _states.stream;
@@ -151,22 +156,17 @@ class WindowsCore extends VpnCore {
 
   @override
   Future<void> init() async {
+    await os.harden();
     // Убираем «хвосты» после аварийного завершения: старое ядро и прокси.
     await _killStrayCore();
-    final marker = File('$_dataDir\\proxy.lock');
+    final marker = File('$_dataDir${_sep}proxy.lock');
     if (marker.existsSync()) {
-      WinProxy.restore(_readSaved(marker));
+      await os.proxyRestore(_readSaved(marker));
       marker.deleteSync();
     }
   }
 
-  Future<void> _killStrayCore() async {
-    try {
-      await Process.start('taskkill', ['/F', '/IM', kCoreExe],
-          mode: ProcessStartMode.detached);
-      await Future.delayed(const Duration(milliseconds: 300));
-    } catch (_) {}
-  }
+  Future<void> _killStrayCore() => os.killStrayCore();
 
   String _withStats(String config) {
     final cfg = jsonDecode(config) as Map<String, dynamic>;
@@ -281,7 +281,24 @@ class WindowsCore extends VpnCore {
     }
     _tun = false;
     _modeWarning = null;
-    if (settings.windowsTun) {
+    if (settings.windowsTun && !Platform.isWindows) {
+      // Linux / macOS: права нужны только ядру, а не всему Nexus.
+      final why = await os.tunBlocker();
+      if (why != null) {
+        _modeWarning = tr('{0} — пока Nexus работает через системный прокси', [why]);
+      } else {
+        try {
+          final c = await os.prepareTun(_bundledCore);
+          _tunCore = c;
+          _tun = true;
+          _log(tr('Режим TUN: весь трафик компьютера идёт через Nexus'));
+        } catch (e) {
+          _modeWarning = tr('{0} — пока Nexus работает через системный прокси',
+              ['$e'.replaceFirst('Exception: ', '')]);
+        }
+      }
+      if (_modeWarning != null) _log(_modeWarning!);
+    } else if (settings.windowsTun) {
       if (!WinAdmin.isAdmin) {
         _modeWarning = tr('Режим TUN работает только с правами администратора — пока Nexus работает через системный прокси. Включите TUN в настройках ещё раз, чтобы перезапустить Nexus от администратора');
       } else if (!_ensureWintun()) {
@@ -296,19 +313,28 @@ class WindowsCore extends VpnCore {
       _log(tr('Порты {0}/{1} заняты другой программой (например, Happ или v2rayN) — Nexus использует {2}/{3}', [kSocksPort, kHttpPort, sp, hp]));
     }
     try {
-      // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
-      final started = await Process.start(
-        corePath,
-        ['run', '-format', 'json', '-c', 'stdin:'],
-        workingDirectory: _runDir,
-        environment: {'XRAY_LOCATION_ASSET': _assetDir},
-      );
-      _proc = started;
-      // Пишем в «свой» процесс, а не в поле _proc — его мог сменить
-      // другой запуск.
-      started.stdin.add(utf8.encode(_withStats(config)));
-      await started.stdin.flush();
-      await started.stdin.close();
+      final full = _withStats(config);
+      final special = _tun ? os.startTun(_tunCore!, full, _assetDir) : null;
+      if (special != null) {
+        // macOS: ядро от root после окна с паролем администратора.
+        _proc = await special;
+      } else {
+        // Конфиг с ключами передаётся через stdin и никогда не пишется на диск.
+        final started = await Process.start(
+          _tun && _tunCore != null ? _tunCore! : corePath,
+          ['run', '-format', 'json', '-c', 'stdin:'],
+          workingDirectory: _tun && _tunCore != null
+              ? File(_tunCore!).parent.path
+              : _runDir,
+          environment: {'XRAY_LOCATION_ASSET': _assetDir},
+        );
+        _proc = started;
+        // Пишем в «свой» процесс, а не в поле _proc — его мог сменить
+        // другой запуск.
+        started.stdin.add(utf8.encode(full));
+        await started.stdin.flush();
+        await started.stdin.close();
+      }
     } catch (e) {
       _states.add(ConnState.disconnected);
       throw Exception(tr('Не удалось запустить ядро: {0}', [e]));
@@ -331,15 +357,19 @@ class WindowsCore extends VpnCore {
         .transform(const LineSplitter())
         .listen(_log);
 
-    // Ждём, пока ядро откроет локальный порт.
+    // Ждём, пока ядро откроет локальный порт. На macOS в режиме TUN
+    // сначала вводят пароль — ждём, пока открыто окно ввода (до 2 минут).
     var up = false;
-    for (var i = 0; i < 25 && !up; i++) {
+    var gone = false;
+    unawaited(proc.exitCode.then((_) => gone = true));
+    final tries = _tun && !Platform.isWindows && Platform.isMacOS ? 600 : 25;
+    for (var i = 0; i < tries && !up && !(gone && i > 2); i++) {
       await Future.delayed(const Duration(milliseconds: 200));
       up = await _portOpen(_httpPort);
     }
     // Старый файл конфига от прошлых версий — удаляем.
     try {
-      final old = File('$_dataDir\\config.json');
+      final old = File('$_dataDir${_sep}config.json');
       if (old.existsSync()) old.deleteSync();
     } catch (_) {}
     if (!up) {
@@ -354,12 +384,17 @@ class WindowsCore extends VpnCore {
     if (settings.windowsSystemProxy && !_tun) {
       // Запоминаем прокси, который был у пользователя до Nexus, —
       // при отключении (и после сбоя) вернём именно его.
-      final marker = File('$_dataDir\\proxy.lock');
+      final marker = File('$_dataDir${_sep}proxy.lock');
       if (!marker.existsSync()) {
-        _savedProxy = WinProxy.snapshot();
+        _savedProxy = await os.proxySnapshot();
         marker.writeAsStringSync(jsonEncode(_savedProxy));
       }
-      WinProxy.enable('127.0.0.1:$_httpPort');
+      try {
+        await os.proxyEnable('127.0.0.1:$_httpPort');
+      } catch (e) {
+        _modeWarning = '$e'.replaceFirst('Exception: ', '');
+        _log(_modeWarning!);
+      }
       _proxySet = true;
     }
 
@@ -492,6 +527,9 @@ class WindowsCore extends VpnCore {
   bool _tun = false;
   String? _modeWarning;
 
+  /// Linux/macOS: ядро для режима TUN (проверенная копия).
+  String? _tunCore;
+
   @override
   String? get modeWarning => _modeWarning;
 
@@ -499,9 +537,9 @@ class WindowsCore extends VpnCore {
   /// автообновления живёт в папке данных — копируем библиотеку туда.
   bool _ensureWintun() {
     try {
-      final target = File('$_runDir\\wintun.dll');
+      final target = File('$_runDir${_sep}wintun.dll');
       if (target.existsSync()) return true;
-      final src = File('$_exeDir\\wintun.dll');
+      final src = File('$_exeDir${_sep}wintun.dll');
       if (!src.existsSync()) return false;
       src.copySync(target.path);
       return true;
@@ -520,8 +558,8 @@ class WindowsCore extends VpnCore {
       'protocol': 'tun',
       'port': 0,
       'settings': {
-        'name': 'Nexus',
-        'desc': 'Nexus',
+        'name': os.tunName,
+        ...os.tunExtra(),
         'mtu': 1500,
         'gateway': ['172.19.0.1/30'],
         // DNS для программ — обычный адрес выбранного сервиса.
@@ -533,7 +571,6 @@ class WindowsCore extends VpnCore {
               '1.1.1.1'
         ],
         'autoSystemRoutingTable': ['0.0.0.0/0'],
-        'autoSystemWfpBlockLeak': ['dns', 'misconfigtun'],
       },
       'sniffing': {
         'enabled': true,
@@ -583,7 +620,10 @@ class WindowsCore extends VpnCore {
       for (final i in await NetworkInterface.list(
           type: InternetAddressType.IPv4, includeLoopback: false)) {
         final n = i.name.toLowerCase();
-        if (n == 'nexus' || n.contains('wintun') || n.contains('vpn')) {
+        if (n == 'nexus' ||
+            n == os.tunName.toLowerCase() ||
+            n.contains('wintun') ||
+            n.contains('vpn')) {
           continue;
         }
         if (i.addresses.any((a) =>
@@ -651,6 +691,7 @@ class WindowsCore extends VpnCore {
   Future<void> _stopProcess() async {
     final p = _proc;
     _proc = null;
+    if (_tun && !Platform.isWindows) await os.stopTun();
     if (p != null) {
       Process.killPid(p.pid);
     }
@@ -675,8 +716,8 @@ class WindowsCore extends VpnCore {
       _lastSettings = null;
     }
     if (_proxySet) {
-      final marker = File('$_dataDir\\proxy.lock');
-      WinProxy.restore(_savedProxy ?? _readSaved(marker));
+      final marker = File('$_dataDir${_sep}proxy.lock');
+      await os.proxyRestore(_savedProxy ?? _readSaved(marker));
       _savedProxy = null;
       _proxySet = false;
       if (marker.existsSync()) marker.deleteSync();
@@ -1017,10 +1058,11 @@ class WindowsCore extends VpnCore {
       'https://api.github.com/repos/XTLS/Xray-core/releases/latest';
   static const _geoBase =
       'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download';
-  static const _newExe = 'nexus-core-new.exe';
+  static final _newExe =
+      Platform.isWindows ? 'nexus-core-new.exe' : 'nexus-core-new';
 
   @override
-  bool get canUpdateCore => true;
+  bool get canUpdateCore => os.xrayAsset != null;
 
   bool get _running => _proc != null;
 
@@ -1054,8 +1096,12 @@ class WindowsCore extends VpnCore {
   Future<String> updateCore({bool force = false}) async {
     // С правами администратора работает только ядро из сборки (см.
     // _prepareSafeCore) — скачанное здесь всё равно не запустилось бы.
-    if (WinAdmin.isAdmin && _coreSha.isNotEmpty) {
+    if (!os.canUpdateCore) {
       return tr('С правами администратора используется ядро из сборки Nexus — оно обновляется вместе с приложением');
+    }
+    final asset = os.xrayAsset;
+    if (asset == null) {
+      return tr('Для этого процессора ядро обновляется вместе с приложением');
     }
     final res = await http.get(Uri.parse(_releaseApi), headers: {
       'User-Agent': 'Nexus',
@@ -1076,11 +1122,11 @@ class WindowsCore extends VpnCore {
       final name = a['name'];
       final link = a['browser_download_url']?.toString();
       if (link == null || !link.startsWith('https://github.com/XTLS/')) continue;
-      if (name == 'Xray-windows-64.zip') url = link;
-      if (name == 'Xray-windows-64.zip.dgst') dgstUrl = link;
+      if (name == asset) url = link;
+      if (name == '$asset.dgst') dgstUrl = link;
     }
     if (url == null || dgstUrl == null) {
-      throw Exception(tr('В релизе {0} нет сборки для Windows', [tag]));
+      throw Exception(tr('В релизе {0} нет сборки для этой системы', [tag]));
     }
 
     final dir = Directory(_updDir);
@@ -1101,17 +1147,18 @@ class WindowsCore extends VpnCore {
     final zip = ZipDecoder().decodeBytes(zipBytes);
     ArchiveFile? exe;
     for (final f in zip.files) {
-      if (f.isFile && f.name.toLowerCase() == 'xray.exe') exe = f;
+      if (f.isFile && f.name.toLowerCase() == os.xrayExeInZip) exe = f;
     }
-    if (exe == null) throw Exception(tr('В архиве нет xray.exe'));
+    if (exe == null) throw Exception(tr('В архиве нет {0}', [os.xrayExeInZip]));
     for (final f in zip.files) {
-      if (f.isFile && f.name.toLowerCase() == 'wintun.dll') {
-        await File('$_updDir\\wintun.dll.new')
+      if (Platform.isWindows && f.isFile && f.name.toLowerCase() == 'wintun.dll') {
+        await File('$_updDir${_sep}wintun.dll.new')
             .writeAsBytes(f.content as List<int>, flush: true);
       }
     }
-    final staged = File('$_updDir\\$_newExe');
+    final staged = File('$_updDir${_sep}$_newExe');
     await staged.writeAsBytes(exe.content as List<int>, flush: true);
+    if (!Platform.isWindows) await Process.run('chmod', ['755', staged.path]);
 
     // Проверяем, что скачанное ядро вообще запускается.
     final v = await _versionOf(staged.path);
@@ -1131,7 +1178,7 @@ class WindowsCore extends VpnCore {
             .first
             .toLowerCase();
         if (sha256.convert(data).toString() == sum) {
-          await File('$_updDir\\$g.new').writeAsBytes(data, flush: true);
+          await File('$_updDir${_sep}$g.new').writeAsBytes(data, flush: true);
         } else {
           _log(tr('Гео-база {0} не прошла проверку и пропущена', [g]));
         }
@@ -1148,35 +1195,35 @@ class WindowsCore extends VpnCore {
   /// Подменяет ядро и гео-базы скачанными файлами (только когда ядро не запущено).
   Future<void> _applyPendingUpdate() async {
     try {
-      final staged = File('$_updDir\\$_newExe');
+      final staged = File('$_updDir${_sep}$_newExe');
       if (staged.existsSync()) {
-        final target = File('$_updDir\\$kCoreExe');
+        final target = File('$_updDir${_sep}$kCoreExe');
         if (target.existsSync()) target.deleteSync();
         staged.renameSync(target.path);
       }
-      final wt = File('$_updDir\\wintun.dll.new');
+      final wt = File('$_updDir${_sep}wintun.dll.new');
       if (wt.existsSync()) {
-        final t = File('$_updDir\\wintun.dll');
+        final t = File('$_updDir${_sep}wintun.dll');
         if (t.existsSync()) t.deleteSync();
         wt.renameSync(t.path);
       }
       for (final g in ['geoip.dat', 'geosite.dat']) {
-        final n = File('$_updDir\\$g.new');
+        final n = File('$_updDir${_sep}$g.new');
         if (n.existsSync()) {
-          final t = File('$_updDir\\$g');
+          final t = File('$_updDir${_sep}$g');
           if (t.existsSync()) t.deleteSync();
           n.renameSync(t.path);
-        } else if (!File('$_updDir\\$g').existsSync() &&
-            File('$_exeDir\\$g').existsSync() &&
-            File('$_updDir\\$kCoreExe').existsSync()) {
-          File('$_exeDir\\$g').copySync('$_updDir\\$g');
+        } else if (!File('$_updDir${_sep}$g').existsSync() &&
+            File('${os.resDir}$_sep$g').existsSync() &&
+            File('$_updDir${_sep}$kCoreExe').existsSync()) {
+          File('${os.resDir}$_sep$g').copySync('$_updDir${_sep}$g');
         }
       }
       // Список заблокированных сайтов приходит с приложением, а не с
       // ядром — держим его копию рядом с обновлённым ядром свежей.
-      final bl = File('$_exeDir\\$kBlockedListFile');
-      if (bl.existsSync() && File('$_updDir\\$kCoreExe').existsSync()) {
-        final t = File('$_updDir\\$kBlockedListFile');
+      final bl = File('${os.resDir}$_sep$kBlockedListFile');
+      if (bl.existsSync() && File('$_updDir${_sep}$kCoreExe').existsSync()) {
+        final t = File('$_updDir${_sep}$kBlockedListFile');
         if (!t.existsSync() || t.lengthSync() != bl.lengthSync()) {
           bl.copySync(t.path);
         }
@@ -1199,158 +1246,4 @@ class WindowsCore extends VpnCore {
 
   @override
   Future<void> dispose() => disconnect();
-}
-
-/// Системный прокси Windows через реестр + уведомление WinINet.
-class WinProxy {
-  static const _path =
-      r'Software\Microsoft\Windows\CurrentVersion\Internet Settings';
-
-  // HKEY_CURRENT_USER = (HKEY)(ULONG_PTR)(LONG)0x80000001 — со знаковым расширением.
-  static const _hkcu = -2147483647;
-  static const _regSz = 1;
-  static const _regDword = 4;
-
-  static final _advapi = DynamicLibrary.open('advapi32.dll');
-  static final _wininet = DynamicLibrary.open('wininet.dll');
-
-  static final _regSet = _advapi.lookupFunction<
-      Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>, Uint32,
-          Pointer<Void>, Uint32),
-      int Function(int, Pointer<Utf16>, Pointer<Utf16>, int, Pointer<Void>,
-          int)>('RegSetKeyValueW');
-
-  static final _inetSet = _wininet.lookupFunction<
-      Int32 Function(Pointer<Void>, Uint32, Pointer<Void>, Uint32),
-      int Function(
-          Pointer<Void>, int, Pointer<Void>, int)>('InternetSetOptionW');
-
-  static void _setDword(String name, int value) {
-    final sub = _path.toNativeUtf16();
-    final n = name.toNativeUtf16();
-    final data = calloc<Uint32>()..value = value;
-    try {
-      _regSet(_hkcu, sub, n, _regDword, data.cast(), 4);
-    } finally {
-      calloc.free(sub);
-      calloc.free(n);
-      calloc.free(data);
-    }
-  }
-
-  static void _setString(String name, String value) {
-    final sub = _path.toNativeUtf16();
-    final n = name.toNativeUtf16();
-    final data = value.toNativeUtf16();
-    try {
-      _regSet(_hkcu, sub, n, _regSz, data.cast(), (value.length + 1) * 2);
-    } finally {
-      calloc.free(sub);
-      calloc.free(n);
-      calloc.free(data);
-    }
-  }
-
-  static void _notify() {
-    // INTERNET_OPTION_SETTINGS_CHANGED = 39, INTERNET_OPTION_REFRESH = 37
-    _inetSet(nullptr, 39, nullptr, 0);
-    _inetSet(nullptr, 37, nullptr, 0);
-  }
-
-  static final _regGet = _advapi.lookupFunction<
-      Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>, Uint32,
-          Pointer<Uint32>, Pointer<Void>, Pointer<Uint32>),
-      int Function(int, Pointer<Utf16>, Pointer<Utf16>, int, Pointer<Uint32>,
-          Pointer<Void>, Pointer<Uint32>)>('RegGetValueW');
-
-  static int? _getDword(String name) {
-    final sub = _path.toNativeUtf16();
-    final n = name.toNativeUtf16();
-    final data = calloc<Uint32>();
-    final size = calloc<Uint32>()..value = 4;
-    try {
-      // RRF_RT_REG_DWORD = 0x10
-      final r = _regGet(_hkcu, sub, n, 0x10, nullptr, data.cast(), size);
-      return r == 0 ? data.value : null;
-    } finally {
-      calloc.free(sub);
-      calloc.free(n);
-      calloc.free(data);
-      calloc.free(size);
-    }
-  }
-
-  static String? _getString(String name) {
-    final sub = _path.toNativeUtf16();
-    final n = name.toNativeUtf16();
-    const cap = 8192;
-    final data = calloc<Uint16>(cap ~/ 2);
-    final size = calloc<Uint32>()..value = cap;
-    try {
-      // RRF_RT_REG_SZ = 0x2
-      final r = _regGet(_hkcu, sub, n, 0x2, nullptr, data.cast(), size);
-      return r == 0 ? data.cast<Utf16>().toDartString() : null;
-    } finally {
-      calloc.free(sub);
-      calloc.free(n);
-      calloc.free(data);
-      calloc.free(size);
-    }
-  }
-
-  /// Текущие настройки прокси пользователя.
-  static Map<String, dynamic> snapshot() {
-    try {
-      return {
-        'enable': _getDword('ProxyEnable') ?? 0,
-        'server': _getString('ProxyServer'),
-        'override': _getString('ProxyOverride'),
-      };
-    } catch (_) {
-      return {'enable': 0};
-    }
-  }
-
-  /// Возвращает прокси пользователя; без сохранённых данных — просто выключает.
-  static void restore(Map<String, dynamic>? saved) {
-    if (saved == null) return disable();
-    try {
-      final server = saved['server'];
-      final ovr = saved['override'];
-      // Не восстанавливаем собственный адрес Nexus (остался после сбоя).
-      final ours = server is String && WindowsCore.isOwnProxy(server);
-      if (server is String && !ours) _setString('ProxyServer', server);
-      if (ovr is String) _setString('ProxyOverride', ovr);
-      _setDword('ProxyEnable', saved['enable'] == 1 && !ours ? 1 : 0);
-      _notify();
-    } catch (_) {
-      disable();
-    }
-  }
-
-  static void enable(String server) {
-    try {
-      _setString('ProxyServer', server);
-      _setString(
-          'ProxyOverride',
-          [
-            'localhost',
-            '127.*',
-            '10.*',
-            for (var i = 16; i <= 31; i++) '172.$i.*',
-            '192.168.*',
-            '*.local',
-            '<local>',
-          ].join(';'));
-      _setDword('ProxyEnable', 1);
-      _notify();
-    } catch (_) {}
-  }
-
-  static void disable() {
-    try {
-      _setDword('ProxyEnable', 0);
-      _notify();
-    } catch (_) {}
-  }
 }

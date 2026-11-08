@@ -1,6 +1,6 @@
 # Nexus
 
-Клиент для подписок **NEXUS_VPN** (и любых панелей 3x-ui / Marzban / Remnawave) для **Android** и **Windows**.
+Клиент для подписок **NEXUS_VPN** (и любых панелей 3x-ui / Marzban / Remnawave) для **Android**, **Windows**, **Linux** и **macOS**.
 Аналог Happ — Proxy Utility в собственном дизайне «тёмный неон».
 
 ## Что умеет
@@ -99,6 +99,30 @@ Variables), например приглашение в Discord-бота.
 Секрет `UPDATE_SIGNING_KEY` (из `github-secrets.txt`) подписывает каждый релиз ключом Ed25519.
 Приложение, собранное с этим секретом, ставит только обновления с верной подписью — даже
 если кто-то получит доступ к репозиторию релизов, подсунуть своё обновление он не сможет.
+
+## Linux и macOS
+
+**Linux** (x64, Ubuntu 22.04 и новее, GNOME/KDE): `Nexus-Linux-x64.tar.gz` — распаковать и запустить
+`install.sh`. Nexus ставится в `~/.local/share/nexus-app` без прав администратора, сам добавляет
+ярлык в меню и обработчик ссылок `nexus://`. Нужны `libgtk-3-0` и `libayatana-appindicator3-1`.
+Системный прокси — через `gsettings` (GNOME) и `kwriteconfig` (KDE).
+Режим TUN: при первом включении `pkexec` один раз просит пароль и ставит **проверенное по SHA-256**
+ядро из сборки в `/usr/local/lib/nexus` с правом только на управление сетью (`cap_net_admin,cap_net_raw`),
+без полных прав root.
+
+**macOS** (Apple Silicon и Intel, одна сборка): `Nexus-macOS.zip`. Режим TUN спрашивает пароль
+администратора при каждом включении — постоянного разрешения «без пароля» Nexus не оставляет.
+
+Подпись и нотаризация Apple — секреты репозитория (без них сборка macOS собирается без подписи,
+и при первом запуске её надо разрешить в «Системные настройки → Конфиденциальность и безопасность»):
+
+| Секрет | Что это |
+|---|---|
+| `MACOS_CERT_P12` | сертификат **Developer ID Application** с закрытым ключом (.p12) в base64 |
+| `MACOS_CERT_PASSWORD` | пароль от .p12 |
+| `APPLE_API_KEY_P8` | ключ App Store Connect API (.p8) в base64 — для нотаризации |
+| `APPLE_API_KEY_ID` | Key ID этого ключа |
+| `APPLE_API_ISSUER` | Issuer ID (App Store Connect → Users and Access → Integrations) |
 
 ## Ссылки nexus://
 

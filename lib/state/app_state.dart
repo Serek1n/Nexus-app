@@ -28,6 +28,17 @@ import '../services/traffic_log.dart';
 import '../l10n.dart';
 
 /// Состояние приложения: подписки, серверы, подключение, настройки.
+/// Название системы для отчёта и раздела «О приложении».
+String platformName() => Platform.isWindows
+    ? 'Windows'
+    : Platform.isMacOS
+        ? 'macOS'
+        : Platform.isLinux
+            ? 'Linux'
+            : Platform.isIOS
+                ? 'iOS'
+                : 'Android';
+
 class AppState extends ChangeNotifier {
   AppState() : core = VpnCore.create();
 
@@ -77,7 +88,9 @@ class AppState extends ChangeNotifier {
   final traffic = TrafficLog();
   Timer? _subTimer, _updTimer, _startPing;
 
-  bool get isDesktop => debugDesktop ?? Platform.isWindows;
+  bool get isDesktop =>
+      debugDesktop ??
+      (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   /// Сохранённые данные загружены (до этого интерфейс не знает, есть ли
   /// у пользователя подписки).
@@ -1553,7 +1566,7 @@ class AppState extends ChangeNotifier {
     final st = settings;
     final s = selected;
     final b = StringBuffer()
-      ..writeln('Nexus $appVersionLabel · ${isDesktop ? 'Windows' : 'Android'} '
+      ..writeln('Nexus $appVersionLabel · ${platformName()} '
           '${Platform.operatingSystemVersion}')
       ..writeln('Xray: $coreVersion')
       ..writeln('Время: ${d(DateTime.now())}')

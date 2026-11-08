@@ -87,6 +87,12 @@ class AppUpdater {
       bool zip(String n) => n == 'Nexus-Windows-x64.zip';
       return installed ? [setup, zip] : [zip];
     }
+    if (Platform.isLinux) {
+      final arm = Platform.version.contains('arm64');
+      final own = arm ? 'Nexus-Linux-arm64.tar.gz' : 'Nexus-Linux-x64.tar.gz';
+      return [(n) => n == own];
+    }
+    if (Platform.isMacOS) return [(n) => n == 'Nexus-macOS.zip'];
     final abi = (await AndroidSystem.appInfo())['abi']?.toString() ?? '';
     final own = switch (abi) {
       'arm64-v8a' => 'Nexus-arm64.apk',
@@ -263,7 +269,7 @@ class AppUpdater {
   static Future<Directory> _dir() async {
     final base = Platform.isAndroid
         ? (await AndroidSystem.appInfo())['cacheDir'].toString()
-        : '${Directory.systemTemp.path}\\NexusUpdate';
+        : '${Directory.systemTemp.path}${Platform.pathSeparator}NexusUpdate';
     final dir = Directory(Platform.isAndroid ? '$base/updates' : base);
     if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
@@ -342,6 +348,8 @@ class AppUpdater {
       return;
     }
 
+    if (Platform.isLinux || Platform.isMacOS) return _installUnix(file);
+
     if (file.path.toLowerCase().endsWith('.exe')) {
       // Тихая установка поверх; установщик сам закроет Nexus и запустит заново.
       await Process.start(
@@ -390,6 +398,60 @@ start "" "$exe"
     await Process.start('cmd', ['/c', script.path],
         mode: ProcessStartMode.detached);
   }
+}
+
+/// Linux: архив распаковывается рядом и копируется поверх папки Nexus
+/// после его закрытия. macOS: Nexus.app заменяется целиком (подпись Apple
+/// внутри архива сохраняется — распаковка через ditto).
+Future<void> _installUnix(File file) async {
+  final stage = Directory('${file.parent.path}/stage');
+  if (stage.existsSync()) stage.deleteSync(recursive: true);
+  stage.createSync(recursive: true);
+  final ProcessResult r;
+  if (Platform.isMacOS) {
+    r = await Process.run('/usr/bin/ditto', ['-x', '-k', file.path, stage.path]);
+  } else {
+    r = await Process.run('tar', ['-xzf', file.path, '-C', stage.path]);
+  }
+  if (r.exitCode != 0) {
+    throw Exception(tr('Не удалось распаковать обновление: {0}', ['${r.stderr}'.trim()]));
+  }
+  String q(String s) => "'${s.replaceAll("'", "'\\''")}'";
+  final exe = Platform.resolvedExecutable;
+  final String body;
+  if (Platform.isMacOS) {
+    // …/Nexus.app/Contents/MacOS/nexus → …/Nexus.app
+    final app = File(exe).parent.parent.parent.path;
+    final fresh = Directory(stage.path)
+        .listSync()
+        .whereType<Directory>()
+        .where((d) => d.path.endsWith('.app'))
+        .firstOrNull;
+    if (fresh == null) throw Exception(tr('В архиве обновления нет Nexus.app'));
+    body = [
+      'rm -rf ${q('$app.old')}',
+      'mv ${q(app)} ${q('$app.old')}',
+      'if mv ${q(fresh.path)} ${q(app)}; then rm -rf ${q('$app.old')}; else mv ${q('$app.old')} ${q(app)}; fi',
+      'open ${q(app)}',
+    ].join('\n');
+  } else {
+    // В архиве папка nexus/ с программой.
+    final dir = File(exe).parent.path;
+    final inner = Directory('${stage.path}/nexus').existsSync()
+        ? '${stage.path}/nexus'
+        : stage.path;
+    body = [
+      'cp -a ${q(inner)}/. ${q(dir)}/',
+      'nohup ${q(exe)} >/dev/null 2>&1 &',
+    ].join('\n');
+  }
+  final script = File('${file.parent.path}/apply.sh');
+  await script.writeAsString('''#!/bin/sh
+while kill -0 $pid 2>/dev/null; do sleep 1; done
+$body
+''');
+  await Process.run('chmod', ['700', script.path]);
+  await Process.start('/bin/sh', [script.path], mode: ProcessStartMode.detached);
 }
 
 class _DigestSink implements Sink<Digest> {

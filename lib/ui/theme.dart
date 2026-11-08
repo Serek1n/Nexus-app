@@ -48,7 +48,7 @@ class NX {
 
   /// Оценка задержки: 3 — хорошо (зелёный), 2 — средне (жёлтый),
   /// 1 — плохо (красный), 0 — нет связи или не измерялась.
-  /// Пороги — для «тёплой» задержки через сервер (см. WindowsCore._warmDelay).
+  /// Пороги — для «тёплой» задержки через сервер (см. DesktopCore._warmDelay).
   static int pingLevel(int? ping) {
     if (ping == null || ping < 0) return 0;
     if (ping < 350) return 3;
