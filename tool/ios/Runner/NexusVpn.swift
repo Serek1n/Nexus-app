@@ -1,4 +1,5 @@
 import Flutter
+import Security
 import LibXray
 import NetworkExtension
 
@@ -163,5 +164,48 @@ final class NexusVpn: NSObject {
       let text = try? String(contentsOf: url, encoding: .utf8)
     else { return [] }
     return Array(text.split(separator: "\n").suffix(300).map(String.init))
+  }
+}
+
+/// Ключ шифрования подписок Nexus в Keychain (канал nexus/keychain).
+/// Ошибка чтения (Keychain заблокирован) отличается от «ключа нет»:
+/// в первом случае Nexus не создаёт новый ключ и ничего не перезаписывает.
+final class NexusKeychain {
+  static func attach(_ messenger: FlutterBinaryMessenger) {
+    let ch = FlutterMethodChannel(name: "nexus/keychain", binaryMessenger: messenger)
+    let base: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: "app.nexusvpn.nexus",
+      kSecAttrAccount as String: "secrets-key",
+    ]
+    ch.setMethodCallHandler { call, result in
+      switch call.method {
+      case "get":
+        var q = base
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let st = SecItemCopyMatching(q as CFDictionary, &item)
+        if st == errSecSuccess, let d = item as? Data {
+          result(FlutterStandardTypedData(bytes: d))
+        } else if st == errSecItemNotFound {
+          result(nil)
+        } else {
+          result(FlutterError(code: "keychain", message: "\(st)", details: nil))
+        }
+      case "set":
+        guard let d = (call.arguments as? FlutterStandardTypedData)?.data else {
+          result(false)
+          return
+        }
+        SecItemDelete(base as CFDictionary)
+        var add = base
+        add[kSecValueData as String] = d
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        result(SecItemAdd(add as CFDictionary, nil) == errSecSuccess)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }

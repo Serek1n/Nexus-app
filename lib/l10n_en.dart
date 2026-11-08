@@ -459,6 +459,8 @@ const kEn = <String, String>{
       'Couldn\'t start the core: {0}',
   'Не удалось измерить скорость':
       'Couldn\'t measure the speed',
+  'Не удалось открыть системную связку ключей — подписки не загружены. Разблокируйте её (или войдите в систему заново) и перезапустите Nexus':
+      'Couldn\'t open the system keyring — subscriptions weren\'t loaded. Unlock it (or sign in again) and restart Nexus',
   'Не удалось открыть установщик':
       'Couldn\'t open the installer',
   'Не удалось отправить. Окно добавления на телевизоре должно быть открыто, а телефон — в той же сети Wi-Fi.':

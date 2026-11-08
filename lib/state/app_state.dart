@@ -19,6 +19,7 @@ import '../models.dart';
 import '../platform/hotkey.dart';
 import '../platform/android_system.dart';
 import '../platform/links.dart';
+import '../platform/keyring_box.dart';
 import '../platform/win_dpapi.dart';
 import '../services/config_builder.dart';
 import '../services/net_probe.dart';
@@ -362,11 +363,19 @@ class AppState extends ChangeNotifier {
   }
 
   /// Ссылки подписок и ключи серверов хранятся зашифрованными:
-  /// на Windows — DPAPI, на Android — ключом из Android Keystore.
+  /// на Windows — DPAPI, на Android — ключом из Android Keystore,
+  /// на macOS, iOS и Linux — ключом из системной связки ключей.
   static const _aks = 'aks:';
 
   bool _isProtected(String raw) =>
-      raw.startsWith(_aks) || WinDpapi.isProtected(raw);
+      raw.startsWith(_aks) ||
+      WinDpapi.isProtected(raw) ||
+      KeyringBox.isProtected(raw);
+
+  /// Зашифрованные данные не удалось открыть (связка ключей заблокирована
+  /// или недоступна). Тогда ничего не перезаписываем — иначе следующее
+  /// сохранение затёрло бы подписки пустым списком.
+  bool _secretsLocked = false;
 
   Future<String> _readSecret(String key) async {
     final raw = _prefs.getString(key);
@@ -374,16 +383,29 @@ class AppState extends ChangeNotifier {
     if (raw.startsWith(_aks)) {
       return await AndroidSystem.unprotect(raw.substring(_aks.length)) ?? '[]';
     }
+    if (KeyringBox.isProtected(raw)) {
+      final v = await KeyringBox.unprotect(raw);
+      if (v == null) {
+        _secretsLocked = true;
+        lastError = tr('Не удалось открыть системную связку ключей — подписки не загружены. Разблокируйте её (или войдите в систему заново) и перезапустите Nexus');
+        return '[]';
+      }
+      return v;
+    }
     return WinDpapi.unprotect(raw) ?? '[]';
   }
 
   Future<void> _writeSecret(String key, String value) async {
+    if (_secretsLocked) return;
     if (Platform.isAndroid) {
       final enc = await AndroidSystem.protect(value);
       // Если Keystore недоступен — не теряем данные, сохраняем как есть.
       await _prefs.setString(key, enc != null ? '$_aks$enc' : value);
-    } else {
+    } else if (Platform.isWindows) {
       await _prefs.setString(key, WinDpapi.protect(value));
+    } else {
+      // macOS, iOS, Linux: AES-GCM, ключ в системной связке ключей.
+      await _prefs.setString(key, await KeyringBox.protect(value));
     }
   }
 

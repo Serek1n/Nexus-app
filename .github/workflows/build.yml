@@ -584,7 +584,7 @@ jobs:
           Architecture: amd64
           Maintainer: NEXUS_VPN <noreply@nexus.invalid>
           Installed-Size: $SIZE
-          Depends: libgtk-3-0 | libgtk-3-0t64, libayatana-appindicator3-1, libcap2-bin
+          Depends: libgtk-3-0 | libgtk-3-0t64, libayatana-appindicator3-1, libcap2-bin, libsecret-tools
           Section: net
           Priority: optional
           Homepage: https://github.com/$UPDATE_REPO

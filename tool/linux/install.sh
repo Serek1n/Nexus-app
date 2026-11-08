@@ -13,6 +13,7 @@ chmod 755 "$DEST/nexus" "$DEST/nexus-core"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$DEST/nexus" "$HOME/.local/bin/nexus"
 echo "Nexus установлен в $DEST"
+command -v secret-tool >/dev/null 2>&1 || echo "Для шифрования подписок установите libsecret-tools (Ubuntu/Debian: sudo apt install libsecret-tools)"
 for lib in libgtk-3.so.0 libayatana-appindicator3.so.1; do
   if ! ldconfig -p 2>/dev/null | grep -q "$lib"; then
     echo "Нужна библиотека $lib — установите её пакетным менеджером"

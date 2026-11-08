@@ -16,6 +16,7 @@ import UIKit
     GeneratedPluginRegistrant.register(with: self)
     if let r = self.registrar(forPlugin: "NexusNative") {
       NexusVpn.shared.attach(r.messenger())
+      NexusKeychain.attach(r.messenger())
       let ch = FlutterMethodChannel(name: "nexus/links", binaryMessenger: r.messenger())
       ch.setMethodCallHandler { [weak self] call, result in
         guard let self = self else { return }
