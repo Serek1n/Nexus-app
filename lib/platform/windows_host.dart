@@ -121,9 +121,17 @@ class WindowsHost with TrayListener, WindowListener {
 
     final on = st == ConnState.connected;
     try {
-      final ext = Platform.isWindows ? 'ico' : 'png';
-      await trayManager.setIcon(
-          on ? 'assets/icon/tray_on.$ext' : 'assets/icon/tray_off.$ext');
+      if (Platform.isMacOS) {
+        // Строка меню macOS: монохромный значок-шаблон — сам подстраивается
+        // под светлую и тёмную тему; подключено — с точкой.
+        await trayManager.setIcon(
+            on ? 'assets/icon/tray_mac_on.png' : 'assets/icon/tray_mac_off.png',
+            isTemplate: true);
+      } else {
+        final ext = Platform.isWindows ? 'ico' : 'png';
+        await trayManager.setIcon(
+            on ? 'assets/icon/tray_on.$ext' : 'assets/icon/tray_off.$ext');
+      }
       final status = switch (st) {
         ConnState.connected => tr('подключено'),
         ConnState.connecting => tr('подключение…'),
@@ -356,6 +364,8 @@ class LinuxDesktop {
   }
 
   static Future<void> install() async {
+    // Установлен пакетом .deb — ярлык и обработчик ссылок уже в системе.
+    if (Platform.resolvedExecutable.startsWith('/opt/nexus/')) return;
     try {
       final base = Platform.environment['XDG_DATA_HOME'] ?? '$_home/.local/share';
       final f = File('$base/applications/nexus.desktop');

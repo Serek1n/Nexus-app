@@ -555,6 +555,58 @@ jobs:
           cp -a "$B" stage/nexus
           tar -C stage -czf dist/Nexus-Linux-x64.tar.gz nexus
 
+      - name: Пакет .deb (Ubuntu, Debian, Mint)
+        run: |
+          set -e
+          B=build/linux/x64/release/bundle
+          D=deb/nexus-vpn
+          mkdir -p $D/DEBIAN $D/opt/nexus $D/usr/bin $D/usr/share/applications $D/usr/share/icons/hicolor/256x256/apps
+          cp -a "$B/." $D/opt/nexus/
+          rm -f $D/opt/nexus/install.sh
+          ln -s /opt/nexus/nexus $D/usr/bin/nexus
+          convert assets/icon/app_icon.png -resize 256x256 $D/usr/share/icons/hicolor/256x256/apps/nexus.png
+          cat > $D/usr/share/applications/nexus.desktop <<'DT'
+          [Desktop Entry]
+          Type=Application
+          Name=Nexus
+          Comment=VPN
+          Exec=/opt/nexus/nexus %u
+          Icon=nexus
+          Terminal=false
+          Categories=Network;
+          MimeType=x-scheme-handler/nexus;
+          StartupWMClass=nexus
+          DT
+          SIZE=$(du -sk $D | cut -f1)
+          cat > $D/DEBIAN/control <<CT
+          Package: nexus-vpn
+          Version: $VER
+          Architecture: amd64
+          Maintainer: NEXUS_VPN <noreply@nexus.invalid>
+          Installed-Size: $SIZE
+          Depends: libgtk-3-0 | libgtk-3-0t64, libayatana-appindicator3-1, libcap2-bin
+          Section: net
+          Priority: optional
+          Homepage: https://github.com/$UPDATE_REPO
+          Description: Nexus — VPN-клиент NEXUS_VPN (Xray)
+           Подписки, режим «Авто», умный режим, системный прокси и режим TUN.
+          CT
+          # Режим TUN без пароля: ядро в /opt/nexus принадлежит root, и
+          # установщик даёт ему только право управлять сетью.
+          cat > $D/DEBIAN/postinst <<'PI'
+          #!/bin/sh
+          set -e
+          if command -v setcap >/dev/null 2>&1; then
+            setcap cap_net_admin,cap_net_raw+ep /opt/nexus/nexus-core || true
+          fi
+          command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q || true
+          command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+          exit 0
+          PI
+          chmod 755 $D/DEBIAN/postinst
+          dpkg-deb --root-owner-group --build $D dist/Nexus-Linux-x64.deb
+          dpkg-deb --info dist/Nexus-Linux-x64.deb | head -12
+
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Nexus-Linux
@@ -713,6 +765,140 @@ jobs:
           name: Nexus-macOS
           path: dist/*
 
+  ios:
+    name: iOS (iPhone и iPad)
+    needs: [check, code]
+    if: needs.check.outputs.run == 'true'
+    continue-on-error: true
+    runs-on: macos-15
+    env:
+      BUILD: ${{ needs.check.outputs.build }}
+      # libXray на Xray 26.10.31 (то же ядро, что у Nexus на других системах).
+      LIBXRAY_REF: 645bf9a36b7d26420e1e8d471620cbe133d9b2ae
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Кэш ядра для iOS
+        id: lx
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: LibXray.xcframework
+          key: libxray-ios-${{ env.LIBXRAY_REF }}
+
+      - name: Исходники libXray
+        if: steps.lx.outputs.cache-hit != 'true'
+        run: |
+          git clone -q https://github.com/XTLS/libXray lx
+          git -C lx checkout -q "$LIBXRAY_REF"
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        if: steps.lx.outputs.cache-hit != 'true'
+        with:
+          go-version-file: lx/go.mod
+          cache: false
+
+      - name: Сборка ядра для iOS (gomobile)
+        if: steps.lx.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          cd lx
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+          gomobile bind -target ios -iosversion 15.0 -trimpath -ldflags="-s -w" -o ../LibXray.xcframework .
+          ls ../LibXray.xcframework
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Сгенерировать платформу iOS
+        run: |
+          flutter create --platforms=ios --org $ORG --project-name nexus .
+          rm -f test/widget_test.dart
+          python3 tool/patch_platforms.py
+          flutter pub get
+          cat > icons-ios.yaml <<'YML'
+          flutter_launcher_icons:
+            image_path: "assets/icon/app_icon.png"
+            ios: true
+            remove_alpha_ios: true
+          YML
+          dart run flutter_launcher_icons -f icons-ios.yaml || echo "::warning::Иконка iOS не сгенерирована"
+
+      - name: Гео-базы (только нужные Nexus категории)
+        run: |
+          set -e
+          for g in geoip.dat geosite.dat; do
+            curl -fsSL -o "full-$g" "$GEO_URL/$g"
+            curl -fsSL -o "$g.sum" "$GEO_URL/$g.sha256sum"
+            [ "$(cut -d' ' -f1 $g.sum)" = "$(shasum -a 256 full-$g | cut -d' ' -f1)" ] || { echo "Контрольная сумма $g не совпала"; exit 1; }
+          done
+          # Память VPN-расширения на iPhone ограничена (~50 МБ) — полные базы
+          # (27 МБ) туда не помещаются, берём только используемые категории.
+          python3 tool/make_blocked_dat.py full-geosite.dat ios/Runner/geosite.dat category-ads-all
+          python3 tool/make_blocked_dat.py full-geoip.dat ios/Runner/geoip.dat ru,telegram,private
+          BLOCKED=false
+          if curl -fsSL -o rf.dat "$RF_URL/geosite.dat" && curl -fsSL -o rf.sum "$RF_URL/geosite.dat.sha256sum" \
+             && [ "$(cut -d' ' -f1 rf.sum)" = "$(shasum -a 256 rf.dat | cut -d' ' -f1)" ] \
+             && python3 tool/make_blocked_dat.py rf.dat ios/Runner/nexus-blocked.dat; then
+            BLOCKED=true
+          fi
+          rm -f rf.dat rf.sum full-*.dat
+          echo "BLOCKED_DAT=$BLOCKED" >> $GITHUB_ENV
+
+      - name: Расширение NexusTunnel в проекте Xcode
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          echo "VER=$VER" >> $GITHUB_ENV
+          cp -R LibXray.xcframework ios/
+          ruby tool/ios/add_tunnel.rb "$VER" "$BUILD"
+
+      - name: Сборка
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -e
+          DEFS="--dart-define=APP_VERSION=$VER --dart-define=APP_BUILD=$BUILD --dart-define=RENEW_URL=$RENEW_URL --dart-define=APP_CHANNEL=$APP_CHANNEL --dart-define=BLOCKED_DAT=$BLOCKED_DAT"
+          if [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_API_KEY_P8" ]; then
+            echo "::warning::Нет APPLE_TEAM_ID или ключа App Store Connect — iOS собирается без подписи (проверка, что всё компилируется)"
+            flutter build ios --release --no-codesign --obfuscate --split-debug-info=build/symbols \
+              --build-name=$VER --build-number=$BUILD $DEFS
+            exit 0
+          fi
+          KEY=$RUNNER_TEMP/AuthKey.p8
+          python3 -c "import base64,os,sys; sys.stdout.buffer.write(base64.b64decode(os.environ['APPLE_API_KEY_P8']))" > "$KEY"
+          flutter build ios --release --config-only --obfuscate --split-debug-info=build/symbols \
+            --build-name=$VER --build-number=$BUILD $DEFS
+          (cd ios && pod install)
+          AUTH="-allowProvisioningUpdates -authenticationKeyPath $KEY -authenticationKeyID $APPLE_API_KEY_ID -authenticationKeyIssuerID $APPLE_API_ISSUER"
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -archivePath build/Nexus.xcarchive \
+            DEVELOPMENT_TEAM=$APPLE_TEAM_ID CODE_SIGN_STYLE=Automatic $AUTH archive | tail -30
+          cat > ExportOptions.plist <<PL
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PL
+          # Отправка в App Store Connect → TestFlight.
+          xcodebuild -exportArchive -archivePath build/Nexus.xcarchive \
+            -exportOptionsPlist ExportOptions.plist -exportPath build/ipa $AUTH | tail -30
+          rm -f "$KEY"
+          echo "::notice::Nexus $VER ($BUILD) отправлен в TestFlight"
+
   release:
     name: Релиз
     # Linux и macOS — необязательные (continue-on-error): их сбой не задерживает релиз.
@@ -785,7 +971,7 @@ jobs:
             echo "**Android:** Nexus-arm64.apk — большинство телефонов, Nexus-armv7.apk — старые, Nexus-universal.apk — любой."
             echo "**Windows:** Nexus-Setup-$VER.exe — установщик, Nexus-Windows-x64.zip — портативная версия."
             if [ -f out/Nexus-Linux-x64.tar.gz ]; then
-              echo "**Linux:** Nexus-Linux-x64.tar.gz — распакуйте и запустите install.sh."
+              echo "**Linux:** Nexus-Linux-x64.deb — пакет для Ubuntu/Debian/Mint (двойной клик или \`sudo apt install ./Nexus-Linux-x64.deb\`), Nexus-Linux-x64.tar.gz — для других дистрибутивов (распакуйте и запустите install.sh)."
             fi
             if [ -f out/Nexus-macOS.zip ]; then
               echo "**macOS:** Nexus-macOS.zip — распакуйте и перенесите Nexus в «Программы»."

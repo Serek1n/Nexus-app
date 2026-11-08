@@ -63,7 +63,8 @@ class AppUpdater {
         'Accept': 'application/vnd.github+json',
       };
 
-  static bool get configured => kUpdateRepo.isNotEmpty;
+  /// На iPhone обновления приходят через TestFlight / App Store.
+  static bool get configured => kUpdateRepo.isNotEmpty && !Platform.isIOS;
 
   static Future<int> currentBuild() async {
     if (kAppBuild > 0) return kAppBuild;
@@ -88,6 +89,8 @@ class AppUpdater {
       return installed ? [setup, zip] : [zip];
     }
     if (Platform.isLinux) {
+      // Установлен пакетом .deb (/opt/nexus) — обновление тоже пакетом.
+      if (_systemInstall) return [(n) => n == 'Nexus-Linux-x64.deb'];
       final arm = Platform.version.contains('arm64');
       final own = arm ? 'Nexus-Linux-arm64.tar.gz' : 'Nexus-Linux-x64.tar.gz';
       return [(n) => n == own];
@@ -403,7 +406,24 @@ start "" "$exe"
 /// Linux: архив распаковывается рядом и копируется поверх папки Nexus
 /// после его закрытия. macOS: Nexus.app заменяется целиком (подпись Apple
 /// внутри архива сохраняется — распаковка через ditto).
+bool get _systemInstall =>
+    Platform.isLinux && Platform.resolvedExecutable.startsWith('/opt/nexus/');
+
 Future<void> _installUnix(File file) async {
+  if (file.path.endsWith('.deb')) {
+    // Пакет уже проверен по подписи. Ставит его система (окно пароля
+    // pkexec), Nexus перезапускается после установки.
+    String q(String s) => "'${s.replaceAll("'", "'\\''")}'";
+    final script = File('${file.parent.path}/apply.sh');
+    await script.writeAsString('''#!/bin/sh
+while kill -0 $pid 2>/dev/null; do sleep 1; done
+pkexec /usr/bin/dpkg -i ${q(file.path)}
+nohup /opt/nexus/nexus >/dev/null 2>&1 &
+''');
+    await Process.run('chmod', ['700', script.path]);
+    await Process.start('/bin/sh', [script.path], mode: ProcessStartMode.detached);
+    return;
+  }
   final stage = Directory('${file.parent.path}/stage');
   if (stage.existsSync()) stage.deleteSync(recursive: true);
   stage.createSync(recursive: true);

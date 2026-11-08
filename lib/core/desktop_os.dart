@@ -368,6 +368,7 @@ class LinuxOs extends DesktopOs {
       return tr('В системе нет /dev/net/tun — режим TUN недоступен');
     }
     if (_which('pkexec') == null &&
+        !Platform.resolvedExecutable.startsWith('/opt/nexus/') &&
         !await DesktopOs.shaOk(_tunCore, DesktopOs.coreSha)) {
       return tr('Для режима TUN нужен pkexec (polkit), чтобы один раз установить ядро с правом управления сетью');
     }
@@ -382,6 +383,13 @@ class LinuxOs extends DesktopOs {
   @override
   Future<String> prepareTun(String bundledCore) async {
     final want = DesktopOs.coreSha;
+    // Пакет .deb: ядро в /opt/nexus принадлежит root, право на управление
+    // сетью ему выдал установщик — пароль не нужен.
+    if (bundledCore.startsWith('/opt/nexus/') &&
+        await DesktopOs.shaOk(bundledCore, want) &&
+        await _hasCaps(bundledCore)) {
+      return bundledCore;
+    }
     if (await DesktopOs.shaOk(_tunCore, want) && await _hasCaps()) {
       return _tunCore;
     }
@@ -415,9 +423,9 @@ class LinuxOs extends DesktopOs {
     return _tunCore;
   }
 
-  Future<bool> _hasCaps() async {
+  Future<bool> _hasCaps([String path = _tunCore]) async {
     final getcap = _which('getcap') ?? '/usr/sbin/getcap';
-    final r = await DesktopOs.run(getcap, [_tunCore]);
+    final r = await DesktopOs.run(getcap, [path]);
     if (r == null) return true; // getcap нет — проверит сам запуск
     return '${r.stdout}'.contains('cap_net_admin');
   }

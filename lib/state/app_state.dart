@@ -1859,6 +1859,10 @@ class AppState extends ChangeNotifier {
   /// подписку добавляют с телефона по QR-коду.
   bool isTv = false;
 
+  /// iPhone и iPad: только режим VPN, без функций Android.
+  bool get isIos => debugIos ?? Platform.isIOS;
+  bool? debugIos;
+
   // ─────────────────── PIN-код ───────────────────
 
   bool get pinEnabled => settings.pinHash != null;

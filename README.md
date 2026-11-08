@@ -1,6 +1,6 @@
 # Nexus
 
-Клиент для подписок **NEXUS_VPN** (и любых панелей 3x-ui / Marzban / Remnawave) для **Android**, **Windows**, **Linux** и **macOS**.
+Клиент для подписок **NEXUS_VPN** (и любых панелей 3x-ui / Marzban / Remnawave) для **Android**, **iOS**, **Windows**, **Linux** и **macOS**.
 Аналог Happ — Proxy Utility в собственном дизайне «тёмный неон».
 
 ## Что умеет
@@ -102,8 +102,10 @@ Variables), например приглашение в Discord-бота.
 
 ## Linux и macOS
 
-**Linux** (x64, Ubuntu 22.04 и новее, GNOME/KDE): `Nexus-Linux-x64.tar.gz` — распаковать и запустить
-`install.sh`. Nexus ставится в `~/.local/share/nexus-app` без прав администратора, сам добавляет
+**Linux** (x64, Ubuntu 22.04 и новее, GNOME/KDE): `Nexus-Linux-x64.deb` для Ubuntu/Debian/Mint
+(`sudo apt install ./Nexus-Linux-x64.deb` — зависимости поставятся сами, режим TUN работает без пароля:
+установщик даёт ядру в `/opt/nexus` право управлять сетью). Для других дистрибутивов —
+`Nexus-Linux-x64.tar.gz`: распаковать и запустить `install.sh`. Nexus ставится в `~/.local/share/nexus-app` без прав администратора, сам добавляет
 ярлык в меню и обработчик ссылок `nexus://`. Нужны `libgtk-3-0` и `libayatana-appindicator3-1`.
 Системный прокси — через `gsettings` (GNOME) и `kwriteconfig` (KDE).
 Режим TUN: при первом включении `pkexec` один раз просит пароль и ставит **проверенное по SHA-256**
@@ -123,6 +125,27 @@ Variables), например приглашение в Discord-бота.
 | `APPLE_API_KEY_P8` | ключ App Store Connect API (.p8) в base64 — для нотаризации |
 | `APPLE_API_KEY_ID` | Key ID этого ключа |
 | `APPLE_API_ISSUER` | Issuer ID (App Store Connect → Users and Access → Integrations) |
+
+## iOS
+
+Xray работает в VPN-расширении **NexusTunnel** (Network Extension, Packet Tunnel) через
+[libXray](https://github.com/XTLS/libXray) — то же ядро Xray 26.10.31, что и на других системах.
+Код расширения и приложения — `tool/ios/`, цель расширения добавляет в проект Xcode
+`tool/ios/add_tunnel.rb`. В расширении нет обычных прокси-входов (к `127.0.0.1` на iPhone
+могут подключиться и другие приложения) — только служебный вход с паролем для статистики.
+Гео-базы на iOS урезаны до используемых категорий: память VPN-расширения ограничена.
+
+Без секретов CI собирает iOS без подписи — только проверка, что всё компилируется.
+Для TestFlight нужны:
+
+| Секрет | Что это |
+|---|---|
+| `APPLE_TEAM_ID` | Team ID (developer.apple.com → Membership) |
+| `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | ключ App Store Connect API с ролью **Admin** (тот же, что для нотаризации macOS) |
+
+Один раз вручную: в App Store Connect создать приложение с Bundle ID `app.nexusvpn.nexus`.
+Идентификаторы `app.nexusvpn.nexus`, `app.nexusvpn.nexus.tunnel`, группу `group.app.nexusvpn.nexus`
+и профили подписи Xcode создаёт сам (автоматическая подпись по ключу API).
 
 ## Ссылки nexus://
 

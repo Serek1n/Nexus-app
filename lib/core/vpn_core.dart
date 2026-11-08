@@ -4,12 +4,16 @@ import 'dart:io';
 import '../models.dart';
 import 'android_core.dart';
 import 'desktop_core.dart';
+import 'ios_core.dart';
 import '../l10n.dart';
 
 /// Общий интерфейс ядра для Android и компьютеров.
 abstract class VpnCore {
-  static VpnCore create() =>
-      Platform.isAndroid ? AndroidCore() : DesktopCore();
+  static VpnCore create() => Platform.isAndroid
+      ? AndroidCore()
+      : Platform.isIOS
+          ? IosCore()
+          : DesktopCore();
 
   /// Поток изменений состояния.
   Stream<ConnState> get states;

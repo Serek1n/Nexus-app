@@ -416,7 +416,8 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-          if (!app.isDesktop)
+          // Приложения мимо VPN: iOS такого не позволяет.
+          if (!app.isDesktop && !app.isIos)
             NeonCard(
               onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AppsScreen())),
@@ -568,6 +569,29 @@ class SettingsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                  ),
+                ] else if (app.isIos) ...[
+                  // iOS: только полноценный VPN (системный профиль Nexus).
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(children: [
+                      const Icon(Icons.vpn_lock_rounded,
+                          color: NX.violet, size: 21),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr('Режим VPN'),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 14.5)),
+                            const SizedBox(height: 2),
+                            Text(tr('Весь трафик iPhone идёт через Nexus'),
+                                style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
+                    ]),
                   ),
                 ] else ...[
                   switchRow(
@@ -737,6 +761,7 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
               child: Column(
                 children: [
+                  if (!app.isIos) ...[
                   switchRow(
                     Icons.screenshot_monitor_rounded,
                     tr('Скрывать экран'),
@@ -748,6 +773,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   const Divider(height: 14),
+                  ],
                   switchRow(
                     Icons.content_paste_off_rounded,
                     tr('Очищать буфер обмена'),
@@ -755,6 +781,7 @@ class SettingsScreen extends StatelessWidget {
                     st.clearClipboard,
                     (v) => app.updateSettings((s) => s.clearClipboard = v),
                   ),
+                  if (!app.isIos) ...[
                   const Divider(height: 14),
                   InkWell(
                     onTap: AndroidSystem.openVpnSettings,
@@ -788,6 +815,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  ],
                 ],
               ),
             ),

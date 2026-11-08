@@ -67,6 +67,8 @@ const kEn = <String, String>{
       'A VPN was turned on in another app — Nexus disconnected. Tap “Connect” to get it back',
   'VPN оборвался — интернет заблокирован, чтобы ничего не ушло мимо':
       'The VPN dropped — internet is blocked so nothing leaks around it',
+  'VPN остановлен: {0}':
+      'VPN stopped: {0}',
   'VPN подключён, но сайты не открываются — переподключитесь или выберите другой сервер.':
       'The VPN is connected but websites don\'t open — reconnect or pick another server.',
   'VPN, который думает за вас':
@@ -195,6 +197,8 @@ const kEn = <String, String>{
       'Version {0}',
   'Весь трафик':
       'All traffic',
+  'Весь трафик iPhone идёт через Nexus':
+      'All iPhone traffic goes through Nexus',
   'Весь трафик телефона идёт через Nexus':
       'All phone traffic goes through Nexus',
   'Включён, но Nexus запущен без прав администратора — работает системный прокси':
@@ -351,6 +355,8 @@ const kEn = <String, String>{
       'Startup',
   'Запуск ядра: {0}':
       'Starting core: {0}',
+  'Запуск: {0}':
+      'Starting: {0}',
   'Запускать вместе с {0}':
       'Launch with {0}',
   'Защита':

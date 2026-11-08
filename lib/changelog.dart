@@ -19,8 +19,10 @@ const appVersionLabel = isBetaBuild
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
   ('2.5.0', [
+    'Nexus для iPhone и iPad',
     'Nexus для Linux и macOS: подписки, Авто, умный режим, трей, автообновление',
     'Режим TUN на Linux и macOS — весь трафик компьютера через VPN',
+    'Linux: пакет .deb — режим TUN без пароля',
   ]),
   ('2.4.0', [
     'Режим «Только заблокированное»: через VPN — только заблокированные сайты (полный список, обновляется с каждой версией), остальное напрямую',
@@ -223,8 +225,10 @@ const changelog = <(String, List<String>)>[
 /// Английский текст изменений последних версий (у старых — русский).
 const changelogEn = <String, List<String>>{
   '2.5.0': [
+    'Nexus for iPhone and iPad',
     'Nexus for Linux and macOS: subscriptions, Auto, smart mode, tray, auto-update',
     'TUN mode on Linux and macOS — all computer traffic through the VPN',
+    'Linux: .deb package — TUN mode without a password',
   ],
   '2.4.0': [
     '"Blocked only" mode: only blocked sites go via VPN (full list, updated with every version), everything else directly',

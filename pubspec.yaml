@@ -38,6 +38,8 @@ flutter:
     - assets/icon/tray_off.ico
     - assets/icon/tray_on.png
     - assets/icon/tray_off.png
+    - assets/icon/tray_mac_on.png
+    - assets/icon/tray_mac_off.png
     - assets/flags/
   fonts:
     - family: Manrope

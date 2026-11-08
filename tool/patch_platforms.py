@@ -481,6 +481,29 @@ def macos():
     ])
 
 
+def ios():
+    """Nexus для iOS: свой AppDelegate (без сцен), канал VPN, права, ссылки
+    nexus://. Цель NexusTunnel добавляет tool/ios/add_tunnel.rb."""
+    import plistlib
+    import shutil
+    src = ROOT / "tool/ios"
+    for f in (src / "Runner").iterdir():
+        shutil.copy(f, ROOT / "ios/Runner" / f.name)
+    shutil.copytree(src / "NexusTunnel", ROOT / "ios/NexusTunnel", dirs_exist_ok=True)
+    # Без сцен: регистрация плагинов и ссылки — в AppDelegate.
+    (ROOT / "ios/Runner/SceneDelegate.swift").write_text(
+        "// Nexus работает без сцен (UIScene) — см. AppDelegate.swift.\n", encoding="utf-8")
+    p = ROOT / "ios/Runner/Info.plist"
+    info = plistlib.loads(p.read_bytes())
+    info.pop("UIApplicationSceneManifest", None)
+    info["CFBundleDisplayName"] = "Nexus"
+    info["CFBundleURLTypes"] = [{
+        "CFBundleURLName": "app.nexusvpn.nexus",
+        "CFBundleURLSchemes": ["nexus"],
+    }]
+    p.write_bytes(plistlib.dumps(info))
+
+
 if (ROOT / "android").is_dir():
     android()
 if (ROOT / "windows").is_dir():
@@ -489,6 +512,8 @@ if (ROOT / "linux").is_dir():
     linux()
 if (ROOT / "macos").is_dir():
     macos()
+if (ROOT / "ios").is_dir():
+    ios()
 
 if errors:
     print("\nОШИБКИ ПАТЧА:\n  " + "\n  ".join(errors))

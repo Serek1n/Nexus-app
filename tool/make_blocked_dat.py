@@ -6,6 +6,12 @@
 GeoSite { string country_code = 1; ... }. Записи копируются байт в байт.
 
 Запуск: python3 tool/make_blocked_dat.py geosite.dat nexus-blocked.dat
+
+Третий аргумент — свой список категорий через запятую (подходит и для
+geoip.dat: формат GeoIPList тот же). Так для iOS собираются маленькие
+базы только с нужными Nexus категориями — память VPN-расширения на
+iPhone ограничена:
+  python3 tool/make_blocked_dat.py geoip.dat out/geoip.dat ru,telegram,private
 """
 import sys
 
@@ -31,6 +37,9 @@ def varint(buf, i):
 
 def main():
     src, dst = sys.argv[1], sys.argv[2]
+    want = WANT
+    if len(sys.argv) > 3:
+        want = {c.strip().upper().encode() for c in sys.argv[3].split(",") if c.strip()}
     data = open(src, "rb").read()
     out = bytearray()
     found = []
@@ -47,11 +56,12 @@ def main():
         if entry[:1] == b"\x0a":
             cl, j = varint(entry, 1)
             code = bytes(entry[j:j + cl]).upper()
-            if code in WANT:
+            if code in want:
                 out += data[start:i]
                 found.append(code.decode())
-    if not found:
-        raise SystemExit("категория ru-blocked не найдена")
+    missing = {w.decode() for w in want} - set(found)
+    if not found or (len(sys.argv) > 3 and missing):
+        raise SystemExit(f"нет категорий: {', '.join(sorted(missing))}")
     open(dst, "wb").write(out)
     print(f"{dst}: {', '.join(found)} — {len(out)} байт")
 
