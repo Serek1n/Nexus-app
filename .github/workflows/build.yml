@@ -386,8 +386,8 @@ jobs:
         shell: pwsh
         run: |
           $base = "https://github.com/XTLS/Xray-core/releases/latest/download"
-          Invoke-WebRequest "$base/Xray-windows-64.zip" -OutFile xray.zip
-          Invoke-WebRequest "$base/Xray-windows-64.zip.dgst" -OutFile xray.dgst
+          Invoke-WebRequest "$base/Xray-windows-64.zip" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile xray.zip
+          Invoke-WebRequest "$base/Xray-windows-64.zip.dgst" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile xray.dgst
           $want = ((Get-Content xray.dgst -Raw) | Select-String -Pattern 'SHA2-256=\s*([0-9a-fA-F]{64})').Matches[0].Groups[1].Value.ToLower()
           $got = (Get-FileHash xray.zip -Algorithm SHA256).Hash.ToLower()
           if ($want -ne $got) { throw "Контрольная сумма Xray не совпала: $got != $want" }
@@ -401,8 +401,8 @@ jobs:
           # Список заблокированных сайтов (см. tool/make_blocked_dat.py).
           $blocked = "false"
           try {
-            Invoke-WebRequest "$env:RF_URL/geosite.dat" -OutFile rf-geosite.dat
-            Invoke-WebRequest "$env:RF_URL/geosite.dat.sha256sum" -OutFile rf-geosite.dat.sha256sum
+            Invoke-WebRequest "$env:RF_URL/geosite.dat" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile rf-geosite.dat
+            Invoke-WebRequest "$env:RF_URL/geosite.dat.sha256sum" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile rf-geosite.dat.sha256sum
             $w = ((Get-Content rf-geosite.dat.sha256sum -Raw).Trim() -split '\s+')[0].ToLower()
             $g = (Get-FileHash rf-geosite.dat -Algorithm SHA256).Hash.ToLower()
             if ($w -ne $g) { throw "SHA-256 не совпал" }
@@ -434,8 +434,8 @@ jobs:
           Copy-Item xray\LICENSE-Wintun "$rel\LICENSE-Wintun.txt"
           if (Test-Path nexus-blocked.dat) { Copy-Item nexus-blocked.dat "$rel\nexus-blocked.dat" }
           foreach ($g in "geoip.dat","geosite.dat") {
-            Invoke-WebRequest "$env:GEO_URL/$g" -OutFile "$rel\$g"
-            Invoke-WebRequest "$env:GEO_URL/$g.sha256sum" -OutFile "$g.sha256sum"
+            Invoke-WebRequest "$env:GEO_URL/$g" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile "$rel\$g"
+            Invoke-WebRequest "$env:GEO_URL/$g.sha256sum" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile "$g.sha256sum"
             $want = ((Get-Content "$g.sha256sum" -Raw).Trim() -split '\s+')[0].ToLower()
             $got = (Get-FileHash "$rel\$g" -Algorithm SHA256).Hash.ToLower()
             if ($want -ne $got) { throw "Контрольная сумма $g не совпала" }
