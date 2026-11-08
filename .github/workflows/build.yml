@@ -862,6 +862,9 @@ jobs:
             "$FLUTTER_ROOT/packages/flutter_tools/templates/cocoapods/Podfile-ios" > ios/Podfile
           grep -n "^platform" ios/Podfile
           flutter pub get
+          # У плагина flutter_v2ray_client подспек назван flutter_v2ray.podspec,
+          # а CocoaPods ищет его по имени пакета.
+          python3 -c "import sys; sys.path.insert(0, 'tool'); import patch_plugin as p; d = p.plugin_dir() / 'ios'; t = d / 'flutter_v2ray_client.podspec'; t.exists() or t.write_text((d / 'flutter_v2ray.podspec').read_text()); print(t)"
           (cd ios && pod install)
 
       - name: Сборка
