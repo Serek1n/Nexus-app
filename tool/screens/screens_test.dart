@@ -174,7 +174,14 @@ void main() {
       await _shot(t, 'phone_4_subscriptions');
       await _tab(t, tr('Настройки'));
       _size(t, 412, 5200);
+      // Режим «Пользователь» (по умолчанию для новых установок) и «Про».
+      app.updateSettings((s) => s.proMode = false);
+      await t.pump(const Duration(milliseconds: 300));
       await _shot(t, 'phone_5_settings');
+      app.updateSettings((s) => s.proMode = true);
+      await t.pump(const Duration(milliseconds: 300));
+      await _shot(t, 'phone_5b_settings_pro');
+      app.updateSettings((s) => s.proMode = false);
       _size(t, 412, 915);
       await _tab(t, tr('Главная'));
       await t.runAsync(() => app.disconnect());

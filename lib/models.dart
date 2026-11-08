@@ -394,6 +394,7 @@ class AppSettings {
     this.antiBlockFast = false,
     this.pinHash,
     this.hotkey = true,
+    this.proMode = false,
     this.theme = 'dark',
     this.autoMode = false,
     this.language = 'system',
@@ -477,6 +478,11 @@ class AppSettings {
   /// Windows: Ctrl+Alt+N — подключить/отключить из любой программы.
   bool hotkey;
 
+  /// Режим настроек: false — «Пользователь» (только нужное для обычной
+  /// работы), true — «Про» (все настройки). Скрытые настройки при этом
+  /// продолжают действовать.
+  bool proMode;
+
   /// Оформление: dark, light или system.
   String theme;
 
@@ -556,6 +562,7 @@ class AppSettings {
         'antiBlockFast': antiBlockFast,
         if (pinHash != null) 'pinHash': pinHash,
         'hotkey': hotkey,
+        'proMode': proMode,
         'theme': theme,
         'autoMode': autoMode,
         'language': language,
@@ -605,6 +612,9 @@ class AppSettings {
         antiBlockFast: j['antiBlockFast'] as bool? ?? false,
         pinHash: j['pinHash'] as String?,
         hotkey: j['hotkey'] as bool? ?? true,
+        // Кто пользовался Nexus до появления режимов, остаётся в «Про»:
+        // у них всё уже настроено, ничего не прячем.
+        proMode: j['proMode'] as bool? ?? true,
         theme: const ['dark', 'light', 'system'].contains(j['theme'])
             ? j['theme'] as String
             : 'dark',

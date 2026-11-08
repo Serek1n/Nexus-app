@@ -218,6 +218,8 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final st = app.settings;
+    // «Пользователь» — только нужное для обычной работы, «Про» — всё.
+    final pro = st.proMode;
 
     Widget switchRow(IconData icon, String title, String sub, bool value,
             ValueChanged<bool> onChanged) =>
@@ -292,6 +294,10 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: _gapped([
           PageHeader(title: tr('Настройки')),
+          _ModeSwitch(
+            pro: pro,
+            onChanged: (v) => app.updateSettings((s) => s.proMode = v),
+          ),
           SectionTitle(tr('Маршрутизация')),
           routeOption(
             RoutingMode.smart,
@@ -308,7 +314,7 @@ class SettingsScreen extends StatelessWidget {
             tr('Весь трафик'),
             tr('Абсолютно всё идёт через сервер Nexus'),
           ),
-          NeonCard(
+          if (pro) NeonCard(
             onTap: () => _editRules(context),
             child: Row(
               children: [
@@ -349,7 +355,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
           ),
-          NeonCard(
+          if (pro) NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,7 +393,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          if (app.isDesktop)
+          if (pro && app.isDesktop)
             NeonCard(
               onTap: () => _editApps(context),
               child: Row(
@@ -417,7 +423,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           // Приложения мимо VPN: iOS такого не позволяет.
-          if (!app.isDesktop && !app.isIos)
+          if (pro && !app.isDesktop && !app.isIos)
             NeonCard(
               onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AppsScreen())),
@@ -452,11 +458,13 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           SectionTitle(tr('Подключение')),
-          NeonCard(
+          // «Пользователь» на телефоне: здесь только тонкие настройки режима.
+          if (pro || app.isDesktop) NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
               children: [
                 if (app.isDesktop) ...[
+                  if (pro) ...[
                   switchRow(
                     Icons.lan_rounded,
                     tr('Системный прокси'),
@@ -468,6 +476,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                   const Divider(height: 14),
+                  ],
                   switchRow(
                     Icons.lan_outlined,
                     tr('Режим TUN'),
@@ -483,6 +492,7 @@ class SettingsScreen extends StatelessWidget {
                     st.windowsTun,
                     (v) => _toggleTun(context, v),
                   ),
+                  if (pro) ...[
                   const Divider(height: 14),
                   switchRow(
                     Icons.password_rounded,
@@ -570,6 +580,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  ],
                 ] else if (app.isIos) ...[
                   // iOS: только полноценный VPN (системный профиль Nexus).
                   Padding(
@@ -641,6 +652,7 @@ class SettingsScreen extends StatelessWidget {
               st.autoMode,
               (v) => app.setAutoMode(v),
             ),
+            if (pro) ...[
             const Divider(height: 14),
             switchRow(
               Icons.call_split_rounded,
@@ -683,6 +695,7 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
             ]),
           ),
           // На телевизоре нет батареи — экономия энергии VPN не мешает,
@@ -711,7 +724,7 @@ class SettingsScreen extends StatelessWidget {
                           Autostart.apply(v, tun: st.windowsTun);
                         },
                       ),
-                      if (Platform.isWindows) ...[
+                      if (pro && Platform.isWindows) ...[
                       const Divider(height: 14),
                       switchRow(
                         Icons.keyboard_rounded,
@@ -730,7 +743,7 @@ class SettingsScreen extends StatelessWidget {
                   )
                 : const _AndroidBackground(),
           ),
-          if (app.isDesktop) ...[
+          if (pro && app.isDesktop) ...[
             SectionTitle(tr('Защита')),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -755,7 +768,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ],
-          if (!app.isDesktop) ...[
+          if (pro && !app.isDesktop) ...[
             SectionTitle(tr('Защита')),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -820,6 +833,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ],
+          if (pro) ...[
           SectionTitle(tr('Запуск')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -916,6 +930,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          ],
           SectionTitle(tr('Обновления Nexus')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
@@ -1002,7 +1017,7 @@ class SettingsScreen extends StatelessWidget {
                       secondary: true,
                       onPressed: () => showChangelog(context),
                     ),
-                    if (AppUpdater.configured)
+                    if (pro && AppUpdater.configured)
                       NeonButton(
                         label: tr('Откатить версию'),
                         icon: Icons.history_rounded,
@@ -1011,7 +1026,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (AppUpdater.configured) ...[
+                if (pro && AppUpdater.configured) ...[
                   const Divider(height: 22),
                   switchRow(
                     Icons.autorenew_rounded,
@@ -1084,6 +1099,7 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const DiagnosticsScreen())),
                 ),
+                if (pro) ...[
                 const Divider(height: 6),
                 _NavRow(
                   icon: Icons.bar_chart_rounded,
@@ -1099,6 +1115,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: tr('Подписки, серверы и настройки под паролем. Восстановить — через «Добавить»'),
                   onTap: () => showBackupExport(context),
                 ),
+                ],
               ],
             ),
           ),
@@ -1519,3 +1536,65 @@ class _NavRow extends StatelessWidget {
         ),
       );
 }
+
+/// Переключатель «Пользователь / Про» вверху настроек.
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({required this.pro, required this.onChanged});
+  final bool pro;
+  final ValueChanged<bool> onChanged;
+
+  Widget _option(bool value, IconData icon, String title, String sub) {
+    final on = pro == value;
+    return Expanded(
+      child: NeonCard(
+        active: on,
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        onTap: on ? null : () => onChanged(value),
+        child: Row(children: [
+          Icon(icon, color: on ? NX.violet : NX.text3, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                        color: on ? NX.text : NX.text2)),
+                const SizedBox(height: 2),
+                Text(sub,
+                    maxLines: 2,
+                    style: TextStyle(color: NX.text3, fontSize: 11.5, height: 1.3)),
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          _option(false, Icons.person_rounded, tr('Пользователь'),
+              tr('Только нужное')),
+          const SizedBox(width: 10),
+          _option(true, Icons.tune_rounded, tr('Про'), tr('Все настройки')),
+        ]),
+        if (!pro)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: Text(
+              tr('Тонкие настройки спрятаны и работают как настроены. Включите «Про», чтобы их увидеть'),
+              style: TextStyle(color: NX.text3, fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+}
+

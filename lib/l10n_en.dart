@@ -211,6 +211,8 @@ const kEn = <String, String>{
       'Restored: {0} subscriptions, {1} servers, settings',
   'Все':
       'All',
+  'Все настройки':
+      'All settings',
   'Все приложения через VPN':
       'All apps through the VPN',
   'Все программы через Nexus, как VPN на телефоне. Нужны права администратора':
@@ -683,6 +685,8 @@ const kEn = <String, String>{
       'Get test builds before everyone else. If something breaks — “Roll back version”',
   'Получите ссылку на подписку в Discord-боте NEXUS_VPN\nи вставьте её сюда':
       'Get a subscription link from the NEXUS_VPN Discord bot\nand paste it here',
+  'Пользователь':
+      'Basic',
   'Пользоваться прокси смогут только приложения, которым вы дали логин и пароль':
       'Only apps you gave the login and password to can use the proxy',
   'Порты {0}/{1} заняты другой программой (например, Happ или v2rayN) — Nexus использует {2}/{3}':
@@ -697,6 +701,8 @@ const kEn = <String, String>{
       'On launch, connect and reconnect',
   'Приложения без VPN':
       'Apps without VPN',
+  'Про':
+      'Pro',
   'Проверить':
       'Check',
   'Проверить ещё раз':
@@ -959,10 +965,14 @@ const kEn = <String, String>{
       'Speed test: {0} Mbps via “{1}”',
   'Только заблокированное':
       'Blocked only',
+  'Только нужное':
+      'Just the essentials',
   'Только прокси 127.0.0.1:10807 — им сможет пользоваться любое приложение на телефоне':
       'Proxy only 127.0.0.1:10807 — any app on the phone can use it',
   'Только рабочие':
       'Working only',
+  'Тонкие настройки спрятаны и работают как настроены. Включите «Про», чтобы их увидеть':
+      'Advanced settings are hidden and keep working as set. Switch to “Pro” to see them',
   'Трафик через «{0}» идёт, задержка {1} мс':
       'Traffic flows via “{0}”, latency {1} ms',
   'Тёмная':
