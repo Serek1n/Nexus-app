@@ -300,6 +300,17 @@ jobs:
           fi
           echo "NDK $NDK на месте"
 
+      - name: Gradle (скачать с повторами)
+        run: |
+          # Обёртка Gradle качает дистрибутив без повторов и падает на разовых
+          # ошибках GitHub (502/504). Качаем сами и отдаём ей локальный файл.
+          P=android/gradle/wrapper/gradle-wrapper.properties
+          URL=$(grep '^distributionUrl=' $P | cut -d= -f2- | sed 's#\\:#:#g')
+          echo "Gradle: $URL"
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/gradle.zip" "$URL"
+          sed -i "s#^distributionUrl=.*#distributionUrl=file\\:$RUNNER_TEMP/gradle.zip#" $P
+          grep '^distributionUrl=' $P
+
       - name: Сборка APK
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
