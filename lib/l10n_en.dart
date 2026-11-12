@@ -191,6 +191,8 @@ const kEn = <String, String>{
       'In VPN settings, choose Nexus and turn on “Always-on VPN” and “Block connections without VPN”',
   'В подписке не найдено ни одного сервера':
       'No servers found in the subscription',
+  'В подписке только серверы {0} — ядро Xray их не поддерживает':
+      'The subscription only has {0} servers — the Xray core doesn\'t support them',
   'В режиме TUN системный прокси не нужен — HTTP-прокси закрыт паролем, им пользуется только Nexus':
       'In TUN mode the system proxy isn\'t needed — the HTTP proxy is password-protected and used only by Nexus',
   'В релизе {0} нет сборки для этой системы':
@@ -221,6 +223,8 @@ const kEn = <String, String>{
       'All traffic through the VPN',
   'Включён, но Nexus запущен без прав администратора — работает системный прокси':
       'On, but Nexus is running without administrator rights — the system proxy is used',
+  'Вместо списка серверов пришла веб-страница — проверьте, что это ссылка на подписку, а не на сайт':
+      'A web page came back instead of a server list — make sure this is a subscription link, not a website',
   'Внимание: трафик идёт мимо VPN':
       'Warning: traffic is bypassing the VPN',
   'Восстановить':
@@ -707,6 +711,8 @@ const kEn = <String, String>{
       'The subscription is loaded without encryption: it can be tampered with or the keys spied on. Ask for an https link.',
   'Подписка заканчивается через {0} {1} — продлите её в боте':
       'Subscription ends in {0} {1} — renew it in the bot',
+  'Подписка зашифрована для приложения Happ — попросите у поставщика обычную ссылку (для v2rayNG или Hiddify)':
+      'The subscription is encrypted for the Happ app — ask your provider for a regular link (for v2rayNG or Hiddify)',
   'Подписка не найдена (404) — проверьте ссылку: возможно, она устарела, клиент удалён или срок истёк':
       'Subscription not found (404) — check the link: it may be outdated, the client deleted or expired',
   'Подписка с сайта {0} будет добавлена в Nexus.':
@@ -927,6 +933,8 @@ const kEn = <String, String>{
       'The subscription server keeps redirecting endlessly',
   'Сервер подписки перенаправил на незащищённый адрес — загрузка остановлена':
       'The subscription server redirected to an insecure address — loading stopped',
+  'Сервер подписки прислал пустой ответ — возможно, подписка истекла или в ней нет серверов':
+      'The subscription server sent an empty response — the subscription may have expired or has no servers',
   'Серверы':
       'Servers',
   'Сертификат сервера подписки недействителен или просрочен — сообщите владельцу подписки':

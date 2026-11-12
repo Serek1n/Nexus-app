@@ -750,6 +750,14 @@ void _patchShareParams(Map<String, dynamic> cfg, String link) {
       }
       ss['xhttpSettings'] = xh;
     }
+    // HTTPUpgrade: парсер ссылок его не знает — без этого терялись путь
+    // и адрес, и сервер не подключался.
+    if (ss['network'] == 'httpupgrade') {
+      ss['httpupgradeSettings'] = {
+        'path': p('path') ?? '/',
+        if (p('host') != null) 'host': p('host'),
+      };
+    }
     if (ss['network'] == 'grpc' && p('authority') != null) {
       final g = (ss['grpcSettings'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{};

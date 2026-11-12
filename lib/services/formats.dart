@@ -6,9 +6,18 @@ import 'package:yaml/yaml.dart';
 /// каждый сервер переводится в обычную ссылку vless:// trojan:// …,
 /// дальше с ним работает весь остальной Nexus.
 List<String> convertSubscription(String body) {
-  final t = body.trim();
+  var t = body.trim();
+  if (t.startsWith('\uFEFF')) t = t.substring(1);
   try {
-    if (t.startsWith('{')) return _fromSingBox(jsonDecode(t));
+    if (t.startsWith('[') || t.startsWith('{')) {
+      final j = jsonDecode(t);
+      // Xray JSON (Remnawave, Marzban и др. для v2rayNG, Happ, Streisand):
+      // массив полных конфигов или один конфиг с outbounds[].protocol.
+      final xray = _fromXray(j);
+      if (xray.isNotEmpty) return xray;
+      if (j is Map) return _fromSingBox(j);
+      return const [];
+    }
     if (RegExp(r'(^|\n)\s*proxies\s*:').hasMatch(t)) {
       return _fromClash(loadYaml(t));
     }
@@ -37,6 +46,190 @@ String _link(String scheme, String user, String server, Object port,
         Map<String, Object?> p, Object? name) =>
     '$scheme://${Uri.encodeComponent(user)}@${_host(server)}:$port'
     '?${_q(p)}#${_name(name)}';
+
+// ──────────────────────────────── Xray JSON ────────────────────────────────
+
+List<String> _fromXray(Object? j) {
+  final configs = j is List ? j : [j];
+  final out = <String>[];
+  for (final c in configs.take(1000)) {
+    final cfg = _m(c);
+    final obs = (cfg['outbounds'] as List?) ?? const [];
+    if (obs.isEmpty) continue;
+    final maps = obs.map(_m).toList();
+    // Основной сервер — outbound с тегом proxy, иначе первый с протоколом
+    // прокси (в конфиге бывают ещё direct, block, dns и звенья цепочки).
+    const proto = {
+      'vless', 'vmess', 'trojan', 'shadowsocks', 'socks', 'hysteria',
+      'wireguard',
+    };
+    final main = maps.firstWhere(
+        (o) => o['tag'] == 'proxy' && proto.contains(o['protocol']),
+        orElse: () => maps.firstWhere((o) => proto.contains(o['protocol']),
+            orElse: () => const {}));
+    if (main.isEmpty) continue;
+    try {
+      final l = _xrayOne(main, cfg['remarks'] ?? main['tag']);
+      if (l != null) out.add(l);
+    } catch (_) {}
+  }
+  return out;
+}
+
+/// Список строк или строка → «a,b».
+String? _join(Object? v) => v is List ? v.join(',') : _s(v);
+
+String? _xrayOne(Map<String, dynamic> o, Object? name) {
+  final st = _m(o['settings']);
+  final ss = _m(o['streamSettings']);
+  var net = '${ss['network'] ?? 'tcp'}';
+  if (net == 'raw') net = 'tcp';
+  if (net == 'splithttp') net = 'xhttp';
+  final sec = '${ss['security'] ?? 'none'}';
+  final tls = _m(ss['tlsSettings']);
+  final re = _m(ss['realitySettings']);
+  final ws = _m(ss['wsSettings']);
+  final grpc = _m(ss['grpcSettings']);
+  final xh = _m(ss['xhttpSettings'] ?? ss['splithttpSettings']);
+  final hu = _m(ss['httpupgradeSettings']);
+  final kcp = _m(ss['kcpSettings']);
+  final tcp = _m(ss['rawSettings'] ?? ss['tcpSettings']);
+  final tcpHeader = _m(tcp['header']);
+  final tcpReq = _m(tcpHeader['request']);
+  String? first(Object? v) => v is List ? (v.isEmpty ? null : '${v.first}') : _s(v);
+
+  final params = <String, Object?>{
+    'type': net,
+    'security': sec,
+    'sni': sec == 'reality' ? re['serverName'] : tls['serverName'],
+    'fp': sec == 'reality' ? re['fingerprint'] : tls['fingerprint'],
+    'alpn': _join(tls['alpn']),
+    'allowInsecure': tls['allowInsecure'] == true ? 1 : null,
+    'pbk': re['publicKey'] ?? re['password'],
+    'sid': re['shortId'],
+    'spx': re['spiderX'],
+    'pqv': re['mldsa65Verify'],
+    'ech': tls['echConfigList'],
+    switch (net) {
+      'ws' => 'path',
+      'xhttp' => 'path',
+      'httpupgrade' => 'path',
+      _ => '_',
+    }: switch (net) {
+      'ws' => ws['path'],
+      'xhttp' => xh['path'],
+      'httpupgrade' => hu['path'],
+      _ => null,
+    },
+    'host': switch (net) {
+      'ws' => ws['host'] ?? _m(ws['headers'])['Host'],
+      'xhttp' => xh['host'],
+      'httpupgrade' => hu['host'],
+      'tcp' => first(_m(tcpReq['headers'])['Host']),
+      'grpc' => grpc['authority'],
+      _ => null,
+    },
+    'serviceName': grpc['serviceName'],
+    'authority': grpc['authority'],
+    'mode': net == 'grpc'
+        ? (grpc['multiMode'] == true ? 'multi' : null)
+        : xh['mode'],
+    'extra': xh['extra'] is Map && (xh['extra'] as Map).isNotEmpty
+        ? jsonEncode(xh['extra'])
+        : null,
+    'headerType': net == 'tcp'
+        ? (tcpHeader['type'] == 'http' ? 'http' : null)
+        : net == 'kcp'
+            ? _m(kcp['header'])['type']
+            : null,
+    'seed': kcp['seed'],
+    'fm': ss['finalmask'] is Map ? jsonEncode(ss['finalmask']) : null,
+  };
+  if (net == 'tcp' && tcpHeader['type'] == 'http') {
+    params['path'] = first(tcpReq['path']);
+  }
+  params.remove('_');
+
+  // Адрес: старый вид (vnext / servers) и новый плоский (Xray 25+).
+  final vnext = _m((st['vnext'] as List?)?.firstOrNull);
+  final server = _m((st['servers'] as List?)?.firstOrNull);
+  final user = _m((vnext['users'] as List?)?.firstOrNull);
+  final addr = _s(vnext['address'] ?? server['address'] ?? st['address']);
+  final port = vnext['port'] ?? server['port'] ?? st['port'];
+
+  switch (o['protocol']) {
+    case 'vless':
+      final id = user['id'] ?? st['id'];
+      if (addr == null || port == null || id == null) return null;
+      return _link('vless', '$id', addr, port, {
+        ...params,
+        'flow': user['flow'] ?? st['flow'],
+        'encryption': user['encryption'] ?? st['encryption'] ?? 'none',
+      }, name);
+    case 'trojan':
+      final pw = server['password'] ?? st['password'];
+      if (addr == null || port == null || pw == null) return null;
+      return _link('trojan', '$pw', addr, port, params, name);
+    case 'vmess':
+      final id = user['id'] ?? st['id'];
+      if (addr == null || port == null || id == null) return null;
+      return 'vmess://${base64.encode(utf8.encode(jsonEncode({
+            'v': '2',
+            'ps': '${name ?? ''}',
+            'add': addr,
+            'port': '$port',
+            'id': '$id',
+            'aid': '${user['alterId'] ?? 0}',
+            'scy': '${user['security'] ?? st['security'] ?? 'auto'}',
+            'net': net,
+            'type': params['headerType'] ?? 'none',
+            'host': params['host'] ?? '',
+            'path': params['path'] ?? params['serviceName'] ?? '',
+            'tls': sec == 'tls' ? 'tls' : '',
+            'sni': params['sni'] ?? '',
+            'alpn': params['alpn'] ?? '',
+            'fp': params['fp'] ?? '',
+          })))}';
+    case 'shadowsocks':
+      final m = server['method'] ?? st['method'];
+      final pw = server['password'] ?? st['password'];
+      if (addr == null || port == null || m == null || pw == null) return null;
+      final cred =
+          base64Url.encode(utf8.encode('$m:$pw')).replaceAll('=', '');
+      return 'ss://$cred@${_host(addr)}:$port#${_name(name)}';
+    case 'socks':
+      if (addr == null || port == null) return null;
+      final u = _m((server['users'] as List?)?.firstOrNull);
+      final auth = u['user'] == null
+          ? ''
+          : '${base64Url.encode(utf8.encode('${u['user']}:${u['pass'] ?? ''}')).replaceAll('=', '')}@';
+      return 'socks://$auth${_host(addr)}:$port#${_name(name)}';
+    case 'hysteria':
+      if (addr == null || port == null) return null;
+      final hy = _m(ss['hysteriaSettings']);
+      return _link('hysteria2', '${hy['auth'] ?? st['auth'] ?? ''}', addr,
+          port, {
+        'sni': tls['serverName'],
+        'alpn': _join(tls['alpn']),
+        'insecure': tls['allowInsecure'] == true ? 1 : null,
+      }, name);
+    case 'wireguard':
+      final peer = _m((st['peers'] as List?)?.firstOrNull);
+      final ep = _s(peer['endpoint']);
+      if (ep == null) return null;
+      final i = ep.lastIndexOf(':');
+      if (i <= 0) return null;
+      final host = ep.substring(0, i).replaceAll('[', '').replaceAll(']', '');
+      return _link('wireguard', '${st['secretKey']}', host, ep.substring(i + 1), {
+        'publickey': peer['publicKey'],
+        'presharedkey': peer['preSharedKey'],
+        'address': _join(st['address']),
+        'reserved': _join(st['reserved']),
+        'mtu': st['mtu'],
+      }, name);
+  }
+  return null;
+}
 
 // ─────────────────────────────── sing-box ───────────────────────────────
 

@@ -179,12 +179,34 @@ bool _isLoopback(String host) {
       h == '::';
 }
 
-/// Текст подписки → серверы; null — в ответе нет ни одной ссылки.
-/// Чистая функция: годится для [Isolate.run].
-List<ServerProfile>? _parseBody(List<int> bytes, String subId) {
-  final body = utf8.decode(bytes, allowMalformed: true);
+/// Что вышло из разбора тела подписки.
+class _Parsed {
+  const _Parsed(this.servers, [this.why]);
+  final List<ServerProfile> servers;
+
+  /// Понятная причина, если серверов нет.
+  final String? why;
+}
+
+/// Протоколы, которые бывают в подписках, но ядро Xray их не знает.
+const _foreignSchemes = {
+  'tuic': 'TUIC',
+  'hysteria': 'Hysteria 1',
+  'hy': 'Hysteria 1',
+  'anytls': 'AnyTLS',
+  'ssr': 'ShadowsocksR',
+  'naive+https': 'NaiveProxy',
+  'naive': 'NaiveProxy',
+  'juicity': 'Juicity',
+  'mieru': 'Mieru',
+  'ssh': 'SSH',
+};
+
+/// Текст подписки → серверы. Чистая функция: годится для [Isolate.run].
+_Parsed _parseBody(List<int> bytes, String subId) {
+  var body = utf8.decode(bytes, allowMalformed: true).trim();
+  if (body.startsWith('\uFEFF')) body = body.substring(1);
   final links = extractLinks(body);
-  if (links.isEmpty) return null;
   final servers = <ServerProfile>[];
   for (final l in links.take(1000)) {
     final p = profileFromLink(l, subscriptionId: subId);
@@ -192,7 +214,39 @@ List<ServerProfile>? _parseBody(List<int> bytes, String subId) {
     // так чужая подписка могла бы стучаться в локальные службы устройства.
     if (p != null && !_isLoopback(p.host)) servers.add(p);
   }
-  return servers;
+  if (servers.isNotEmpty) return _Parsed(servers);
+  if (links.isNotEmpty) {
+    return _Parsed(
+        servers, tr('Не удалось разобрать ссылки из подписки'));
+  }
+  // Почему пусто — чтобы человек знал, что делать дальше.
+  final low = body.toLowerCase();
+  if (body.isEmpty) {
+    return _Parsed(servers,
+        tr('Сервер подписки прислал пустой ответ — возможно, подписка истекла или в ней нет серверов'));
+  }
+  if (low.contains('happ://crypt')) {
+    return _Parsed(servers,
+        tr('Подписка зашифрована для приложения Happ — попросите у поставщика обычную ссылку (для v2rayNG или Hiddify)'));
+  }
+  if (low.startsWith('<!doctype') || low.startsWith('<html') ||
+      low.startsWith('<')) {
+    return _Parsed(servers,
+        tr('Вместо списка серверов пришла веб-страница — проверьте, что это ссылка на подписку, а не на сайт'));
+  }
+  var text = body;
+  if (!text.contains('://')) text = tryBase64(text) ?? text;
+  final found = <String>{};
+  for (final m in RegExp(r'([a-z][a-z0-9+.-]{1,15})://', caseSensitive: false)
+      .allMatches(text)) {
+    final name = _foreignSchemes[m.group(1)!.toLowerCase()];
+    if (name != null) found.add(name);
+  }
+  if (found.isNotEmpty) {
+    return _Parsed(servers,
+        tr('В подписке только серверы {0} — ядро Xray их не поддерживает', [found.join(', ')]));
+  }
+  return _Parsed(servers, tr('В подписке не найдено ни одного сервера'));
 }
 
 class SubscriptionService {
@@ -252,6 +306,80 @@ class SubscriptionService {
     return u != null && (u.scheme == 'https' || u.scheme == 'http') ? v : null;
   }
 
+  /// Кем ещё представиться, если на первый запрос серверов не пришло.
+  static const _fallbackAgents = [
+    'v2rayN/7.13.8',
+    'Hiddify/2.5.7',
+    'clash-verge/v2.3.1',
+  ];
+
+  /// Один запрос подписки: свои правила перенаправлений, лимит размера.
+  static Future<(http.StreamedResponse, List<int>)> _download(
+      http.Client client, Uri uri, String ua, int limit) async {
+    late http.StreamedResponse res;
+    // Перенаправления проверяем сами: с https на http не идём (ссылка
+    // с ключами ушла бы открытым текстом), на адреса самого устройства —
+    // тоже. Идентификатор устройства отдаём только исходному серверу.
+    var current = uri;
+    for (var hop = 0;; hop++) {
+      final req = http.Request('GET', current)
+        ..followRedirects = false
+        ..headers['User-Agent'] = ua
+        ..headers['Accept'] = '*/*';
+      // Идентификатор устройства для панелей с лимитом устройств (3x-ui,
+      // Remnawave): без него такая подписка отвечает 404. Это случайное
+      // число, созданное при установке Nexus, — не серийный номер.
+      if (deviceId != null && current.host == uri.host) {
+        req.headers['X-HWID'] = deviceId!;
+        req.headers['X-Device-OS'] = switch (Platform.operatingSystem) {
+          'android' => 'Android',
+          'ios' => 'iOS',
+          'macos' => 'macOS',
+          'linux' => 'Linux',
+          _ => 'Windows',
+        };
+        req.headers['X-Device-Model'] = 'Nexus';
+        final ver = Platform.operatingSystemVersion;
+        req.headers['X-Ver-OS'] = ver.length > 60 ? ver.substring(0, 60) : ver;
+      }
+      res = await client.send(req).timeout(const Duration(seconds: 20));
+      if (!const [301, 302, 303, 307, 308].contains(res.statusCode)) break;
+      await res.stream.drain<void>().catchError((_) {});
+      final loc = res.headers['location'];
+      final next = loc == null ? null : current.resolve(loc);
+      if (next == null || hop >= 5) {
+        throw Exception(tr('Сервер подписки отвечает бесконечными перенаправлениями'));
+      }
+      if (!(next.scheme == 'https' || next.scheme == 'http') ||
+          (current.scheme == 'https' && next.scheme == 'http')) {
+        throw Exception(tr('Сервер подписки перенаправил на незащищённый адрес — загрузка остановлена'));
+      }
+      if (_isLoopback(next.host)) {
+        throw Exception(tr('Подписка указывает на адрес этого устройства — загрузка остановлена'));
+      }
+      current = next;
+    }
+    if (res.statusCode == 404) {
+      await res.stream.drain<void>().catchError((_) {});
+      if (res.headers['x-hwid-max-devices-reached'] == 'true') {
+        throw Exception(tr('Лимит устройств подписки исчерпан — отключите старое устройство в боте или попросите увеличить лимит'));
+      }
+      throw Exception(tr('Подписка не найдена (404) — проверьте ссылку: возможно, она устарела, клиент удалён или срок истёк'));
+    }
+    if (res.statusCode != 200) {
+      await res.stream.drain<void>().catchError((_) {});
+      throw Exception(tr('Сервер ответил кодом {0}', [res.statusCode]));
+    }
+    final bytes = <int>[];
+    await for (final chunk in res.stream.timeout(const Duration(seconds: 30))) {
+      bytes.addAll(chunk);
+      if (bytes.length > limit) {
+        throw Exception(tr('Подписка слишком большая (больше 8 МБ)'));
+      }
+    }
+    return (res, bytes);
+  }
+
   /// Загружает подписку и обновляет [sub] (трафик, срок, название).
   /// [url] — запасной адрес вместо основного (сама подписка не меняется).
   static Future<FetchResult> fetch(Subscription sub,
@@ -271,83 +399,33 @@ class SubscriptionService {
         ? http.Client()
         : IOClient(HttpClient()..findProxy = (_) => 'PROXY $proxy');
     late http.StreamedResponse res;
-    final bytes = <int>[];
+    List<ServerProfile>? servers;
+    String? why;
     try {
-      // Перенаправления проверяем сами: с https на http не идём (ссылка
-      // с ключами ушла бы открытым текстом), на адреса самого устройства —
-      // тоже. Идентификатор устройства отдаём только исходному серверу.
-      var current = uri;
-      for (var hop = 0;; hop++) {
-        final req = http.Request('GET', current)
-          ..followRedirects = false
-          ..headers['User-Agent'] = userAgent
-          ..headers['Accept'] = '*/*';
-        // Идентификатор устройства для панелей с лимитом устройств (3x-ui,
-        // Remnawave): без него такая подписка отвечает 404. Это случайное
-        // число, созданное при установке Nexus, — не серийный номер.
-        if (deviceId != null && current.host == uri.host) {
-          req.headers['X-HWID'] = deviceId!;
-          req.headers['X-Device-OS'] =
-              switch (Platform.operatingSystem) {
-        'android' => 'Android',
-        'ios' => 'iOS',
-        'macos' => 'macOS',
-        'linux' => 'Linux',
-        _ => 'Windows',
-      };
-          req.headers['X-Device-Model'] = 'Nexus';
-          final ver = Platform.operatingSystemVersion;
-          req.headers['X-Ver-OS'] =
-              ver.length > 60 ? ver.substring(0, 60) : ver;
+      // Панели отдают разный формат в зависимости от приложения
+      // (User-Agent): ссылки, Xray JSON, Clash, sing-box — или пустой ответ
+      // «незнакомому» клиенту. Если в ответе нет серверов, спрашиваем ещё
+      // раз, представившись другими популярными клиентами.
+      for (final ua in [userAgent, ..._fallbackAgents]) {
+        final (r, bytes) = await _download(client, uri, ua, limit);
+        res = r;
+        // Большую подписку (сотни серверов, JSON-конфиги) разбираем в
+        // отдельном изоляте, чтобы не подвисал интерфейс.
+        final subId = sub.id;
+        final parsed = bytes.length > 64 * 1024
+            ? await Isolate.run(() => _parseBody(bytes, subId))
+            : _parseBody(bytes, subId);
+        if (parsed.servers.isNotEmpty) {
+          servers = parsed.servers;
+          break;
         }
-        res = await client.send(req).timeout(const Duration(seconds: 20));
-        if (!const [301, 302, 303, 307, 308].contains(res.statusCode)) break;
-        await res.stream.drain<void>().catchError((_) {});
-        final loc = res.headers['location'];
-        final next = loc == null ? null : current.resolve(loc);
-        if (next == null || hop >= 5) {
-          throw Exception(tr('Сервер подписки отвечает бесконечными перенаправлениями'));
-        }
-        if (!(next.scheme == 'https' || next.scheme == 'http') ||
-            (current.scheme == 'https' && next.scheme == 'http')) {
-          throw Exception(tr('Сервер подписки перенаправил на незащищённый адрес — загрузка остановлена'));
-        }
-        if (_isLoopback(next.host)) {
-          throw Exception(tr('Подписка указывает на адрес этого устройства — загрузка остановлена'));
-        }
-        current = next;
-      }
-      if (res.statusCode == 404) {
-        if (res.headers['x-hwid-max-devices-reached'] == 'true') {
-          throw Exception(tr('Лимит устройств подписки исчерпан — отключите старое устройство в боте или попросите увеличить лимит'));
-        }
-        throw Exception(tr('Подписка не найдена (404) — проверьте ссылку: возможно, она устарела, клиент удалён или срок истёк'));
-      }
-      if (res.statusCode != 200) {
-        throw Exception(tr('Сервер ответил кодом {0}', [res.statusCode]));
-      }
-      await for (final chunk
-          in res.stream.timeout(const Duration(seconds: 30))) {
-        bytes.addAll(chunk);
-        if (bytes.length > limit) {
-          throw Exception(tr('Подписка слишком большая (больше 8 МБ)'));
-        }
+        why ??= parsed.why;
       }
     } finally {
       client.close();
     }
-    // Большую подписку (сотни серверов, base64, JSON-конфиги) разбираем в
-    // отдельном изоляте, чтобы не подвисал интерфейс.
-    final subId = sub.id;
-    final parsed = bytes.length > 64 * 1024
-        ? await Isolate.run(() => _parseBody(bytes, subId))
-        : _parseBody(bytes, subId);
-    if (parsed == null) {
-      throw Exception(tr('В подписке не найдено ни одного сервера'));
-    }
-    final servers = parsed;
-    if (servers.isEmpty) {
-      throw Exception(tr('Не удалось разобрать ссылки из подписки'));
+    if (servers == null) {
+      throw Exception(why ?? tr('В подписке не найдено ни одного сервера'));
     }
 
     applyUserInfo(sub, res.headers['subscription-userinfo']);
