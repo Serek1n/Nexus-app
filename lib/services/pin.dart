@@ -56,3 +56,63 @@ class Pin {
     return Duration(seconds: s);
   }
 }
+
+/// Счётчик неудачных попыток PIN и пауза после них. Состояние хранится
+/// строкой через [read]/[write] (в приложении — SharedPreferences), чтобы
+/// паузу нельзя было обойти перезапуском Nexus.
+class PinGuard {
+  PinGuard({required this.read, required this.write, DateTime Function()? now})
+      : _now = now ?? DateTime.now;
+
+  final String? Function() read;
+  final void Function(String) write;
+  final DateTime Function() _now;
+
+  int fails = 0;
+  DateTime? blockedUntil;
+
+  bool get blocked => blockedUntil != null && _now().isBefore(blockedUntil!);
+
+  void load() {
+    try {
+      final j = jsonDecode(read() ?? '{}') as Map;
+      fails = (j['fails'] as num?)?.toInt() ?? 0;
+      final u = (j['until'] as num?)?.toInt();
+      blockedUntil = u == null ? null : DateTime.fromMillisecondsSinceEpoch(u);
+      // Часы перевели назад, чтобы снять паузу, — не даём: пауза не
+      // бывает дольше максимальной.
+      if (blockedUntil != null &&
+          blockedUntil!.difference(_now()) > const Duration(hours: 1)) {
+        blockedUntil = _now().add(Pin.delayAfter(fails));
+      }
+    } catch (_) {}
+  }
+
+  void _store(int f, DateTime? until) => write(jsonEncode({
+        'fails': f,
+        'until': until?.millisecondsSinceEpoch,
+      }));
+
+  /// Проверяет [pin] против [stored]. Попытка засчитывается до проверки:
+  /// закрыв Nexus во время проверки, её не «отменить».
+  Future<bool> attempt(String pin, String stored) async {
+    if (blocked) return false;
+    final f = fails + 1;
+    final d = Pin.delayAfter(f);
+    final until = d == Duration.zero ? null : _now().add(d);
+    _store(f, until);
+    if (await Pin.verify(pin, stored)) {
+      reset();
+      return true;
+    }
+    fails = f;
+    blockedUntil = until;
+    return false;
+  }
+
+  void reset() {
+    fails = 0;
+    blockedUntil = null;
+    _store(0, null);
+  }
+}

@@ -42,11 +42,11 @@ class _TrafficScreenState extends State<TrafficScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: TextStyle(color: NX.text3, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text3, fontSize: NXFont.sub)),
                 const SizedBox(height: 4),
                 Text(fmtBytes(bytes),
                     style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 17)),
+                        fontWeight: FontWeight.w800, fontSize: NXFont.h3)),
               ],
             ),
           ),
@@ -67,7 +67,7 @@ class _TrafficScreenState extends State<TrafficScreen> {
               Expanded(
                 child: Text(tr('Статистика трафика'),
                     style:
-                        TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+                        TextStyle(fontWeight: FontWeight.w800, fontSize: NXFont.h2)),
               ),
             ]),
             Padding(
@@ -114,7 +114,7 @@ class _TrafficScreenState extends State<TrafficScreen> {
                                           const SizedBox(height: 6),
                                           Text('${days[i].$1.day}',
                                               style: TextStyle(
-                                                  fontSize: 11,
+                                                  fontSize: NXFont.micro,
                                                   color: i == pick
                                                       ? NX.text
                                                       : NX.text3,
@@ -134,17 +134,17 @@ class _TrafficScreenState extends State<TrafficScreen> {
                           Text(
                               '${pd.day} ${_months[pd.month - 1].substring(0, 3)}',
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 14)),
+                                  fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                           const Spacer(),
                           const _Dot(NX.violet),
                           Text(' ↓ ${fmtBytes(pdn)}',
                               style: TextStyle(
-                                  color: NX.text2, fontSize: 13)),
+                                  color: NX.text2, fontSize: NXFont.body)),
                           const SizedBox(width: 12),
                           const _Dot(NX.mint),
                           Text(' ↑ ${fmtBytes(pu)}',
                               style: TextStyle(
-                                  color: NX.text2, fontSize: 13)),
+                                  color: NX.text2, fontSize: NXFont.body)),
                         ]),
                       ],
                     ),
@@ -152,7 +152,7 @@ class _TrafficScreenState extends State<TrafficScreen> {
                   const SizedBox(height: 10),
                   Text(
                     tr('Считается только трафик через VPN, данные хранятся на этом устройстве. Оператор и провайдер могут считать иначе.'),
-                    style: TextStyle(color: NX.text3, fontSize: 12.5, height: 1.4),
+                    style: TextStyle(color: NX.text3, fontSize: NXFont.sub, height: 1.4),
                   ),
                   const SizedBox(height: 16),
                   Align(

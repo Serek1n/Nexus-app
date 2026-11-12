@@ -91,7 +91,7 @@ class _ShareBody extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style:
-                  const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                  const TextStyle(fontSize: NXFont.h2, fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
           if (qr != null)
             Center(
@@ -121,7 +121,7 @@ class _ShareBody extends StatelessWidget {
             Expanded(
               child: Text(warning,
                   style: TextStyle(
-                      color: NX.text2, fontSize: 12.5, height: 1.35)),
+                      color: NX.text2, fontSize: NXFont.sub, height: 1.35)),
             ),
           ]),
           const SizedBox(height: 16),

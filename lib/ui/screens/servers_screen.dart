@@ -88,7 +88,7 @@ class _ServersScreenState extends State<ServersScreen> {
     final sp = app.speedAllProgress;
     final prog = app.pingProgress ?? sp;
 
-    return SafeArea(
+    final listView = SafeArea(
       bottom: false,
       child: CustomScrollView(
         slivers: [
@@ -106,37 +106,59 @@ class _ServersScreenState extends State<ServersScreen> {
                         : '${app.servers.length} ${plural(app.servers.length, tr('локация'), tr('локации'), tr('локаций'))}' '${dead > 0 ? tr(' · {0} не отвечают', [dead]) : ''}',
                 actions: [
                   NxIconButton(
-                    icon: _byPing
-                        ? Icons.sort_rounded
-                        : Icons.format_list_bulleted_rounded,
-                    tooltip: _byPing
-                        ? tr('Сортировка: по задержке')
-                        : tr('Сортировка: как в подписке'),
-                    onPressed: app.servers.isEmpty
-                        ? null
-                        : () => setState(() => _byPing = !_byPing),
-                  ),
-                  NxIconButton(
                     icon: Icons.speed_rounded,
                     tooltip: tr('Проверить задержку'),
-                    spinning: app.pingingAll,
+                    spinning: app.pingingAll || app.speedAllProgress != null,
                     onPressed: app.servers.isEmpty ? null : app.pingAll,
                   ),
-                  if (app.canSpeedAll)
-                    NxIconButton(
-                      icon: Icons.download_rounded,
-                      tooltip: app.speedAllProgress != null
-                          ? tr('Остановить проверку скорости')
-                          : tr('Проверить скорость всех серверов'),
-                      spinning: app.speedAllProgress != null,
-                      onPressed: app.servers.isEmpty ? null : app.speedTestAll,
-                    ),
                   const SizedBox(width: 8),
                   NxIconButton(
                     icon: Icons.add_rounded,
                     tooltip: tr('Добавить'),
                     onPressed: () => showAddSheet(context),
                   ),
+                  // Редкие действия — в меню с подписями: на телефоне
+                  // подсказки у значков не видны.
+                  if (app.servers.isNotEmpty)
+                    PopupMenuButton<String>(
+                      tooltip: tr('Ещё'),
+                      icon: Icon(Icons.more_vert_rounded, color: NX.text2),
+                      onSelected: (v) {
+                        switch (v) {
+                          case 'sort':
+                            setState(() => _byPing = !_byPing);
+                          case 'speed':
+                            app.speedTestAll();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'sort',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(_byPing
+                                ? Icons.format_list_bulleted_rounded
+                                : Icons.sort_rounded),
+                            title: Text(_byPing
+                                ? tr('Как в подписке')
+                                : tr('Сортировать по задержке')),
+                          ),
+                        ),
+                        if (app.canSpeedAll)
+                          PopupMenuItem(
+                            value: 'speed',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.download_rounded),
+                              title: Text(app.speedAllProgress != null
+                                  ? tr('Остановить проверку скорости')
+                                  : tr('Проверить скорость всех серверов')),
+                            ),
+                          ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -162,7 +184,14 @@ class _ServersScreenState extends State<ServersScreen> {
               sliver: SliverToBoxAdapter(
                 child: SizedBox(
                   height: 36,
-                  child: ListView(
+                  // Край ленты затухает — видно, что фильтры листаются.
+                  child: ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (r) => const LinearGradient(
+                      colors: [Colors.white, Colors.white, Colors.transparent],
+                      stops: [0, 0.9, 1],
+                    ).createShader(r),
+                    child: ListView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
@@ -195,7 +224,9 @@ class _ServersScreenState extends State<ServersScreen> {
                           selected: _filter == g.$1,
                           onTap: () => setState(() => _filter = g.$1),
                         ),
+                      const SizedBox(width: 24),
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -268,6 +299,129 @@ class _ServersScreenState extends State<ServersScreen> {
         ],
       ),
     );
+    // Большое окно: список слева, сведения о выбранном сервере справа.
+    return LayoutBuilder(
+      builder: (_, c) => c.maxWidth < 980
+          ? listView
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: listView),
+                const SizedBox(width: 340, child: _ServerDetails()),
+              ],
+            ),
+    );
+  }
+}
+
+/// Правая панель на компьютере: выбранный сервер, задержка, скорость,
+/// протокол и действия.
+class _ServerDetails extends StatelessWidget {
+  const _ServerDetails();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final s = app.selected;
+    Widget row(String k, String v) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [
+            SizedBox(
+                width: 110,
+                child: Text(k,
+                    style: TextStyle(color: NX.text3, fontSize: NXFont.body))),
+            Expanded(
+              child: Text(v,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: NXFont.body, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        );
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 8, 16, 16),
+        child: NeonCard(
+          child: s == null
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(tr('Выберите сервер в списке'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: NX.text2)),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(children: [
+                      ServerAvatar(server: s, size: 40),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(s.cleanName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: NXFont.h3, fontWeight: FontWeight.w800)),
+                      ),
+                      IconButton(
+                        tooltip: app.isFavorite(s)
+                            ? tr('Убрать из избранного')
+                            : tr('В избранное'),
+                        onPressed: () => app.toggleFavorite(s),
+                        icon: Icon(
+                            app.isFavorite(s)
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: NX.warn),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    row(tr('Протокол'), s.protocol),
+                    if (s.transport.isNotEmpty) row(tr('Транспорт'), s.transport),
+                    row(
+                        tr('Задержка'),
+                        app.state == ConnState.connected &&
+                                (app.liveLatency ?? 0) > 0
+                            ? tr('{0} мс через туннель', [app.liveLatency])
+                            : s.ping == null
+                                ? '—'
+                                : s.ping! < 0
+                                    ? tr('не отвечает')
+                                    : tr('{0} мс', [s.ping])),
+                    if (s.mbps != null)
+                      row(
+                          tr('Скорость'),
+                          s.mbps! > 0
+                              ? tr('{0} Мбит/с', [s.mbps!.round()])
+                              : '—'),
+                    if (app.subscriptionOf(s) case final sub?)
+                      row(tr('Подписка'), sub.title),
+                    const SizedBox(height: 14),
+                    NeonButton(
+                      label: app.state == ConnState.connected
+                          ? tr('Отключить')
+                          : tr('Подключить'),
+                      icon: Icons.power_settings_new_rounded,
+                      onPressed: app.state == ConnState.connecting ||
+                              app.state == ConnState.disconnecting
+                          ? null
+                          : app.toggle,
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: app.pinging.contains(s.id)
+                          ? null
+                          : () => app.pingOne(s),
+                      icon: const Icon(Icons.speed_rounded, size: 18),
+                      label: Text(tr('Проверить задержку')),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
   }
 }
 
@@ -316,14 +470,14 @@ class _Chip extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontSize: 13,
+                            fontSize: NXFont.body,
                             fontWeight: FontWeight.w600,
                             color: selected ? NX.text : NX.text2)),
                   ),
                   const SizedBox(width: 6),
                   Text('$count',
                       style: TextStyle(
-                          fontSize: 12,
+                          fontSize: NXFont.caption,
                           fontWeight: FontWeight.w700,
                           color: selected ? NX.violet : NX.text3)),
                 ],
@@ -386,7 +540,7 @@ class _GroupHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: NX.text,
-                          fontSize: 14,
+                          fontSize: NXFont.title,
                           fontWeight: FontWeight.w700)),
                 ),
                 if (hasActive) ...[
@@ -407,7 +561,7 @@ class _GroupHeader extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${servers.length} ' '${plural(servers.length, tr('сервер'), tr('сервера'), tr('серверов'))}' '${pings.isEmpty ? '' : tr(' · от {0} мс', [pings.first])}',
-              style: TextStyle(color: NX.text3, fontSize: 12),
+              style: TextStyle(color: NX.text3, fontSize: NXFont.caption),
             ),
             if (onPing != null)
               Tooltip(
@@ -487,8 +641,14 @@ class _ServerTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14.5)),
+                            fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                   ),
+                  // «Активен» — в строке названия: строка ниже (протокол,
+                  // транспорт) остаётся читаемой целиком.
+                  if (live) ...[
+                    const SizedBox(width: 8),
+                    Tag(tr('АКТИВЕН'), color: NX.mint),
+                  ],
                 ]),
                 const SizedBox(height: 5),
                 Row(children: [
@@ -505,10 +665,6 @@ class _ServerTile extends StatelessWidget {
                                 ? NX.warn
                                 : NX.red),
                   ],
-                  if (live) ...[
-                    const SizedBox(width: 6),
-                    Tag(tr('АКТИВЕН'), color: NX.mint),
-                  ],
                   const SizedBox(width: 8),
                   // Транспорт, а у безымянных серверов — ещё и адрес.
                   Flexible(
@@ -519,7 +675,7 @@ class _ServerTile extends StatelessWidget {
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: NX.text3, fontSize: 11.5),
+                      style: TextStyle(color: NX.text3, fontSize: NXFont.caption),
                     ),
                   ),
                 ]),
@@ -602,7 +758,7 @@ class _ServerTile extends StatelessWidget {
                   Expanded(
                     child: Text(server.cleanName,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 15)),
+                            fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                   ),
                 ]),
               ),

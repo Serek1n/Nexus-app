@@ -8,13 +8,14 @@ import '../l10n.dart';
 /// Резервная копия Nexus: подписки, свои серверы и настройки,
 /// зашифрованные паролем (PBKDF2-SHA256 → AES-256-GCM).
 ///
-/// Формат — одна строка «nexus-backup:2:<base64url>», где внутри
+/// Формат — одна строка «nexus-backup:3:<base64url>», где внутри
 /// соль (16 байт) | nonce (12) | шифротекст | метка GCM (16).
 /// Без пароля из неё ничего не достать; изменённая копия не расшифруется.
 /// Версия 1 — то же с 100 000 итераций PBKDF2 (читается для совместимости).
 class Backup {
-  static const prefix = 'nexus-backup:2:';
-  static const _iterations = {'1': 100000, '2': 200000};
+  static const prefix = 'nexus-backup:3:';
+  // 3 — с 2.5.1: больше итераций, подбор пароля к украденной копии дороже.
+  static const _iterations = {'1': 100000, '2': 200000, '3': 400000};
 
   static bool looksLike(String text) =>
       text.trim().toLowerCase().startsWith('nexus-backup:');
@@ -37,7 +38,7 @@ class Backup {
     final salt = _random(16);
     final nonce = _random(12);
     return Isolate.run(() async {
-      final key = await _kdf(_iterations['2']!)
+      final key = await _kdf(_iterations['3']!)
           .deriveKeyFromPassword(password: password, nonce: salt);
       final box = await cg.AesGcm.with256bits()
           .encrypt(utf8.encode(json), secretKey: key, nonce: nonce);

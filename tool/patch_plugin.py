@@ -156,6 +156,97 @@ def patch_assets(base: pathlib.Path) -> bool:
     return True
 
 
+SWAP_OLD = """            if (V2rayCoreManager.getInstance().isV2rayCoreRunning()) {
+                V2rayCoreManager.getInstance().stopCore();
+            }
+
+            // 1) Establish VpnService TUN first (v2rayNG order).
+            if (!establishVpnInterface()) {"""
+SWAP_NEW = """            // Nexus: смена сервера без разрыва VPN. Новый интерфейс поднимается
+            // раньше, чем останавливается старое ядро: Android переводит трафик
+            // на него сразу, и в паузе между ядрами пакеты ждут в туннеле, а не
+            // уходят в сеть напрямую.
+            ParcelFileDescriptor nexusOld = null;
+            boolean nexusSwap = V2rayCoreManager.getInstance().isV2rayCoreRunning()
+                    && mInterface != null;
+            if (nexusSwap) {
+                nexusOld = mInterface;
+                mInterface = null;
+            } else if (V2rayCoreManager.getInstance().isV2rayCoreRunning()) {
+                V2rayCoreManager.getInstance().stopCore();
+            }
+
+            // 1) Establish VpnService TUN first (v2rayNG order).
+            boolean nexusUp = establishVpnInterface();
+            if (nexusSwap) {
+                nexusSwapping = true;
+                try {
+                    V2rayCoreManager.getInstance().stopLoopOnly();
+                } finally {
+                    nexusSwapping = false;
+                }
+                V2rayCoreManager.getInstance().v2rayServicesListener = this;
+                try {
+                    nexusOld.close();
+                } catch (Exception ignored) {
+                }
+            }
+            if (!nexusUp) {"""
+
+SWAP_FIELD_OLD = """    private boolean vpnInterfaceReady = false;
+"""
+SWAP_FIELD_NEW = """    private boolean vpnInterfaceReady = false;
+    /** Nexus: идёт смена ядра без разрыва — сигнал «ядро остановлено» не гасит VPN. */
+    private boolean nexusSwapping = false;
+"""
+
+SWAP_STOP_OLD = """    public void stopService() {
+        stopAllProcess();"""
+SWAP_STOP_NEW = """    public void stopService() {
+        if (nexusSwapping) return;
+        stopAllProcess();"""
+
+LOOP_OLD = """    public void stopCore() {"""
+LOOP_NEW = """    /** Nexus: остановить только ядро — VPN-интерфейс и служба остаются. */
+    public void stopLoopOnly() {
+        try {
+            if (countDownTimer != null) countDownTimer.cancel();
+            if (coreController != null && isV2rayCoreRunning()) coreController.stopLoop();
+        } catch (Exception e) {
+            Log.w(V2rayCoreManager.class.getSimpleName(), "stopLoopOnly failed", e);
+        }
+    }
+
+    public void stopCore() {"""
+
+
+def patch_swap(base: pathlib.Path) -> bool:
+    """Смена сервера на Android без выхода трафика напрямую (и MTU 1400)."""
+    f = base / 'v2ray/services/V2rayVPNService.java'
+    src = f.read_text(encoding='utf-8')
+    if 'Nexus: смена сервера без разрыва' not in src:
+        for a, b in [(SWAP_OLD, SWAP_NEW), (SWAP_FIELD_OLD, SWAP_FIELD_NEW),
+                     (SWAP_STOP_OLD, SWAP_STOP_NEW)]:
+            if a not in src:
+                return False
+            src = src.replace(a, b, 1)
+        # Запас на заголовки туннеля: без дробления пакетов на мобильных сетях.
+        src = src.replace('VPN_MTU = 1500;', 'VPN_MTU = 1400;')
+        f.write_text(src, encoding='utf-8')
+        print('V2rayVPNService.java: смена сервера без разрыва, MTU 1400')
+    f = base / 'v2ray/core/V2rayCoreManager.java'
+    src = f.read_text(encoding='utf-8')
+    if 'public void stopLoopOnly()' not in src:
+        if LOOP_OLD not in src:
+            return False
+        src = src.replace(LOOP_OLD, LOOP_NEW, 1)
+        src = src.replace('Utilities.ensureTunInbound(config, 1500)',
+                          'Utilities.ensureTunInbound(config, 1400)')
+        f.write_text(src, encoding='utf-8')
+        print('V2rayCoreManager.java: остановка ядра без остановки VPN')
+    return True
+
+
 def main() -> int:
     base = plugin_dir() / 'android/src/main/java/dev/amirzr/flutter_v2ray_client'
     total = 0
@@ -178,6 +269,9 @@ def main() -> int:
         return 1
     if not patch_always_on(base):
         print('Не удалось исправить запуск постоянной VPN — плагин изменился')
+        return 1
+    if not patch_swap(base):
+        print('Не удалось включить смену сервера без разрыва — плагин изменился')
         return 1
     if not patch_assets(base):
         print('Не удалось добавить список заблокированных сайтов — плагин изменился')

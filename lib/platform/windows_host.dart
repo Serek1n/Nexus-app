@@ -4,6 +4,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -41,59 +42,109 @@ class WindowsHost with TrayListener, WindowListener {
   static Future<bool> claimSingleInstance([String? link]) async {
     final token = _instanceToken();
     final unix = !Platform.isWindows;
-    final addr = unix
+    final unixAddr = unix
         ? InternetAddress('${DesktopOs.current.dataDir}/instance.sock',
             type: InternetAddressType.unix)
-        : InternetAddress.loopbackIPv4;
-    final port = unix ? 0 : _instancePort;
-    Future<bool> send() async {
-      try {
-        final s = await Socket.connect(addr, port,
-            timeout: const Duration(seconds: 2));
-        s.add(utf8.encode(link != null && token != null
-            ? 'nexus:$token:link:$link'
-            : 'nexus:show'));
-        await s.flush();
-        await s.close();
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
+        : null;
+    // Windows: порт мог занять кто-то другой — тогда берём следующий.
+    final targets = unix
+        ? [(unixAddr!, 0)]
+        : [
+            for (var i = 0; i < 4; i++)
+              (InternetAddress.loopbackIPv4, _instancePort + i)
+          ];
 
-    for (var attempt = 0; attempt < 2; attempt++) {
+    // Уже открытый Nexus? Сначала он доказывает, что знает секрет (ответ на
+    // случайный вызов), и только потом получает ссылку: чужая программа на
+    // этом порту не узнает ни секрет, ни ссылку.
+    for (final (addr, port) in targets) {
+      if (await _askRunning(addr, port, token, link)) return false;
+    }
+    for (final (addr, port) in targets) {
       try {
         _instanceServer = await ServerSocket.bind(addr, port);
         break;
       } on SocketException {
-        if (await send()) return false;
         // Сокет остался после аварийного завершения — убираем и занимаем.
-        if (!unix || attempt > 0) return false;
-        try {
-          File(addr.address).deleteSync();
-        } catch (_) {
-          return false;
+        if (unix) {
+          try {
+            File(addr.address).deleteSync();
+            _instanceServer = await ServerSocket.bind(addr, port);
+            break;
+          } catch (_) {}
         }
       }
     }
     final srv = _instanceServer;
-    if (srv == null) return false;
+    // Все порты заняты чужими программами — работаем без этого канала.
+    if (srv == null) return true;
     srv.listen((client) {
+      var buf = '';
       client.listen((data) {
         // Только короткие команды от второй копии Nexus.
-        if (data.length > 8192) return client.destroy();
-        final msg = utf8.decode(data, allowMalformed: true).trim();
-        final linkPrefix = token == null ? null : 'nexus:$token:link:';
-        if (msg == 'nexus:show') {
-          _showRequests.add(null);
-        } else if (linkPrefix != null && msg.startsWith(linkPrefix)) {
-          _showRequests.add(null);
-          DeepLinks.handle(msg.substring(linkPrefix.length));
+        buf += utf8.decode(data, allowMalformed: true);
+        if (buf.length > 8192) return client.destroy();
+        while (buf.contains('\n')) {
+          final i = buf.indexOf('\n');
+          final msg = buf.substring(0, i).trim();
+          buf = buf.substring(i + 1);
+          final linkPrefix = token == null ? null : 'nexus:$token:link:';
+          if (msg.startsWith('nexus:hello:')) {
+            final nonce = msg.substring('nexus:hello:'.length);
+            client.add(utf8.encode('nexus:proof:${_proof(token, nonce)}\n'));
+          } else if (msg == 'nexus:show') {
+            _showRequests.add(null);
+          } else if (linkPrefix != null && msg.startsWith(linkPrefix)) {
+            _showRequests.add(null);
+            DeepLinks.handle(msg.substring(linkPrefix.length));
+          }
         }
       }, onError: (_) {}, cancelOnError: true);
-      Future.delayed(const Duration(seconds: 2), client.destroy);
+      Future.delayed(const Duration(seconds: 3), client.destroy);
     });
     return true;
+  }
+
+  static String _proof(String? token, String nonce) => token == null
+      ? 'none'
+      : Hmac(sha256, utf8.encode(token)).convert(utf8.encode(nonce)).toString();
+
+  /// Спросить Nexus на [addr]:[port]: true — он ответил верно и получил
+  /// просьбу показать окно (и ссылку).
+  static Future<bool> _askRunning(
+      InternetAddress addr, int port, String? token, String? link) async {
+    Socket? s;
+    try {
+      s = await Socket.connect(addr, port,
+          timeout: const Duration(milliseconds: 700));
+      final r = Random.secure();
+      final nonce =
+          List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'))
+              .join();
+      s.add(utf8.encode('nexus:hello:$nonce\n'));
+      await s.flush();
+      final reply = await s
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .first
+          .timeout(const Duration(seconds: 2));
+      if (token == null || reply.trim() != 'nexus:proof:${_proof(token, nonce)}') {
+        return false;
+      }
+      s.add(utf8.encode(link != null
+          ? 'nexus:$token:link:$link\n'
+          : 'nexus:show\n'));
+      await s.flush();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      try {
+        await s?.close();
+      } catch (_) {}
+      s?.destroy();
+    }
   }
 
   /// Секрет канала между копиями Nexus (файл в личной папке пользователя).
@@ -348,9 +399,26 @@ class Autostart {
     // TUN включён, но Nexus сейчас без прав администратора: задачу не
     // создать и не проверить — оставляем автозапуск как есть.
     if (enabled && tun && !WinAdmin.isAdmin) return;
-    final elevated = enabled && tun && WinAdmin.isAdmin;
-    _runKeySet(enabled && !elevated);
-    unawaited(_task(elevated, removeOnly: !enabled || !tun));
+    // Задача с наивысшими правами запускает Nexus от администратора без
+    // окна UAC — только если он стоит в Program Files (туда пишут лишь
+    // администраторы). Из папки пользователя — обычный автозапуск, права
+    // попросим окном UAC при входе (--elevate).
+    final elevated = enabled && tun && WinAdmin.isAdmin && exeProtected;
+    _runKeySet(enabled && !elevated, elevate: enabled && tun && !elevated);
+    unawaited(_task(elevated, removeOnly: !enabled || !tun || !exeProtected));
+  }
+
+  /// Nexus установлен в Program Files (подменить файлы без прав
+  /// администратора нельзя).
+  static bool get exeProtected {
+    final exe = Platform.resolvedExecutable.toLowerCase();
+    for (final v in const ['ProgramFiles', 'ProgramW6432']) {
+      final pf = Platform.environment[v];
+      if (pf != null && pf.isNotEmpty && exe.startsWith('${pf.toLowerCase()}\\')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static Future<void> _task(bool create, {required bool removeOnly}) async {
@@ -370,12 +438,13 @@ class Autostart {
     } catch (_) {}
   }
 
-  static void _runKeySet(bool enabled) {
+  static void _runKeySet(bool enabled, {bool elevate = false}) {
     final sub = _runKey.toNativeUtf16();
     final name = _valueName.toNativeUtf16();
     try {
       if (enabled) {
-        final cmd = '"${Platform.resolvedExecutable}" --minimized';
+        final cmd =
+            '"${Platform.resolvedExecutable}" --minimized${elevate ? ' --elevate' : ''}';
         final data = cmd.toNativeUtf16();
         _regSet(_hkcu, sub, name, _regSz, data.cast(), (cmd.length + 1) * 2);
         calloc.free(data);

@@ -13,10 +13,15 @@ AppId={{7B1E6C0E-4C1B-4C9F-9E58-2A7F2C0E5A11}
 AppName=Nexus
 AppVersion={#AppVersion}
 AppPublisher=NEXUS_VPN
-DefaultDirName={localappdata}\Programs\Nexus
+; Для себя — папка пользователя (без прав администратора). Для всех
+; пользователей — Program Files: тогда режим TUN запускается при входе в
+; систему без окна UAC и без риска подмены файлов программы.
+DefaultDirName={autopf}\Nexus
 DefaultGroupName=Nexus
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
+UsePreviousAppDir=yes
 OutputDir=..\dist
 OutputBaseFilename=Nexus-Setup-{#AppVersion}
 SetupIconFile=..\windows\runner\resources\app_icon.ico
@@ -50,6 +55,14 @@ Filename: "{app}\nexus.exe"; Description: "Запустить Nexus"; Flags: now
 Filename: "{app}\nexus.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
+; Снять блокировку kill switch (правила брандмауэра) — с окном UAC
+Filename: "{app}\nexus.exe"; Parameters: "--killswitch-off"; Verb: "runas"; Flags: shellexec waituntilterminated; RunOnceId: "KillSwitchOff"; Check: KillSwitchActive
 ; Вернуть системный прокси пользователя, если Nexus удаляют подключённым
 Filename: "{app}\nexus.exe"; Parameters: "--restore-proxy"; Flags: runhidden waituntilterminated; RunOnceId: "RestoreProxy"
 Filename: "taskkill"; Parameters: "/F /IM nexus-core.exe"; Flags: runhidden; RunOnceId: "KillCore"
+
+[Code]
+function KillSwitchActive: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{userappdata}\Nexus\killswitch.lock'));
+end;

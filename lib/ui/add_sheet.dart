@@ -217,12 +217,12 @@ class _AddFormState extends State<_AddForm> {
             ),
             child: Text(n,
                 style: const TextStyle(
-                    color: NX.violet, fontWeight: FontWeight.w800, fontSize: 12.5)),
+                    color: NX.violet, fontWeight: FontWeight.w800, fontSize: NXFont.sub)),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(text,
-                style: TextStyle(color: NX.text2, fontSize: 14, height: 1.35)),
+                style: TextStyle(color: NX.text2, fontSize: NXFont.title, height: 1.35)),
           ),
         ]),
       );
@@ -256,12 +256,12 @@ class _AddFormState extends State<_AddForm> {
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(tr('С телефона'),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: NXFont.h3)),
           const SizedBox(height: 12),
           if (_linkFailed)
             Text(
               tr('Телевизор не подключён к домашней сети по Wi-Fi или кабелю — введите ссылку вручную.'),
-              style: TextStyle(color: NX.text2, fontSize: 14, height: 1.35),
+              style: TextStyle(color: NX.text2, fontSize: NXFont.title, height: 1.35),
             )
           else ...[
             _step('1', tr('Отсканируйте QR-код камерой телефона')),
@@ -269,7 +269,7 @@ class _AddFormState extends State<_AddForm> {
             _step('3', tr('Нажмите «Отправить» — подписка появится здесь')),
             const SizedBox(height: 2),
             Text(tr('Телефон должен быть в той же сети Wi-Fi'),
-                style: TextStyle(color: NX.text3, fontSize: 12.5)),
+                style: TextStyle(color: NX.text3, fontSize: NXFont.sub)),
           ],
         ]),
       ),
@@ -305,11 +305,11 @@ class _AddFormState extends State<_AddForm> {
               style: TextStyle(
                   fontFamily: NX.display,
                   fontWeight: FontWeight.w700,
-                  fontSize: 20)),
+                  fontSize: NXFont.h2)),
           const SizedBox(height: 6),
           Text(
             tr('Ссылка на подписку (https://…) или ключ сервера (vless://, vmess://, trojan://, ss://)'),
-            style: TextStyle(color: NX.text2, fontSize: 13.5, height: 1.4),
+            style: TextStyle(color: NX.text2, fontSize: NXFont.body, height: 1.4),
           ),
           const SizedBox(height: 18),
           if (widget.tv) _phoneBlock(),
@@ -329,10 +329,10 @@ class _AddFormState extends State<_AddForm> {
                     children: [
                       Text(tr('Вставить из буфера обмена'),
                           style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15)),
+                              fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                       SizedBox(height: 2),
                       Text(tr('Скопируйте ссылку из бота и нажмите сюда'),
-                          style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                          style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                     ],
                   ),
                 ),
@@ -356,11 +356,11 @@ class _AddFormState extends State<_AddForm> {
                       children: [
                         Text(tr('Сканировать QR-код'),
                             style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 15)),
+                                fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                         SizedBox(height: 2),
                         Text(tr('Наведите камеру на QR подписки или ключа'),
                             style:
-                                TextStyle(color: NX.text2, fontSize: 12.5)),
+                                TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                       ],
                     ),
                   ),
@@ -375,7 +375,7 @@ class _AddFormState extends State<_AddForm> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text(tr('или вручную'),
-                  style: TextStyle(color: NX.text3, fontSize: 12)),
+                  style: TextStyle(color: NX.text3, fontSize: NXFont.caption)),
             ),
             Expanded(child: Divider()),
           ]),
@@ -384,7 +384,7 @@ class _AddFormState extends State<_AddForm> {
             controller: _ctrl,
             minLines: 1,
             maxLines: 4,
-            style: const TextStyle(fontSize: 14),
+            style: const TextStyle(fontSize: NXFont.title),
             decoration: InputDecoration(
               hintText: tr('https://… или vless://…'),
               prefixIcon: Icon(Icons.link_rounded, color: NX.text3),
@@ -401,7 +401,7 @@ class _AddFormState extends State<_AddForm> {
                 border: Border.all(color: NX.red.withValues(alpha: 0.4)),
               ),
               child: Text(_error!,
-                  style: const TextStyle(color: NX.red, fontSize: 13)),
+                  style: const TextStyle(color: NX.red, fontSize: NXFont.body)),
             ),
           ],
           const SizedBox(height: 18),

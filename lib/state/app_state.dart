@@ -130,7 +130,7 @@ class AppState extends ChangeNotifier {
     SubscriptionService.appVersion = appVersion;
     settings = AppSettings.fromJsonString(_prefs.getString('settings'));
     locked = settings.pinHash != null;
-    _loadPinState();
+    pinGuard.load();
     L10n.apply(settings.language, PlatformDispatcher.instance.locale.languageCode);
     language.value = L10n.lang;
     applyTheme();
@@ -140,13 +140,24 @@ class AppState extends ChangeNotifier {
     if (!isDesktop) {
       isTv = await AndroidSystem.isTv();
       unawaited(AndroidSystem.setTileLabels());
+      unawaited(AndroidSystem.setBootConnect(settings.bootConnect));
       unawaited(AndroidSystem.setShortcuts());
       unawaited(AndroidSystem.cancelStopTimer());
       unawaited(AndroidSystem.hideInRecents(pinEnabled));
     }
     traffic.load(_prefs);
     try {
-      final subs = jsonDecode(await _readSecret('subscriptions')) as List;
+      final rawSubs = jsonDecode(await _readSecret('subscriptions'));
+      final subs = rawSubs is Map ? (rawSubs['items'] as List? ?? []) : rawSubs as List;
+      // PIN из зашифрованного блока главнее настроек: убрать или подменить
+      // его в файле настроек не получится.
+      if (rawSubs is Map && rawSubs['pin'] is String) {
+        if (settings.pinHash != rawSubs['pin']) {
+          settings.pinHash = rawSubs['pin'] as String;
+          _prefs.setString('settings', settings.toJsonString());
+        }
+        locked = true;
+      }
       subscriptions
         ..clear()
         ..addAll(subs.map((e) => Subscription.fromJson(e)));
@@ -431,7 +442,13 @@ class AppState extends ChangeNotifier {
   }
 
   void _save() {
-    final subs = jsonEncode(subscriptions.map((e) => e.toJson()).toList());
+    // С PIN-кодом подписки сохраняются вместе с его отпечатком в одном
+    // зашифрованном блоке: стереть PIN из файла настроек, не потеряв
+    // подписки, нельзя.
+    final list = subscriptions.map((e) => e.toJson()).toList();
+    final subs = jsonEncode(settings.pinHash == null
+        ? list
+        : {'pin': settings.pinHash, 'items': list});
     final srv = jsonEncode(servers.map((e) => e.toJson()).toList());
     _saveChain = _saveChain.then((_) async {
       await _writeSecret('subscriptions', subs);
@@ -462,6 +479,9 @@ class AppState extends ChangeNotifier {
   void updateSettings(void Function(AppSettings s) change) {
     change(settings);
     _save();
+    if (Platform.isAndroid) {
+      unawaited(AndroidSystem.setBootConnect(settings.bootConnect));
+    }
     notifyListeners();
   }
 
@@ -473,15 +493,35 @@ class AppState extends ChangeNotifier {
   /// Реальная задержка через туннель после подключения.
   int? liveLatency;
 
+  /// Идёт проверка трафика через туннель (первый запрос через сервер).
+  /// Пока она не закончилась, главная пишет «Проверка…», а не «Подключено».
+  bool latencyChecking = false;
+
+  /// Подключено, но трафик ещё не проверен.
+  bool get checking => state == ConnState.connected && latencyChecking;
+
+  /// Подключено, но сервер не ответил на проверку.
+  bool get noTraffic =>
+      state == ConnState.connected && !latencyChecking && liveLatency == -1;
+
+  /// Подключиться не удалось: «Ошибка» на главной и кнопка «Повторить».
+  bool get failed => state == ConnState.disconnected && lastError != null;
+
   Future<void> measureLatency({bool afterConnect = false}) async {
     final s = selected;
-    if (s == null || state != ConnState.connected) return;
+    if (s == null || state != ConnState.connected) {
+      latencyChecking = false;
+      return;
+    }
     liveLatency = null;
+    latencyChecking = true;
     notifyListeners();
     try {
       liveLatency = await core.connectedDelay(s);
     } catch (_) {
       liveLatency = -1;
+    } finally {
+      latencyChecking = false;
     }
     notifyListeners();
     core.note(liveLatency != null && liveLatency! > 0
@@ -641,10 +681,10 @@ class AppState extends ChangeNotifier {
     await _restartCore(keepFailover: true);
   }
 
-  /// Перезапуск соединения при смене сервера или настроек. На компьютере
-  /// ядро меняется «на месте»: системный прокси всё это время указывает
-  /// на Nexus, и программы не успевают выйти в сеть напрямую. На телефоне
-  /// интерфейс VPN приходится пересоздавать.
+  /// Перезапуск соединения при смене сервера или настроек. Ядро меняется
+  /// «на месте»: на компьютере системный прокси всё время указывает на
+  /// Nexus, на Android новый интерфейс VPN поднимается поверх старого —
+  /// трафик не успевает выйти в сеть напрямую. iOS пока переподключается.
   Future<void> _restartCore({bool keepFailover = false}) async {
     if (!core.swapsInPlace || core.blocked) {
       await core.disconnect();
@@ -803,17 +843,17 @@ class AppState extends ChangeNotifier {
     _networkSignature().then((v) => _netSig = v);
     _lastNetTick = DateTime.now();
     var tick = 0;
-    _netTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _netTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       if (state != ConnState.connected) return;
-      // Приложение свёрнуто — сеть проверяем раз в 15 с, а не 5: меньше
-      // будим процессор, переключение сети всё равно ловится быстро.
+      // Приложение свёрнуто — сеть проверяем раз в 30 с, а не 10: меньше
+      // будим процессор; смену сети на Android ловит и сама служба VPN.
       if (!windowVisible && (tick++ % 3) != 0) {
         _lastNetTick = DateTime.now();
         return;
       }
       // Большой разрыв между тиками — компьютер/телефон спал: проверяем канал.
       final now = DateTime.now();
-      final slept = now.difference(_lastNetTick).inSeconds > 20;
+      final slept = now.difference(_lastNetTick).inSeconds > 40;
       _lastNetTick = now;
       if (slept) {
         _scheduleHealth(const Duration(seconds: 3));
@@ -991,11 +1031,13 @@ class AppState extends ChangeNotifier {
     }
     if (s == ConnState.connected && state != ConnState.connected) {
       connectedAt = DateTime.now();
+      latencyChecking = true;
       Future.delayed(const Duration(seconds: 1),
           () => measureLatency(afterConnect: true));
     }
     if (s != ConnState.connected) {
       liveLatency = null;
+      latencyChecking = false;
       exitInfo = null;
       exitWarning = null;
       speedMbps = null;
@@ -1886,8 +1928,9 @@ class AppState extends ChangeNotifier {
     await _prefs.clear();
     settings = AppSettings();
     locked = false;
-    pinFails = 0;
-    pinBlockedUntil = null;
+    pinGuard
+      ..fails = 0
+      ..blockedUntil = null;
     unawaited(_prefs.remove('pinState'));
     traffic.clear();
     await core.forgetSaved();
@@ -1930,8 +1973,12 @@ class AppState extends ChangeNotifier {
   /// Интерфейс закрыт экраном PIN-кода.
   bool locked = false;
   DateTime? _hiddenAt;
-  int pinFails = 0;
-  DateTime? pinBlockedUntil;
+  late final PinGuard pinGuard = PinGuard(
+    read: () => _prefs.getString('pinState'),
+    write: (v) => unawaited(_prefs.setString('pinState', v)),
+  );
+  int get pinFails => pinGuard.fails;
+  DateTime? get pinBlockedUntil => pinGuard.blockedUntil;
 
   /// Проверяет PIN; при успехе снимает блокировку.
   Future<bool> unlock(String pin) async {
@@ -1941,51 +1988,10 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    if (pinBlockedUntil != null && DateTime.now().isBefore(pinBlockedUntil!)) {
-      return false;
-    }
-    // Попытка засчитывается до проверки: закрыв Nexus во время проверки,
-    // её не «отменить».
-    final fails = pinFails + 1;
-    final d = Pin.delayAfter(fails);
-    final until = d == Duration.zero ? null : DateTime.now().add(d);
-    _savePinState(fails, until);
-    if (await Pin.verify(pin, h)) {
-      pinFails = 0;
-      pinBlockedUntil = null;
-      _savePinState();
-      locked = false;
-      notifyListeners();
-      return true;
-    }
-    pinFails = fails;
-    pinBlockedUntil = until;
+    final ok = await pinGuard.attempt(pin, h);
+    if (ok) locked = false;
     notifyListeners();
-    return false;
-  }
-
-  /// Счётчик ошибок PIN переживает перезапуск: иначе паузу после 5 ошибок
-  /// обходили бы, закрывая и открывая Nexus.
-  void _savePinState([int? fails, DateTime? until]) {
-    unawaited(_prefs.setString('pinState', jsonEncode({
-      'fails': fails ?? pinFails,
-      'until': (fails == null ? pinBlockedUntil : until)?.millisecondsSinceEpoch,
-    })));
-  }
-
-  void _loadPinState() {
-    try {
-      final j = jsonDecode(_prefs.getString('pinState') ?? '{}') as Map;
-      pinFails = (j['fails'] as num?)?.toInt() ?? 0;
-      final u = (j['until'] as num?)?.toInt();
-      pinBlockedUntil = u == null ? null : DateTime.fromMillisecondsSinceEpoch(u);
-      // Часы перевели назад, чтобы снять паузу, — не даём: пауза не
-      // бывает дольше максимальной.
-      if (pinBlockedUntil != null &&
-          pinBlockedUntil!.difference(DateTime.now()) > const Duration(hours: 1)) {
-        pinBlockedUntil = DateTime.now().add(Pin.delayAfter(pinFails));
-      }
-    } catch (_) {}
+    return ok;
   }
 
   // ─────────────────── горячая клавиша (Windows) ───────────────────
@@ -2007,10 +2013,9 @@ class AppState extends ChangeNotifier {
   /// Задать PIN (null — выключить вход по PIN-коду).
   Future<void> setPin(String? pin) async {
     final h = pin == null ? null : await Pin.hash(pin);
-    pinFails = 0;
-    pinBlockedUntil = null;
-    _savePinState();
+    pinGuard.reset();
     updateSettings((s) => s.pinHash = h);
+    _save(); // отпечаток PIN — в зашифрованный блок подписок
     if (!isDesktop) unawaited(AndroidSystem.hideInRecents(h != null));
   }
 

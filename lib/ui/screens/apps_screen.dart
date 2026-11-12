@@ -75,7 +75,7 @@ class _AppsScreenState extends State<AppsScreen> {
                     Expanded(
                       child: Text(tr('Приложения без VPN'),
                           style: TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 20)),
+                              fontWeight: FontWeight.w800, fontSize: NXFont.h2)),
                     ),
                   ],
                 ),
@@ -95,12 +95,12 @@ class _AppsScreenState extends State<AppsScreen> {
                             Text(tr('Российские приложения напрямую'),
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 14)),
+                                    fontSize: NXFont.title)),
                             SizedBox(height: 2),
                             Text(
                                 tr('Больше {0} приложений: банки, Госуслуги, VK, Яндекс, маркетплейсы. Список обновляется сам', [ruBypassApps.length]),
                                 style:
-                                    TextStyle(color: NX.text2, fontSize: 12)),
+                                    TextStyle(color: NX.text2, fontSize: NXFont.caption)),
                           ],
                         ),
                       ),
@@ -120,7 +120,7 @@ class _AppsScreenState extends State<AppsScreen> {
                   padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
                   child: Text(
                     tr('Сейчас включён режим «Весь трафик»: российские приложения идут через VPN. Отмеченные вручную — всегда напрямую.'),
-                    style: TextStyle(color: NX.warn, fontSize: 12.5),
+                    style: TextStyle(color: NX.warn, fontSize: NXFont.sub),
                   ),
                 ),
               Padding(
@@ -154,14 +154,14 @@ class _AppsScreenState extends State<AppsScreen> {
                                 title: Text(label,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        fontSize: 14.5)),
+                                        fontSize: NXFont.title)),
                                 subtitle: Text(
                                     auto ? tr('Напрямую автоматически') : pkg,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                         color: auto ? NX.mint : NX.text3,
-                                        fontSize: 12)),
+                                        fontSize: NXFont.caption)),
                                 trailing: Checkbox(
                                   value: on,
                                   onChanged: auto

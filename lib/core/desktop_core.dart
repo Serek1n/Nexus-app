@@ -182,6 +182,8 @@ class DesktopCore extends VpnCore {
       await os.proxyRestore(_readSaved(marker));
       marker.deleteSync();
     }
+    // Блокировка kill switch осталась после сбоя — снимаем, как и прокси.
+    await _killSwitchOff();
   }
 
   Future<void> _killStrayCore() => os.killStrayCore();
@@ -289,6 +291,7 @@ class DesktopCore extends VpnCore {
       return;
     } catch (_) {
       if (!(_tun && (os.tunDnsToGateway || os.tunIpv6))) {
+        if (_keepBlocked()) return;
         await _afterFailedConnect();
         rethrow;
       }
@@ -302,6 +305,7 @@ class DesktopCore extends VpnCore {
     } catch (_) {
       // Дело было не в них — в следующий раз пробуем с защитой снова.
       os.tunPlain = false;
+      if (_keepBlocked()) return;
       await _afterFailedConnect();
       rethrow;
     }
@@ -317,6 +321,18 @@ class DesktopCore extends VpnCore {
     } catch (_) {}
   }
 
+  /// Новое ядро не запустилось, а kill switch уже стоит (смена сервера в
+  /// режиме TUN): блокировку не снимаем — интернет закрыт, пока
+  /// пользователь не отключится сам. true — так и сделали.
+  bool _keepBlocked() {
+    if (_restarting || !os.killSwitchActive) return false;
+    _log(tr('Новое ядро не запустилось — интернет заблокирован (kill switch). Нажмите «Отключить», чтобы снять блокировку'));
+    _blocked = true;
+    _stats.add(const ConnStats());
+    _states.add(ConnState.connected);
+    return true;
+  }
+
   Future<void> _connectInner({
     required String remark,
     required String config,
@@ -326,7 +342,8 @@ class DesktopCore extends VpnCore {
       throw Exception(tr('Не найдено ядро {0} рядом с программой. Переустановите Nexus из архива целиком.', [kCoreExe]));
     }
     _states.add(ConnState.connecting);
-    await _stopProcess();
+    // Смена ядра: блокировка трафика (kill switch) остаётся на месте.
+    await _stopProcess(keepBlock: true);
     await _applyPendingUpdate();
     _lastRemark = remark;
     _lastConfig = config;
@@ -384,6 +401,8 @@ class DesktopCore extends VpnCore {
     if (sp != kSocksPort) {
       _log(tr('Порты {0}/{1} заняты другой программой (например, Happ или v2rayN) — Nexus использует {2}/{3}', [kSocksPort, kHttpPort, sp, hp]));
     }
+    os.killSwitchWanted =
+        _tun && settings.windowsKillSwitch && os.killSwitchSupported;
     try {
       final full = _withStats(config);
       final special = _tun ? os.startTun(_tunCore!, full, _assetDir) : null;
@@ -447,6 +466,7 @@ class DesktopCore extends VpnCore {
     if (!up) {
       await _stopProcess();
       _states.add(ConnState.disconnected);
+      await _rollbackCore(config);
       final tail = _logs.reversed.take(3).toList().reversed.join('\n');
       throw Exception(
           tr('Ядро не запустилось.{0}', [tail.isEmpty ? '' : '\n$tail']));
@@ -473,6 +493,25 @@ class DesktopCore extends VpnCore {
       await _dropProxy();
     }
 
+    // Kill switch в режиме TUN: правила файрвола, которые переживают падение
+    // ядра. Не получилось — VPN работает, но без этой защиты (в журнал).
+    if (os.killSwitchWanted) {
+      try {
+        await os.killSwitchOn(
+          core: _tunCore ?? corePath,
+          servers: await _serverIps(config),
+          dns: Platform.isLinux ? await LinuxOs.systemDns() : const [],
+        );
+        _log(tr('Kill switch: трафик мимо туннеля заблокирован'));
+      } catch (e) {
+        _modeWarning = '$e'.replaceFirst('Exception: ', '');
+        _log(_modeWarning!);
+      }
+    } else {
+      await _killSwitchOff();
+    }
+
+    _knownConfig = config;
     _lastUp = 0;
     _lastDown = 0;
     _lastStatsAt = null;
@@ -555,7 +594,8 @@ class DesktopCore extends VpnCore {
           _restarting = false;
         }
       }
-      if (_lastSettings?.windowsKillSwitch == true && _proxySet) {
+      if ((_lastSettings?.windowsKillSwitch == true && _proxySet) ||
+          (_tun && os.killSwitchActive)) {
         // Kill switch: системный прокси остаётся на мёртвом порту —
         // трафик не пойдёт мимо VPN, пока пользователь не отключится сам.
         _log(tr('Ядро не работает — интернет заблокирован (kill switch)'));
@@ -668,6 +708,20 @@ class DesktopCore extends VpnCore {
     cfg['inbounds'] = inbounds;
     final outbounds = (cfg['outbounds'] as List?) ?? [];
     outbounds.add({'tag': 'dns-out', 'protocol': 'dns'});
+    // Linux, kill switch: соединения ядра помечаются — файрвол их пропускает.
+    final mark = os.coreMark;
+    if (mark != null) {
+      for (final ob in outbounds) {
+        if (ob is! Map) continue;
+        final ss = (ob['streamSettings'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+        final so = (ss['sockopt'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+        so['mark'] = mark;
+        ss['sockopt'] = so;
+        ob['streamSettings'] = ss;
+      }
+    }
     cfg['outbounds'] = outbounds;
     final routing = (cfg['routing'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{};
@@ -687,7 +741,9 @@ class DesktopCore extends VpnCore {
   /// сетевой карте — иначе их трафик ушёл бы в туннель через текущий сервер
   /// и задержка всех серверов оказалась бы завышенной.
   Future<void> _bypassTun(List? outbounds, {String? iface}) async {
-    if (!_tun || outbounds == null) return;
+    // При kill switch трафик мимо туннеля запрещён — проверки идут через
+    // туннель (задержка чуть выше, зато ничего не утекает).
+    if (!_tun || outbounds == null || os.killSwitchActive) return;
     iface ??= await _physicalInterface();
     if (iface == null) return;
     for (final ob in outbounds) {
@@ -777,10 +833,10 @@ class DesktopCore extends VpnCore {
     }
   }
 
-  Future<void> _stopProcess() async {
+  Future<void> _stopProcess({bool keepBlock = false}) async {
     final p = _proc;
     _proc = null;
-    if (_tun && !Platform.isWindows) await os.stopTun();
+    if (_tun && !Platform.isWindows) await os.stopTun(keepBlock: keepBlock);
     if (p != null) {
       Process.killPid(p.pid);
     }
@@ -806,8 +862,52 @@ class DesktopCore extends VpnCore {
     }
     await _dropProxy();
     await _stopProcess();
+    await _killSwitchOff();
     _stats.add(const ConnStats());
     _states.add(ConnState.disconnected);
+  }
+
+  /// Снять блокировку kill switch (если стоит). Ошибка — в журнал: снять
+  /// её можно ещё раз кнопкой «Отключить».
+  Future<void> _killSwitchOff() async {
+    if (!os.killSwitchActive) return;
+    try {
+      await os.killSwitchOff();
+      _log(tr('Kill switch: блокировка снята'));
+    } catch (e) {
+      _log('$e'.replaceFirst('Exception: ', ''));
+    }
+  }
+
+  /// Адреса VPN-серверов из конфига (имена переводятся в IP).
+  Future<List<String>> _serverIps(String config) async {
+    final hosts = <String>{};
+    try {
+      for (final ob in (jsonDecode(config)['outbounds'] as List)) {
+        if (ob is! Map) continue;
+        final st = ob['settings'];
+        if (st is! Map) continue;
+        for (final key in const ['vnext', 'servers']) {
+          for (final s in (st[key] as List? ?? const [])) {
+            if (s is Map && s['address'] is String) hosts.add(s['address']);
+          }
+        }
+        if (st['address'] is String) hosts.add(st['address']);
+      }
+    } catch (_) {}
+    final out = <String>{};
+    for (final h in hosts) {
+      if (InternetAddress.tryParse(h) != null) {
+        out.add(h);
+        continue;
+      }
+      try {
+        final a = await InternetAddress.lookup(h)
+            .timeout(const Duration(seconds: 3));
+        out.addAll(a.map((e) => e.address));
+      } catch (_) {}
+    }
+    return out.toList();
   }
 
   @override
@@ -1142,6 +1242,48 @@ class DesktopCore extends VpnCore {
   static final _newExe =
       Platform.isWindows ? 'nexus-core-new.exe' : 'nexus-core-new';
 
+  /// Последний конфиг, с которым ядро работало (только в памяти) — на нём
+  /// проверяется скачанное обновление ядра.
+  String? _knownConfig;
+
+  /// Ядро [exe] принимает [config] (xray run -test).
+  Future<bool> _configOk(String exe, String config) async {
+    try {
+      final p = await Process.start(
+          exe, ['run', '-test', '-format', 'json', '-c', 'stdin:'],
+          environment: {'XRAY_LOCATION_ASSET': _assetDir});
+      p.stdin.add(utf8.encode(config));
+      await p.stdin.close();
+      unawaited(p.stdout.drain<void>());
+      unawaited(p.stderr.drain<void>());
+      final code = await p.exitCode.timeout(const Duration(seconds: 20),
+          onTimeout: () {
+        p.kill();
+        return -1;
+      });
+      return code == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Обновлённое ядро не запустилось: если виновато оно (конфиг не
+  /// принимает, а прежнее или встроенное — принимает), возвращаем прежнее.
+  Future<void> _rollbackCore(String config) async {
+    try {
+      final cur = File('$_updDir${_sep}$kCoreExe');
+      if (!cur.existsSync() || _tun) return;
+      if (await _configOk(cur.path, config)) return; // дело не в ядре
+      final prev = File('$_updDir${_sep}$kCoreExe.prev');
+      final fallback =
+          prev.existsSync() ? prev.path : '$_exeDir${_sep}$kCoreExe';
+      if (!await _configOk(fallback, config)) return;
+      cur.deleteSync();
+      if (prev.existsSync()) prev.renameSync(cur.path);
+      _log(tr('Обновлённое ядро не принимает настройки — вернул прежнее. Подключитесь ещё раз'));
+    } catch (_) {}
+  }
+
   @override
   bool get canUpdateCore => os.xrayAsset != null;
 
@@ -1247,6 +1389,13 @@ class DesktopCore extends VpnCore {
       await staged.delete();
       throw Exception(tr('Скачанное ядро не запускается'));
     }
+    // …и принимает конфиг Nexus: в новых версиях Xray бывает, что
+    // настройки удаляют, и с таким ядром VPN перестал бы подключаться.
+    final known = _knownConfig;
+    if (known != null && !await _configOk(staged.path, known)) {
+      await staged.delete();
+      throw Exception(tr('{0} не принимает настройки Nexus — обновление отменено, остаётся прежнее ядро', [v]));
+    }
 
     // Свежие гео-базы для умного режима — тоже с проверкой SHA-256.
     for (final g in ['geoip.dat', 'geosite.dat']) {
@@ -1279,7 +1428,10 @@ class DesktopCore extends VpnCore {
       final staged = File('$_updDir${_sep}$_newExe');
       if (staged.existsSync()) {
         final target = File('$_updDir${_sep}$kCoreExe');
-        if (target.existsSync()) target.deleteSync();
+        // Прежнее ядро — в запас: если новое не запустится, вернём его.
+        final prev = File('$_updDir${_sep}$kCoreExe.prev');
+        if (prev.existsSync()) prev.deleteSync();
+        if (target.existsSync()) target.renameSync(prev.path);
         staged.renameSync(target.path);
       }
       final wt = File('$_updDir${_sep}wintun.dll.new');

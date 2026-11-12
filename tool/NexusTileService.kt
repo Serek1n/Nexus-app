@@ -193,6 +193,24 @@ object NexusTile {
         prefs(ctx).edit().putBoolean("on", true).putBoolean("vpn", true).apply()
     }
 
+    /** Подключение после перезагрузки (настройка «Подключать при включении»). */
+    fun setBoot(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean("boot", on).apply()
+    }
+
+    /** Телефон включился: если пользователь просил — поднимаем VPN последним конфигом. */
+    fun bootConnect(ctx: Context) {
+        val p = prefs(ctx)
+        // После перезагрузки VPN точно не работает — сбрасываем старое «вкл».
+        p.edit().putBoolean("on", false).apply()
+        if (!p.getBoolean("boot", false)) return
+        try {
+            toggle(ctx)
+        } catch (e: Exception) {
+        }
+        refreshViews(ctx)
+    }
+
     fun clearConfig(ctx: Context) {
         prefs(ctx).edit().remove("cfg").apply()
     }
@@ -504,6 +522,8 @@ class NexusAlarmReceiver : BroadcastReceiver() {
 /** После перезагрузки будильники пропадают — ставим заново. */
 class NexusBootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) NexusTile.reschedule(ctx)
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        NexusTile.reschedule(ctx)
+        NexusTile.bootConnect(ctx)
     }
 }

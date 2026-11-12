@@ -82,7 +82,8 @@ final class NexusVpn: NSObject {
         result(FlutterError(code: "args", message: "no config", details: nil))
         return
       }
-      start(config, onDemand: args?["onDemand"] as? Bool ?? false, result)
+      start(config, onDemand: args?["onDemand"] as? Bool ?? false,
+            killSwitch: args?["killSwitch"] as? Bool ?? false, result)
     case "stop":
       // Сначала выключаем автоподключение — иначе iOS сразу поднимет VPN снова.
       guard let m = manager else {
@@ -149,12 +150,18 @@ final class NexusVpn: NSObject {
     }
   }
 
-  private func start(_ config: String, onDemand: Bool, _ result: @escaping FlutterResult) {
+  private func start(_ config: String, onDemand: Bool, killSwitch: Bool,
+                     _ result: @escaping FlutterResult) {
     let m = manager ?? NETunnelProviderManager()
     let p = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
     p.providerBundleIdentifier = Self.tunnelId
     p.serverAddress = "Nexus"
     p.disconnectOnSleep = false
+    // Kill switch: весь трафик iPhone — только через туннель; пока он не
+    // поднят (или упал), iOS не выпускает пакеты в сеть напрямую.
+    // Локальная сеть (принтеры, AirPlay) остаётся доступной.
+    p.includeAllNetworks = killSwitch
+    p.excludeLocalNetworks = killSwitch
     m.protocolConfiguration = p
     m.localizedDescription = "Nexus"
     m.isEnabled = true

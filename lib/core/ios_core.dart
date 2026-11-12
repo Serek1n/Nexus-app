@@ -215,6 +215,7 @@ class IosCore extends VpnCore {
         'config': full,
         'remark': remark,
         'onDemand': settings.autoReconnect,
+        'killSwitch': settings.iosKillSwitch,
       });
     } on PlatformException catch (e) {
       _set(ConnState.disconnected);

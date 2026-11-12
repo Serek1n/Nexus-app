@@ -102,7 +102,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
           child: Row(children: [
             Expanded(
               child: Text(tr('Откатить версию'),
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  style: TextStyle(fontSize: NXFont.h3, fontWeight: FontWeight.w800)),
             ),
             IconButton(
               icon: Icon(Icons.close_rounded, color: NX.text2),
@@ -116,7 +116,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
             android
                 ? tr('Android не даёт поставить старую версию поверх новой. Скопируйте подписки, удалите Nexus, скачайте нужную версию со страницы релиза и вставьте подписки обратно.')
                 : tr('Сейчас установлена {0}. Выберите версию, которая работала хорошо.', [appVersionLabel]),
-            style: TextStyle(color: NX.text2, fontSize: 13, height: 1.4),
+            style: TextStyle(color: NX.text2, fontSize: NXFont.body, height: 1.4),
           ),
         ),
         if (android)
@@ -146,7 +146,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
               border: Border.all(color: NX.red.withValues(alpha: 0.4)),
             ),
             child: Text(_error!,
-                style: const TextStyle(color: NX.red, fontSize: 13)),
+                style: const TextStyle(color: NX.red, fontSize: NXFont.body)),
           ),
         Flexible(
           child: FutureBuilder<(int, List<AppRelease>)>(
@@ -158,7 +158,7 @@ class _RollbackBodyState extends State<_RollbackBody> {
                   padding: const EdgeInsets.all(20),
                   child: Text(
                       s.startsWith('Exception: ') ? s.substring(11) : s,
-                      style: const TextStyle(color: NX.red, fontSize: 13)),
+                      style: const TextStyle(color: NX.red, fontSize: NXFont.body)),
                 );
               }
               if (!snap.hasData) {
@@ -196,11 +196,11 @@ class _RollbackBodyState extends State<_RollbackBody> {
                               Text(r.version,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w800,
-                                      fontSize: 15)),
+                                      fontSize: NXFont.title)),
                               if (r.date != null)
                                 Text(_date(r.date),
                                     style: TextStyle(
-                                        color: NX.text3, fontSize: 12)),
+                                        color: NX.text3, fontSize: NXFont.caption)),
                               if (r.notes.isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 ChangeList(r.notes.take(3).toList()),

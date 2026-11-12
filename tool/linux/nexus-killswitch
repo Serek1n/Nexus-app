@@ -1,0 +1,47 @@
+#!/bin/sh
+# Nexus kill switch (nftables). Запускается через pkexec без пароля только
+# для активного сеанса (правило polkit app.nexusvpn.killswitch).
+# Принимает лишь IP-адреса — ничего другого в правила не попадает.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+NFT=$(command -v nft) || exit 3
+if [ "${1:-}" = off ]; then
+  $NFT delete table inet nexus_ks 2>/dev/null || true
+  exit 0
+fi
+[ "${1:-}" = on ] || exit 2
+shift
+S4=""; S6=""; D4=""; D6=""
+for a in "$@"; do
+  k=${a%%=*}; v=${a#*=}
+  case "$v" in ""|*[!0-9a-fA-F.:/]*) exit 2;; esac
+  case "$k:$v" in
+    srv:*:*) S6="$S6, $v";;
+    srv:*) S4="$S4, $v";;
+    dns:*:*) D6="$D6, $v";;
+    dns:*) D4="$D4, $v";;
+    *) exit 2;;
+  esac
+done
+{
+  echo 'table inet nexus_ks'
+  echo 'delete table inet nexus_ks'
+  echo 'table inet nexus_ks {'
+  echo ' chain out {'
+  echo '  type filter hook output priority 0; policy drop;'
+  echo '  oifname "lo" accept'
+  echo '  oifname "nexus0" accept'
+  echo '  meta mark 0x4e58 accept'
+  echo '  ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4, 255.255.255.255 } accept'
+  echo '  ip6 daddr { fe80::/10, fc00::/7, ff00::/8 } accept'
+  echo '  udp dport { 67, 68, 546, 547 } accept'
+  if [ -n "$S4" ]; then echo "  ip daddr { ${S4#, } } accept"; fi
+  if [ -n "$S6" ]; then echo "  ip6 daddr { ${S6#, } } accept"; fi
+  if [ -n "$D4" ]; then echo "  ip daddr { ${D4#, } } meta l4proto { tcp, udp } th dport 53 accept"; fi
+  if [ -n "$D6" ]; then echo "  ip6 daddr { ${D6#, } } meta l4proto { tcp, udp } th dport 53 accept"; fi
+  # Отказ сразу, а не молчание: программы не «висят», а видят, что сети нет.
+  echo '  meta l4proto tcp reject with tcp reset'
+  echo '  reject with icmpx type admin-prohibited'
+  echo ' }'
+  echo '}'
+} | $NFT -f -

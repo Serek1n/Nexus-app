@@ -142,13 +142,13 @@ class _SendToTvState extends State<_SendToTv> {
                   style: TextStyle(
                       fontFamily: NX.display,
                       fontWeight: FontWeight.w700,
-                      fontSize: 20)),
+                      fontSize: NXFont.h2)),
             ),
           ]),
           const SizedBox(height: 6),
           // Адрес телевизора на виду — видно, куда уходит подписка.
           Text(tr('Телевизор в вашей сети: {0}', [widget.target.host]),
-              style: TextStyle(color: NX.text3, fontSize: 13)),
+              style: TextStyle(color: NX.text3, fontSize: NXFont.body)),
           const SizedBox(height: 16),
           if (subs.isEmpty)
             Text(
@@ -190,7 +190,7 @@ class _SendToTvState extends State<_SendToTv> {
                                 style: const TextStyle(fontWeight: FontWeight.w700)),
                             Text(
                                 tr('{0} серв.', [app.serversOf(s.id).length]),
-                                style: TextStyle(color: NX.text3, fontSize: 12.5)),
+                                style: TextStyle(color: NX.text3, fontSize: NXFont.sub)),
                           ],
                         ),
                       ),

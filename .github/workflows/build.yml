@@ -354,6 +354,8 @@ jobs:
     runs-on: windows-latest
     env:
       BUILD: ${{ needs.check.outputs.build }}
+      XRAY: ${{ needs.check.outputs.xray }}
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX != '' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -396,7 +398,10 @@ jobs:
       - name: Ядро Xray (скачать и проверить)
         shell: pwsh
         run: |
-          $base = "https://github.com/XTLS/Xray-core/releases/latest/download"
+          # Та же версия Xray, что и в сборке для Android (одна на все системы).
+          $base = "https://github.com/XTLS/Xray-core/releases/download/$env:XRAY"
+          try { Invoke-WebRequest "$base/Xray-windows-64.zip.dgst" -Method Head -MaximumRetryCount 2 -RetryIntervalSec 5 | Out-Null }
+          catch { $base = "https://github.com/XTLS/Xray-core/releases/latest/download"; Write-Host "Xray $env:XRAY не найден — беру последний" }
           Invoke-WebRequest "$base/Xray-windows-64.zip" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile xray.zip
           Invoke-WebRequest "$base/Xray-windows-64.zip.dgst" -MaximumRetryCount 4 -RetryIntervalSec 5 -OutFile xray.dgst
           $want = ((Get-Content xray.dgst -Raw) | Select-String -Pattern 'SHA2-256=\s*([0-9a-fA-F]{64})').Matches[0].Groups[1].Value.ToLower()
@@ -453,6 +458,22 @@ jobs:
           }
           & "$rel\nexus-core.exe" version
 
+      # Подпись кода (если в секретах есть сертификат): Windows покажет
+      # издателя вместо «Неизвестный издатель», и подменённый файл будет
+      # отличим. Ядро не подписываем — его SHA-256 уже зашит в Nexus.
+      - name: Подпись nexus.exe
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX }}
+          WIN_CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:WIN_CERT))
+          $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          & $st.FullName sign /f "$env:RUNNER_TEMP\cert.pfx" /p "$env:WIN_CERT_PASS" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "build\windows\x64\runner\Release\nexus.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Подпись не удалась" }
+          Remove-Item "$env:RUNNER_TEMP\cert.pfx"
+
       - name: Архив
         shell: pwsh
         run: |
@@ -467,6 +488,21 @@ jobs:
         run: |
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VER" tool\nexus.iss
+
+      - name: Подпись установщика
+        if: env.HAS_WIN_CERT == 'true'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX }}
+          WIN_CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:WIN_CERT))
+          $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          Get-ChildItem dist\Nexus-Setup-*.exe | ForEach-Object {
+            & $st.FullName sign /f "$env:RUNNER_TEMP\cert.pfx" /p "$env:WIN_CERT_PASS" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName
+          }
+          Remove-Item "$env:RUNNER_TEMP\cert.pfx"
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
@@ -483,6 +519,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       BUILD: ${{ needs.check.outputs.build }}
+      XRAY: ${{ needs.check.outputs.xray }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -521,7 +558,10 @@ jobs:
       - name: Ядро Xray (скачать и проверить)
         run: |
           set -e
-          base=https://github.com/XTLS/Xray-core/releases/latest/download
+          # Та же версия Xray, что и в сборке для Android (одна на все системы).
+          base=https://github.com/XTLS/Xray-core/releases/download/$XRAY
+          curl -fsIL --retry 2 --retry-delay 5 -o /dev/null "$base/Xray-linux-64.zip.dgst" \
+            || { base=https://github.com/XTLS/Xray-core/releases/latest/download; echo "Xray $XRAY не найден — беру последний"; }
           curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o xray.zip "$base/Xray-linux-64.zip"
           curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o xray.dgst "$base/Xray-linux-64.zip.dgst"
           want=$(grep -oE 'SHA2-256=\s*[0-9a-fA-F]{64}' xray.dgst | grep -oE '[0-9a-fA-F]{64}' | tr A-F a-f)
@@ -648,6 +688,7 @@ jobs:
     runs-on: macos-15
     env:
       BUILD: ${{ needs.check.outputs.build }}
+      XRAY: ${{ needs.check.outputs.xray }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -686,7 +727,10 @@ jobs:
       - name: Ядро Xray (универсальное, с проверкой)
         run: |
           set -e
-          base=https://github.com/XTLS/Xray-core/releases/latest/download
+          # Та же версия Xray, что и в сборке для Android (одна на все системы).
+          base=https://github.com/XTLS/Xray-core/releases/download/$XRAY
+          curl -fsIL --retry 2 --retry-delay 5 -o /dev/null "$base/Xray-macos-64.zip.dgst" \
+            || { base=https://github.com/XTLS/Xray-core/releases/latest/download; echo "Xray $XRAY не найден — беру последний"; }
           for a in macos-64 macos-arm64-v8a; do
             curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "x-$a.zip" "$base/Xray-$a.zip"
             curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 -o "x-$a.dgst" "$base/Xray-$a.zip.dgst"

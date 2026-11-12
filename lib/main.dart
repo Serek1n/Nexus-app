@@ -1,5 +1,3 @@
-import 'changelog.dart';
-import 'core/desktop_core.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -8,9 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'changelog.dart';
+import 'core/desktop_core.dart';
+import 'core/desktop_os.dart';
 import 'models.dart';
 import 'platform/android_system.dart';
 import 'platform/mac_links.dart';
+import 'platform/secure_clipboard.dart';
+import 'platform/win_admin.dart';
 import 'platform/windows_host.dart';
 import 'services/deep_links.dart';
 import 'services/phone_link.dart';
@@ -36,8 +39,19 @@ Future<void> main(List<String> args) async {
 
   final desktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   if (desktop && args.contains('--restore-proxy')) {
-    // Удаление программы: возвращаем системный прокси и выходим без окна.
+    // Удаление программы: возвращаем системный прокси и снимаем блокировку
+    // kill switch (Windows попросит права администратора), выходим без окна.
     await DesktopCore.restoreProxyOnly();
+    try {
+      await DesktopOs.current.killSwitchOff();
+    } catch (_) {}
+    exit(0);
+  }
+  if (desktop && args.contains('--killswitch-off')) {
+    // Запуск с правами администратора только чтобы снять блокировку.
+    try {
+      await DesktopOs.current.killSwitchOff();
+    } catch (_) {}
     exit(0);
   }
   if (desktop) {
@@ -76,6 +90,18 @@ Future<void> main(List<String> args) async {
   final state = AppState();
   runApp(NexusApp(state: state));
   await state.init();
+  // Автозапуск в режиме TUN, когда Nexus стоит в папке пользователя: права
+  // администратора — через окно UAC при входе в систему, а не задачей
+  // Планировщика (она без спроса запускала бы файл, который может
+  // подменить любая программа пользователя).
+  if (Platform.isWindows &&
+      args.contains('--elevate') &&
+      state.settings.windowsTun &&
+      !WinAdmin.isAdmin) {
+    if (await WinAdmin.relaunchElevated(connect: args.contains('--connect'))) {
+      exit(0);
+    }
+  }
   // Телевизор: управление только пультом — выбранный элемент подсвечен
   // всегда, а не только после первого нажатия стрелки.
   if (state.isTv) {
@@ -212,6 +238,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
     if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (s == AppLifecycleState.resumed) secretClipboardCheck();
     AppScope.read(context).setWindowVisible(s == AppLifecycleState.resumed);
   }
 
@@ -262,14 +289,14 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                       .map((m) => Uri.tryParse(m)?.host ?? m)
                       .join(', ')
                 ]),
-                style: TextStyle(color: NX.text2, fontSize: 13),
+                style: TextStyle(color: NX.text2, fontSize: NXFont.body),
               ),
             ],
             if (payload.toLowerCase().startsWith('http://')) ...[
               const SizedBox(height: 12),
               Text(
                 tr('Ссылка без шифрования: её могут подменить по дороге. Добавляйте, только если доверяете источнику.'),
-                style: TextStyle(color: NX.warn, fontSize: 13),
+                style: TextStyle(color: NX.warn, fontSize: NXFont.body),
               ),
             ],
           ],
@@ -353,7 +380,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             ? Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
+                  // Серверы и настройки на большом окне — в две панели.
+                  constraints: BoxConstraints(
+                      maxWidth: switch (_tab) { 1 => 1240, 3 => 1060, _ => 720 }),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _page(wide),
@@ -471,7 +500,7 @@ class _BottomBar extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(items[i].$2,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: NXFont.micro,
                               fontWeight: FontWeight.w700,
                               color: current == i ? NX.text : NX.text3,
                             )),
@@ -546,7 +575,7 @@ class _Sidebar extends StatelessWidget {
                     style: TextStyle(
                         color: live ? NX.text : NX.text2,
                         fontWeight: FontWeight.w600,
-                        fontSize: 13),
+                        fontSize: NXFont.body),
                   ),
                 ),
               ],
@@ -592,7 +621,7 @@ class _SideItem extends StatelessWidget {
                 Text(label,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 14,
+                      fontSize: NXFont.title,
                       color: active ? NX.text : NX.text2,
                     )),
               ],

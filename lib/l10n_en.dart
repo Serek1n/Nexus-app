@@ -11,8 +11,8 @@ const kEn = <String, String>{
       ' · from {0} ms',
   ' — трафик идёт мимо VPN':
       ' — traffic bypasses the VPN',
-  '4–8 цифр':
-      '4–8 digits',
+  '6–8 цифр':
+      '6–8 digits',
   'Android любит экономить батарею и останавливать приложения в фоне. Разрешите Nexus работать без ограничений и показывать уведомление о подключении.':
       'Android likes to save battery by stopping apps in the background. Let Nexus run without restrictions and show the connection notification.',
   'Android может отключать VPN в фоне — разрешите Nexus работать без ограничений':
@@ -35,6 +35,10 @@ const kEn = <String, String>{
       'Exit IP: {0}{1}',
   'IP для сайтов':
       'IP seen by websites',
+  'Kill switch: блокировка снята':
+      'Kill switch: block removed',
+  'Kill switch: трафик мимо туннеля заблокирован':
+      'Kill switch: traffic outside the tunnel is blocked',
   'Nexus · Авто':
       'Nexus · Auto',
   'Nexus включает режим TUN: весь трафик Mac пойдёт через VPN.':
@@ -43,6 +47,8 @@ const kEn = <String, String>{
       'Nexus on your phone opens by itself — pick a subscription and tap “Send”.',
   'Nexus сам держит соединение через самый быстрый сервер подписки и незаметно переходит на другой, если этот упал':
       'Nexus keeps you on the fastest server of the subscription and quietly switches to another one if it goes down',
+  'Nexus снимает блокировку интернета (kill switch).':
+      'Nexus is removing the internet block (kill switch).',
   'Nexus стартует свёрнутым в трей':
       'Nexus starts minimized to the tray',
   'Nexus установит выбранную версию и перезапустится. Подписки и настройки сохранятся. Текущую версию автоматически предлагать не будем — только более новые.':
@@ -93,6 +99,10 @@ const kEn = <String, String>{
       '{0} min',
   '{0} мс':
       '{0} ms',
+  '{0} мс через туннель':
+      '{0} ms through the tunnel',
+  '{0} не принимает настройки Nexus — обновление отменено, остаётся прежнее ядро':
+      '{0} doesn\'t accept Nexus settings — update cancelled, keeping the current core',
   '{0} недоступен — возможно, его блокирует провайдер':
       '{0} is unreachable — your ISP may be blocking it',
   '{0} пропущена после отката':
@@ -147,10 +157,16 @@ const kEn = <String, String>{
       'Beta versions',
   'Блокировать рекламу':
       'Block ads',
+  'Блокировка kill switch не снята — нужны права администратора{0}':
+      'Kill switch block not removed — administrator rights required{0}',
+  'Блокировка не снята — нужен пароль администратора. Перезагрузка Mac тоже её снимает':
+      'Block not removed — administrator password required. Restarting the Mac also removes it',
   'Более ранних версий пока нет':
       'No earlier versions yet',
   'Больше {0} приложений: банки, Госуслуги, VK, Яндекс, маркетплейсы. Список обновляется сам':
       'Over {0} apps: banks, Gosuslugi, VK, Yandex, marketplaces. The list updates itself',
+  'Брандмауэр Windows выключен — kill switch не может блокировать трафик':
+      'Windows Firewall is off — the kill switch can\'t block traffic',
   'Браузеры и программы {0} автоматически пойдут через Nexus. Программы, которые не смотрят на системный прокси (игры, часть мессенджеров, звонки), идут напрямую — для них включите TUN':
       'Browsers and {0} apps go through Nexus automatically. Apps that ignore the system proxy (games, some messengers, calls) connect directly — turn on TUN for those',
   'Будет добавлен сервер {0}.':
@@ -175,8 +191,6 @@ const kEn = <String, String>{
       'In VPN settings, choose Nexus and turn on “Always-on VPN” and “Block connections without VPN”',
   'В подписке не найдено ни одного сервера':
       'No servers found in the subscription',
-  'В режиме TUN не действует: если ядро остановится, трафик пойдёт напрямую. Работает только с системным прокси':
-      'Has no effect in TUN mode: if the core stops, traffic goes out directly. Works only with the system proxy',
   'В режиме TUN системный прокси не нужен — HTTP-прокси закрыт паролем, им пользуется только Nexus':
       'In TUN mode the system proxy isn\'t needed — the HTTP proxy is password-protected and used only by Nexus',
   'В релизе {0} нет сборки для этой системы':
@@ -247,6 +261,8 @@ const kEn = <String, String>{
       'Choose programs that always go via the VPN or directly',
   'Выберите сайты, которые всегда идут через VPN или напрямую':
       'Choose sites that always go through the VPN or directly',
+  'Выберите сервер в списке':
+      'Choose a server from the list',
   'Выбран: {0}':
       'Selected: {0}',
   'Выбрать подписку в Nexus':
@@ -323,6 +339,8 @@ const kEn = <String, String>{
       'If your provider blocks connections to the server: Nexus splits the first packet into pieces so it\'s harder to detect. Connecting is a bit slower',
   'Если сервер не пропускает трафик, Nexus сам переключится на следующий':
       'If a server doesn\'t pass traffic, Nexus switches to the next one by itself',
+  'Ещё':
+      'More',
   'Ещё раз':
       'Repeat',
   'Журнал':
@@ -343,6 +361,8 @@ const kEn = <String, String>{
       'Download failed (code {0})',
   'Загрузка остановилась — проверьте интернет и повторите':
       'The download stalled — check your internet and try again',
+  'Задержка':
+      'Latency',
   'Закрыть':
       'Close',
   'Запасные адреса':
@@ -383,6 +403,8 @@ const kEn = <String, String>{
       'No update source configured in this build',
   'КБ':
       'KB',
+  'Как в подписке':
+      'As in subscription',
   'Как в системе':
       'System default',
   'Какую подписку отправить?':
@@ -447,6 +469,8 @@ const kEn = <String, String>{
       'Don\'t use in Auto mode',
   'Не короче 4 цифр':
       'At least 4 digits',
+  'Не короче 6 цифр':
+      'At least 6 digits',
   'Не короче 8 символов':
       'At least 8 characters',
   'Не найдено ни одной поддерживаемой ссылки':
@@ -457,6 +481,8 @@ const kEn = <String, String>{
       'Not updating',
   'Не подключено':
       'Not connected',
+  'Не удалось включить kill switch: {0}':
+      'Couldn\'t enable kill switch: {0}',
   'Не удалось загрузить ни одну подписку':
       'Couldn\'t load any subscription',
   'Не удалось запустить ядро: {0}':
@@ -481,6 +507,8 @@ const kEn = <String, String>{
       'Couldn\'t apply the core update: {0}',
   'Не удалось проверить файлы релиза':
       'Couldn\'t verify the release files',
+  'Не удалось прочитать настройки брандмауэра Windows':
+      'Couldn\'t read Windows Firewall settings',
   'Не удалось разобрать ни один сервер подписки':
       'Couldn\'t parse any server in the subscription',
   'Не удалось разобрать ссылки из подписки':
@@ -489,8 +517,12 @@ const kEn = <String, String>{
       'Couldn\'t unpack the update: {0}',
   'Не удалось расшифровать сохранённые подписки — они не загружены. Перезапустите устройство; если не поможет — «Сбросить всё» в настройках и добавьте подписку заново':
       'Couldn\'t decrypt the saved subscriptions, so they weren\'t loaded. Restart the device; if that doesn\'t help, use "Reset everything" in Settings and add the subscription again',
+  'Не удалось снять блокировку kill switch: {0}':
+      'Couldn\'t remove kill switch block: {0}',
   'Не удалось узнать последнюю версию (код {0})':
       'Couldn\'t get the latest version (code {0})',
+  'Не удалось установить kill switch':
+      'Couldn\'t install kill switch',
   'Не удалось установить защищённое соединение с сервером подписки — похоже, адрес блокирует провайдер. Подключитесь к VPN и повторите':
       'Couldn\'t establish a secure connection to the subscription server — your provider seems to block it. Connect to the VPN and try again',
   'Не удаётся подключиться к «{0}». Попробуйте другой сервер':
@@ -517,6 +549,8 @@ const kEn = <String, String>{
       'No server is responding — check your internet or subscription',
   'Ничего не найдено':
       'Nothing found',
+  'Новое ядро не запустилось — интернет заблокирован (kill switch). Нажмите «Отключить», чтобы снять блокировку':
+      'The new core didn\'t start — internet is blocked (kill switch). Tap “Disconnect” to remove the block',
   'Новые версии берутся с GitHub XTLS/Xray-core':
       'New versions come from GitHub XTLS/Xray-core',
   'Новые версии приходят с GitHub':
@@ -547,6 +581,8 @@ const kEn = <String, String>{
       'Update subscriptions',
   'Обновляются автоматически при запуске':
       'Updated automatically on launch',
+  'Обновлённое ядро не принимает настройки — вернул прежнее. Подключитесь ещё раз':
+      'The updated core doesn\'t accept the settings — restored the previous one. Connect again',
   'Остановить проверку скорости':
       'Stop the speed test',
   'Отдача':
@@ -591,6 +627,8 @@ const kEn = <String, String>{
       'Appearance',
   'Очищать буфер обмена':
       'Clear clipboard',
+  'Ошибка':
+      'Error',
   'Ошибка инициализации ядра: {0}':
       'Core initialization error: {0}',
   'Пара минут — и всё настроено. Вот что вы получаете:':
@@ -629,10 +667,14 @@ const kEn = <String, String>{
       'One site or IP per line. Subdomains are included automatically: “ozon.ru” also covers “www.ozon.ru”. Your rules take priority over the routing mode.',
   'По этой ссылке получают все серверы подписки и тратят её трафик. Делитесь только с теми, кому доверяете, и если владелец подписки не против.':
       'This link gives access to all servers of the subscription and uses its traffic. Share only with people you trust, and only if the subscription owner agrees.',
+  'Повторить':
+      'Retry',
   'Поддержка':
       'Support',
   'Поделиться (QR)':
       'Share (QR)',
+  'Подключать при включении':
+      'Connect on boot',
   'Подключаться сразу после запуска':
       'Connect right after launch',
   'Подключение':
@@ -649,6 +691,8 @@ const kEn = <String, String>{
       'Connect or disconnect the VPN from any program, even when Nexus is minimized',
   'Подозрительный путь в архиве обновления':
       'Suspicious path in the update archive',
+  'Подписка':
+      'Subscription',
   'Подписка «{0}»':
       'Subscription “{0}”',
   'Подписка «{0}» добавлена: {1} серв.':
@@ -685,6 +729,8 @@ const kEn = <String, String>{
       'Search apps',
   'Поиск сервера':
       'Search servers',
+  'Пока VPN подключается или если он упал, iPhone не выходит в интернет напрямую. Локальная сеть остаётся доступной. Иногда мешает AirDrop и CarPlay. Применяется при следующем подключении':
+      'While the VPN is connecting or if it drops, the iPhone doesn\'t go online directly. The local network stays available. May interfere with AirDrop and CarPlay. Applies on next connection',
   'Пока нет серверов':
       'No servers yet',
   'Получать пробные сборки раньше остальных. Если что-то сломается — «Откатить версию»':
@@ -699,8 +745,12 @@ const kEn = <String, String>{
       'Ports {0}/{1} are used by another program (e.g. Happ or v2rayN) — Nexus uses {2}/{3}',
   'После добавления ключа или подписки':
       'After adding a key or subscription',
+  'После перезагрузки телефона VPN поднимается сам, без открытия Nexus':
+      'After the phone restarts, the VPN comes up by itself without opening Nexus',
   'Последние 14 дней':
       'Last 14 days',
+  'Потяните список вниз, чтобы обновить все':
+      'Pull the list down to refresh all',
   'Права администратора: ядро запускается из защищённой папки':
       'Administrator rights: the core runs from a protected folder',
   'При запуске, подключении и переподключении VPN':
@@ -727,6 +777,8 @@ const kEn = <String, String>{
       'Connection check',
   'Проверка: {0} из {1}':
       'Checking: {0} of {1}',
+  'Проверка…':
+      'Checking…',
   'Проверять обновления':
       'Check for updates',
   'Проверяю задержку…':
@@ -739,6 +791,8 @@ const kEn = <String, String>{
       'Renew',
   'Пропустить':
       'Skip',
+  'Протокол':
+      'Protocol',
   'Прошлая сессия: {0}':
       'Last session: {0}',
   'Пусто — вставьте ссылку':
@@ -773,6 +827,8 @@ const kEn = <String, String>{
       'TUN mode creates a virtual network adapter, so Windows asks for administrator rights. Nexus will restart — confirm the Windows prompt. Subscriptions and settings are kept.',
   'Режим TUN: весь трафик компьютера идёт через Nexus':
       'TUN mode: all computer traffic goes through Nexus',
+  'Режим TUN: пока VPN работает, брандмауэр системы запрещает любой трафик мимо туннеля. Если ядро упадёт, интернет будет закрыт, пока вы не нажмёте «Отключить». Локальная сеть и DNS системы остаются доступны':
+      'TUN mode: while the VPN is on, the system firewall blocks any traffic outside the tunnel. If the core crashes, the internet stays closed until you press “Disconnect”. The local network and system DNS remain available',
   'Режим VPN':
       'VPN mode',
   'Режим «Авто»':
@@ -853,6 +909,8 @@ const kEn = <String, String>{
       'Server',
   'Сервер «{0}»':
       'Server “{0}”',
+  'Сервер не отвечает':
+      'Server not responding',
   'Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения» (Настройки → «Про»).':
       'The server doesn\'t respond — pick another server or turn on "Connection masking" (Settings → Pro).',
   'Сервер не отвечает — трафик не идёт. Выберите другой сервер':
@@ -937,10 +995,8 @@ const kEn = <String, String>{
       'Create',
   'Сообщать о новой версии; скачивание — по кнопке «Установить»':
       'Notify about new versions; download with the “Install” button',
-  'Сортировка: как в подписке':
-      'Sort: as in subscription',
-  'Сортировка: по задержке':
-      'Sort: by latency',
+  'Сортировать по задержке':
+      'Sort by latency',
   'Сохранено: через VPN {0}, напрямую {1}':
       'Saved: {0} via VPN, {1} direct',
   'Сохраните строку в заметках или отправьте себе. Чтобы восстановить: «Добавить» → вставить её → ввести пароль. Без пароля копию не открыть — его нельзя восстановить.':
@@ -993,6 +1049,8 @@ const kEn = <String, String>{
       'Working only',
   'Тонкие настройки спрятаны и работают как настроены. Включите «Про», чтобы их увидеть':
       'Advanced settings are hidden and keep working as set. Switch to “Pro” to see them',
+  'Транспорт':
+      'Transport',
   'Трафик через «{0}» идёт, задержка {1} мс':
       'Traffic flows via “{0}”, latency {1} ms',
   'Тёмная':
@@ -1017,6 +1075,8 @@ const kEn = <String, String>{
       'Install and restart',
   'Установить обновление':
       'Install update',
+  'Установка kill switch отменена':
+      'Kill switch installation cancelled',
   'Установка ядра для TUN отменена':
       'Installing the core for TUN was cancelled',
   'Установлена последняя версия':
@@ -1123,6 +1183,8 @@ const kEn = <String, String>{
       'minutes',
   'не найдено':
       'not found',
+  'не отвечает':
+      'not responding',
   'не открывается':
       'doesn\'t open',
   'не подключено':

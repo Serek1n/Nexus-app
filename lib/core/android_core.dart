@@ -121,6 +121,14 @@ class AndroidCore extends VpnCore {
     }
   }
 
+  /// Режим последнего подключения (VPN или только прокси).
+  bool? _vpnMode;
+
+  /// В режиме VPN новый сервер подключается поверх старого: интерфейс VPN
+  /// не закрывается, и трафик не успевает уйти напрямую.
+  @override
+  bool get swapsInPlace => _vpnMode == true;
+
   void _onStatus(V2RayStatus s) {
     final st = s.state.toUpperCase();
     final ConnState mapped;
@@ -180,6 +188,17 @@ class AndroidCore extends VpnCore {
     required String config,
     required AppSettings settings,
   }) async {
+    // Смена режима VPN ↔ прокси — это другая служба: старую останавливаем.
+    // Смена сервера в том же режиме идёт без разрыва (см. patch_plugin.py).
+    if (_last != ConnState.disconnected &&
+        _vpnMode != null &&
+        _vpnMode != settings.androidVpnMode) {
+      try {
+        await _v2ray.stopV2Ray();
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+    _vpnMode = settings.androidVpnMode;
     if (settings.androidVpnMode) {
       final ok = await _v2ray.requestPermission();
       if (!ok) {

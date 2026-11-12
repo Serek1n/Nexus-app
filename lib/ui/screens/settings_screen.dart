@@ -38,7 +38,7 @@ class SettingsScreen extends StatelessWidget {
         TextEditingController(text: app.settings.customDirect.join('\n'));
     InputDecoration deco(String hint) => InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: NX.text3, fontSize: 13),
+          hintStyle: TextStyle(color: NX.text3, fontSize: NXFont.body),
         );
     final ok = await showDialog<bool>(
       context: context,
@@ -53,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Text(
                     tr('По одному сайту или IP в строке. Поддомены входят автоматически: «ozon.ru» — это и «www.ozon.ru». Свои правила важнее режима маршрутизации.'),
-                    style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                 const SizedBox(height: 14),
                 Text(tr('Всегда через VPN'),
                     style: TextStyle(fontWeight: FontWeight.w700)),
@@ -109,7 +109,7 @@ class SettingsScreen extends StatelessWidget {
     final direct = TextEditingController(text: app.settings.appsDirect.join('\n'));
     InputDecoration deco(String hint) => InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: NX.text3, fontSize: 13),
+          hintStyle: TextStyle(color: NX.text3, fontSize: NXFont.body),
         );
     final ok = await showDialog<bool>(
       context: context,
@@ -124,7 +124,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Text(
                     tr('По одной программе в строке — имя файла, как в Диспетчере задач (Discord.exe). Лучше всего работает в режиме TUN.'),
-                    style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                 const SizedBox(height: 14),
                 Text(tr('Всегда через VPN'),
                     style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -236,11 +236,11 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     Text(title,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14.5)),
+                            fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                     const SizedBox(height: 2),
                     Text(sub,
                         style:
-                            TextStyle(color: NX.text2, fontSize: 12.5)),
+                            TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                   ],
                 ),
               ),
@@ -276,11 +276,11 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     Text(title,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14.5)),
+                            fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                     const SizedBox(height: 3),
                     Text(text,
                         style: TextStyle(
-                            color: NX.text2, fontSize: 12.5, height: 1.35)),
+                            color: NX.text2, fontSize: NXFont.sub, height: 1.35)),
                   ],
                 ),
               ),
@@ -289,17 +289,55 @@ class SettingsScreen extends StatelessWidget {
       );
     }
 
-    return SafeArea(
-      bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+    // Разделы — для быстрого перехода (лента сверху или колонка слева).
+    final titles = <String>[];
+    Widget sec(String t) {
+      titles.add(t);
+      return SectionTitle(t, key: _secKeys.putIfAbsent(t, GlobalKey.new));
+    }
+
+    void jump(String t) {
+      final c = _secKeys[t]?.currentContext;
+      if (c != null) {
+        Scrollable.ensureVisible(c,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic);
+      }
+    }
+
+    // Настройки внутри окна до 1060 точек; колонка разделов — от 900.
+    final wideNav = MediaQuery.sizeOf(context).width >= 1200;
+    final list = SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: _gapped([
           PageHeader(title: tr('Настройки')),
           _ModeSwitch(
             pro: pro,
             onChanged: (v) => app.updateSettings((s) => s.proMode = v),
           ),
-          SectionTitle(tr('Маршрутизация')),
+          // «Про» — длинная лента: ряд разделов для быстрого перехода.
+          if (pro && !wideNav)
+            Builder(
+              builder: (_) => SizedBox(
+                height: 34,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final t in titles)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ActionChip(
+                          label: Text(t, style: const TextStyle(fontSize: NXFont.caption)),
+                          onPressed: () => jump(t),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          sec(tr('Маршрутизация')),
           routeOption(
             RoutingMode.smart,
             tr('Умный режим'),
@@ -327,14 +365,14 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       Text(tr('Свои правила'),
                           style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 14.5)),
+                              fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                       const SizedBox(height: 2),
                       Text(
                         st.customProxy.isEmpty && st.customDirect.isEmpty
                             ? tr('Выберите сайты, которые всегда идут через VPN или напрямую')
                             : tr('Через VPN: {0} · напрямую: {1}', [st.customProxy.length, st.customDirect.length]),
                         style:
-                            TextStyle(color: NX.text2, fontSize: 12.5),
+                            TextStyle(color: NX.text2, fontSize: NXFont.sub),
                       ),
                     ],
                   ),
@@ -368,14 +406,14 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(width: 14),
                   Text(tr('DNS'),
                       style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14.5)),
+                          fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                 ]),
                 const SizedBox(height: 4),
                 Padding(
                   padding: const EdgeInsets.only(left: 35),
                   child: Text(
                       tr('Запросы зашифрованы и идут через сервер. AdGuard дополнительно отсекает рекламу на уровне DNS'),
-                      style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                      style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                 ),
                 const SizedBox(height: 10),
                 Padding(
@@ -409,14 +447,14 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Text(tr('Программы'),
                             style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 14.5)),
+                                fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                         const SizedBox(height: 2),
                         Text(
                           st.appsProxy.isEmpty && st.appsDirect.isEmpty
                               ? tr('Выберите программы, которые всегда идут через VPN или напрямую')
                               : tr('Через VPN: {0} · напрямую: {1}',
                                   [st.appsProxy.length, st.appsDirect.length]),
-                          style: TextStyle(color: NX.text2, fontSize: 12.5),
+                          style: TextStyle(color: NX.text2, fontSize: NXFont.sub),
                         ),
                       ],
                     ),
@@ -440,7 +478,7 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Text(tr('Приложения без VPN'),
                             style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 14.5)),
+                                fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                         const SizedBox(height: 2),
                         Text(
                           [
@@ -451,7 +489,7 @@ class SettingsScreen extends StatelessWidget {
                               tr('выбрано: {0}', [st.bypassApps.length]),
                           ].join(' · ').ifEmpty(tr('Все приложения через VPN')),
                           style:
-                              TextStyle(color: NX.text2, fontSize: 12.5),
+                              TextStyle(color: NX.text2, fontSize: NXFont.sub),
                         ),
                       ],
                     ),
@@ -460,7 +498,7 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-          SectionTitle(tr('Подключение')),
+          sec(tr('Подключение')),
           // «Пользователь» на телефоне: здесь только тонкие настройки режима.
           if (pro || app.isDesktop) NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -515,7 +553,7 @@ class SettingsScreen extends StatelessWidget {
                           child: Text(tr('Локальный прокси'),
                               style: TextStyle(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14.5)),
+                                  fontSize: NXFont.title)),
                         ),
                         app.core.httpLocked
                             ? Tooltip(
@@ -568,12 +606,12 @@ class SettingsScreen extends StatelessWidget {
                                 Text(tr('Подключить Telegram'),
                                     style: TextStyle(
                                         fontWeight: FontWeight.w700,
-                                        fontSize: 14.5)),
+                                        fontSize: NXFont.title)),
                                 SizedBox(height: 2),
                                 Text(
                                     tr('Telegram Desktop не всегда использует системный прокси — добавим ему прокси Nexus'),
                                     style: TextStyle(
-                                        color: NX.text2, fontSize: 12.5)),
+                                        color: NX.text2, fontSize: NXFont.sub)),
                               ],
                             ),
                           ),
@@ -598,10 +636,10 @@ class SettingsScreen extends StatelessWidget {
                           children: [
                             Text(tr('Режим VPN'),
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w700, fontSize: 14.5)),
+                                    fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                             const SizedBox(height: 2),
                             Text(tr('Весь трафик iPhone идёт через Nexus'),
-                                style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                                style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                           ],
                         ),
                       ),
@@ -693,7 +731,7 @@ class SettingsScreen extends StatelessWidget {
                       st.antiBlockFast
                           ? tr('Паузы только между первыми частями: соединение открывается на ~0,05 с дольше. Если сервер перестал подключаться — выберите «Надёжная»')
                           : tr('Паузы между всеми частями: надёжнее против умных фильтров, соединение открывается на ~0,2 с дольше'),
-                      style: TextStyle(color: NX.text3, fontSize: 12),
+                      style: TextStyle(color: NX.text3, fontSize: NXFont.caption),
                     ),
                   ],
                 ),
@@ -703,7 +741,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           // На телевизоре нет батареи — экономия энергии VPN не мешает,
           // а системного экрана «Без ограничений» там обычно нет.
-          if (!app.isTv) SectionTitle(tr('Работа в фоне')),
+          if (!app.isTv) sec(tr('Работа в фоне')),
           if (!app.isTv) NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: app.isDesktop
@@ -747,13 +785,13 @@ class SettingsScreen extends StatelessWidget {
                 : const _AndroidBackground(),
           ),
           if (app.isDesktop) ...[
-            SectionTitle(tr('Защита')),
+            sec(tr('Защита')),
             if (KeyringBox.supported && KeyringBox.plainFallback)
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
                 child: Text(
                   tr('Системная связка ключей недоступна — подписки и ключи хранятся без шифрования (файл закрыт от других пользователей). Установите и разблокируйте GNOME Keyring или KWallet'),
-                  style: TextStyle(color: NX.warn, fontSize: 12.5, height: 1.35),
+                  style: TextStyle(color: NX.warn, fontSize: NXFont.sub, height: 1.35),
                 ),
               ),
             NeonCard(
@@ -764,7 +802,7 @@ class SettingsScreen extends StatelessWidget {
                     Icons.shield_rounded,
                     'Kill switch',
                     st.windowsTun
-                        ? tr('В режиме TUN не действует: если ядро остановится, трафик пойдёт напрямую. Работает только с системным прокси')
+                        ? tr('Режим TUN: пока VPN работает, брандмауэр системы запрещает любой трафик мимо туннеля. Если ядро упадёт, интернет будет закрыт, пока вы не нажмёте «Отключить». Локальная сеть и DNS системы остаются доступны')
                         : tr('Если VPN оборвётся, браузеры и программы, которые ходят через системный прокси, останутся без интернета, а не пойдут напрямую. Остальные программы защищает только режим TUN'),
                     st.windowsKillSwitch,
                     (v) => app.updateSettings((s) => s.windowsKillSwitch = v),
@@ -782,7 +820,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
           if (!app.isDesktop) ...[
-            SectionTitle(tr('Защита')),
+            sec(tr('Защита')),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
               child: Column(
@@ -807,6 +845,16 @@ class SettingsScreen extends StatelessWidget {
                     st.clearClipboard,
                     (v) => app.updateSettings((s) => s.clearClipboard = v),
                   ),
+                  if (app.isIos) ...[
+                    const Divider(height: 14),
+                    switchRow(
+                      Icons.shield_rounded,
+                      'Kill switch',
+                      tr('Пока VPN подключается или если он упал, iPhone не выходит в интернет напрямую. Локальная сеть остаётся доступной. Иногда мешает AirDrop и CarPlay. Применяется при следующем подключении'),
+                      st.iosKillSwitch,
+                      (v) => app.updateSettings((s) => s.iosKillSwitch = v),
+                    ),
+                  ],
                   if (!app.isIos) ...[
                   const Divider(height: 14),
                   InkWell(
@@ -825,12 +873,12 @@ class SettingsScreen extends StatelessWidget {
                                 Text('Kill switch',
                                     style: TextStyle(
                                         fontWeight: FontWeight.w700,
-                                        fontSize: 14.5)),
+                                        fontSize: NXFont.title)),
                                 SizedBox(height: 2),
                                 Text(
                                     tr('В настройках VPN выберите Nexus и включите «Постоянная VPN» и «Блокировать соединения без VPN»'),
                                     style: TextStyle(
-                                        color: NX.text2, fontSize: 12.5)),
+                                        color: NX.text2, fontSize: NXFont.sub)),
                               ],
                             ),
                           ),
@@ -847,7 +895,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
           if (pro) ...[
-          SectionTitle(tr('Запуск')),
+          sec(tr('Запуск')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
@@ -883,10 +931,20 @@ class SettingsScreen extends StatelessWidget {
                   st.autoConnectOnStart,
                   (v) => app.updateSettings((s) => s.autoConnectOnStart = v),
                 ),
+                if (Platform.isAndroid && !app.isIos) ...[
+                  const Divider(height: 14),
+                  switchRow(
+                    Icons.power_settings_new_rounded,
+                    tr('Подключать при включении'),
+                    tr('После перезагрузки телефона VPN поднимается сам, без открытия Nexus'),
+                    st.bootConnect,
+                    (v) => app.updateSettings((s) => s.bootConnect = v),
+                  ),
+                ],
               ],
             ),
           ),
-          SectionTitle(tr('Ядро Xray')),
+          sec(tr('Ядро Xray')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
             child: Column(
@@ -904,7 +962,7 @@ class SettingsScreen extends StatelessWidget {
                           Text(app.coreVersion,
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14.5)),
+                                  fontSize: NXFont.title)),
                           const SizedBox(height: 2),
                           Text(
                             app.core.canUpdateCore
@@ -914,7 +972,7 @@ class SettingsScreen extends StatelessWidget {
                                         : tr('Свежий Xray приходит обновлением Nexus')))
                                 : tr('Обновляется вместе с приложением'),
                             style: TextStyle(
-                                color: NX.text2, fontSize: 12.5),
+                                color: NX.text2, fontSize: NXFont.sub),
                           ),
                         ],
                       ),
@@ -944,7 +1002,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           ],
-          SectionTitle(tr('Обновления Nexus')),
+          sec(tr('Обновления Nexus')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
             child: Column(
@@ -965,7 +1023,7 @@ class SettingsScreen extends StatelessWidget {
                                   : tr('Версия {0}', [appVersionLabel]),
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14.5)),
+                                  fontSize: NXFont.title)),
                           const SizedBox(height: 2),
                           Text(
                             !AppUpdater.configured
@@ -977,7 +1035,7 @@ class SettingsScreen extends StatelessWidget {
                                             ? tr('Нажмите «Установить» — скачаем и проверим')
                                             : tr('Новые версии приходят с GitHub')),
                             style: TextStyle(
-                                color: NX.text2, fontSize: 12.5),
+                                color: NX.text2, fontSize: NXFont.sub),
                           ),
                         ],
                       ),
@@ -1063,7 +1121,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          SectionTitle(tr('Доступ к Nexus')),
+          sec(tr('Доступ к Nexus')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Column(
@@ -1090,7 +1148,7 @@ class SettingsScreen extends StatelessWidget {
                         Expanded(
                           child: Text(tr('Сменить PIN-код'),
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 14.5)),
+                                  fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                         ),
                         Icon(Icons.chevron_right_rounded, color: NX.text3),
                       ]),
@@ -1100,7 +1158,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          SectionTitle(tr('Данные')),
+          sec(tr('Данные')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(16, 4, 10, 4),
             child: Column(
@@ -1132,7 +1190,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          SectionTitle(tr('Оформление')),
+          sec(tr('Оформление')),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: Wrap(
@@ -1154,7 +1212,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SectionTitle('Язык · Language'),
+          sec('Язык · Language'),
           NeonCard(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: Wrap(
@@ -1174,7 +1232,7 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          SectionTitle(tr('О приложении')),
+          sec(tr('О приложении')),
           NeonCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1222,7 +1280,44 @@ class SettingsScreen extends StatelessWidget {
         ]),
       ),
     );
+
+    return SafeArea(
+      bottom: false,
+      child: !wideNav
+          ? list
+          // Большое окно: разделы слева, содержимое справа.
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 210,
+                  child: Builder(
+                    builder: (_) => ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 72, 4, 16),
+                      children: [
+                        for (final t in titles)
+                          ListTile(
+                            dense: true,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            title: Text(t,
+                                style: TextStyle(
+                                    color: NX.text2,
+                                    fontSize: NXFont.body,
+                                    fontWeight: FontWeight.w600)),
+                            onTap: () => jump(t),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(child: list),
+              ],
+            ),
+    );
   }
+
+  static final _secKeys = <String, GlobalKey>{};
 
   /// Ровные промежутки между карточками (после заголовков разделов — нет).
   static List<Widget> _gapped(List<Widget> xs) {
@@ -1263,7 +1358,7 @@ class SettingsScreen extends StatelessWidget {
               reverse: true,
               child: SelectableText(text,
                   style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 11.5, height: 1.4)),
+                      fontFamily: 'monospace', fontSize: NXFont.caption, height: 1.4)),
             ),
           ),
         ),
@@ -1302,7 +1397,7 @@ class SettingsScreen extends StatelessWidget {
               maxLength: 8,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: deco(twice ? tr('4–8 цифр') : tr('PIN-код')),
+              decoration: deco(twice ? tr('6–8 цифр') : tr('PIN-код')),
             ),
             if (twice)
               TextField(
@@ -1316,7 +1411,7 @@ class SettingsScreen extends StatelessWidget {
             if (err != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(err!, style: const TextStyle(color: NX.red, fontSize: 13)),
+                child: Text(err!, style: const TextStyle(color: NX.red, fontSize: NXFont.body)),
               ),
           ]),
           actions: [
@@ -1324,8 +1419,9 @@ class SettingsScreen extends StatelessWidget {
                 onPressed: () => Navigator.pop(ctx), child: Text(tr('Отмена'))),
             TextButton(
               onPressed: () {
-                if (a.text.length < 4) {
-                  set(() => err = tr('Не короче 4 цифр'));
+                // Новый PIN — от 6 цифр (старые из 4 цифр продолжают работать).
+                if (a.text.length < (twice ? 6 : 4)) {
+                  set(() => err = twice ? tr('Не короче 6 цифр') : tr('Не короче 4 цифр'));
                   return;
                 }
                 if (twice && a.text != b.text) {
@@ -1406,11 +1502,11 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
-          Text(k, style: TextStyle(color: NX.text2, fontSize: 13.5)),
+          Text(k, style: TextStyle(color: NX.text2, fontSize: NXFont.body)),
           const Spacer(),
           Text(v,
               style:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: NXFont.body)),
         ]),
       );
 }
@@ -1481,13 +1577,13 @@ class _AndroidBackgroundState extends State<_AndroidBackground>
               children: [
                 Text(ok ? tr('Работа в фоне разрешена') : tr('Система может остановить VPN'),
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                 const SizedBox(height: 2),
                 Text(
                     ok
                         ? tr('Экономия батареи не мешает Nexus')
                         : tr('Отключите для Nexus экономию батареи, чтобы VPN не обрывался'),
-                    style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                    style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
               ],
             ),
           ),
@@ -1535,11 +1631,11 @@ class _NavRow extends StatelessWidget {
                   children: [
                     Text(title,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14.5)),
+                            fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                     const SizedBox(height: 2),
                     Text(subtitle,
                         style:
-                            TextStyle(color: NX.text2, fontSize: 12.5)),
+                            TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                   ],
                 ),
               ),
@@ -1573,12 +1669,12 @@ class _ModeSwitch extends StatelessWidget {
                 Text(title,
                     style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: 14.5,
+                        fontSize: NXFont.title,
                         color: on ? NX.text : NX.text2)),
                 const SizedBox(height: 2),
                 Text(sub,
                     maxLines: 2,
-                    style: TextStyle(color: NX.text3, fontSize: 11.5, height: 1.3)),
+                    style: TextStyle(color: NX.text3, fontSize: NXFont.caption, height: 1.3)),
               ],
             ),
           ),
@@ -1603,7 +1699,7 @@ class _ModeSwitch extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
             child: Text(
               tr('Тонкие настройки спрятаны и работают как настроены. Включите «Про», чтобы их увидеть'),
-              style: TextStyle(color: NX.text3, fontSize: 12),
+              style: TextStyle(color: NX.text3, fontSize: NXFont.caption),
             ),
           ),
       ],

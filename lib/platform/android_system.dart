@@ -90,6 +90,9 @@ class AndroidSystem {
         'offLabel': tr('Отключено'),
       });
 
+  /// Подключать VPN после перезагрузки (последним конфигом режима VPN).
+  static Future<void> setBootConnect(bool on) => _call('bootConnect', {'on': on});
+
   /// Состояние для плитки в шторке.
   static Future<void> setTileState(bool on, {required bool vpn}) =>
       _call('tileState', {

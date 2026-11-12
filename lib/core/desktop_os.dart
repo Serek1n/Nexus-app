@@ -78,8 +78,43 @@ abstract class DesktopOs {
   Future<Process>? startTun(String core, String config, String assetDir) =>
       null;
 
-  /// Остановка ядра, запущенного [startTun].
-  Future<void> stopTun() async {}
+  /// Остановка ядра, запущенного [startTun]. [keepBlock] — ядро меняется
+  /// на новое: блокировку трафика (kill switch) не снимать.
+  Future<void> stopTun({bool keepBlock = false}) async {}
+
+  // ── kill switch уровня системы (режим TUN) ──
+  // Пока VPN работает, весь трафик мимо туннеля запрещён правилами
+  // файрвола. Ядро упало — правила остаются, и программы не выходят в сеть
+  // напрямую. Снимаются по кнопке «Отключить» (и при следующем запуске
+  // Nexus, как и системный прокси). Перезагрузка их тоже снимает
+  // (кроме Windows — там их снимет Nexus или удаление программы).
+
+  /// Блокировку можно поставить на этой системе.
+  bool get killSwitchSupported => false;
+
+  /// macOS: блокировку ставит тот же скрипт администратора, что запускает
+  /// ядро, — его нужно попросить об этом до запуска.
+  bool killSwitchWanted = false;
+
+  File get ksMarker => File('$dataDir${sep}killswitch.lock');
+
+  /// Блокировка сейчас стоит (или осталась после сбоя).
+  bool get killSwitchActive => ksMarker.existsSync();
+
+  /// Поставить блокировку. [core] — ядро, которому сеть разрешена;
+  /// [servers] — адреса VPN-серверов; [dns] — обычные DNS-серверы системы
+  /// (через них ядро находит адрес сервера).
+  Future<void> killSwitchOn({
+    required String core,
+    required List<String> servers,
+    required List<String> dns,
+  }) async {}
+
+  /// Снять блокировку.
+  Future<void> killSwitchOff() async {}
+
+  /// Linux: метка исходящих соединений ядра (их файрвол пропускает).
+  int? get coreMark => null;
 
   /// Обновление ядра из Nexus (без прав администратора).
   bool get canUpdateCore => true;
@@ -182,6 +217,103 @@ class WindowsOs extends DesktopOs {
   @override
   bool get canUpdateCore =>
       !(WinAdmin.isAdmin && DesktopOs.coreSha.isNotEmpty);
+
+  // ── kill switch: брандмауэр Windows ──
+  // Исходящие по умолчанию запрещены; разрешены ядро Nexus, трафик через
+  // туннель (адрес 172.19.0.1), локальная сеть, DHCP и служба DNS Windows
+  // (через неё ядро находит адрес сервера). Прежняя политика профилей
+  // запоминается и возвращается.
+  static const _ksGroup = 'Nexus Kill Switch';
+
+  @override
+  bool get killSwitchSupported => WinAdmin.isAdmin;
+
+  Future<ProcessResult> _ps(String script, [Map<String, String>? env]) =>
+      Process.run(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        environment: env,
+      ).timeout(const Duration(seconds: 40));
+
+  @override
+  Future<void> killSwitchOn({
+    required String core,
+    required List<String> servers,
+    required List<String> dns,
+  }) async {
+    if (!killSwitchActive) {
+      final snap = await _ps(
+          r"Get-NetFirewallProfile | ForEach-Object { $_.Name + '=' + $_.DefaultOutboundAction + '=' + $_.Enabled }");
+      final saved = <String, String>{};
+      var enabled = false;
+      for (final l in '${snap.stdout}'.split(RegExp(r'\r?\n'))) {
+        final m = RegExp(r'^(Domain|Private|Public)=(\w+)=(\w+)$').firstMatch(l.trim());
+        if (m == null) continue;
+        saved[m[1]!] = m[2]!;
+        if (m[3] == 'True') enabled = true;
+      }
+      if (saved.length != 3) {
+        throw Exception(tr('Не удалось прочитать настройки брандмауэра Windows'));
+      }
+      if (!enabled) {
+        throw Exception(tr('Брандмауэр Windows выключен — kill switch не может блокировать трафик'));
+      }
+      ksMarker.writeAsStringSync(jsonEncode(saved));
+    }
+    final r = await _ps('''
+\$ErrorActionPreference = 'Stop'
+\$g = '$_ksGroup'
+Get-NetFirewallRule -Group \$g -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+New-NetFirewallRule -Group \$g -DisplayName 'Nexus: ядро' -Direction Outbound -Action Allow -Program \$env:NEXUS_CORE | Out-Null
+New-NetFirewallRule -Group \$g -DisplayName 'Nexus: туннель' -Direction Outbound -Action Allow -LocalAddress 172.19.0.0/30 | Out-Null
+New-NetFirewallRule -Group \$g -DisplayName 'Nexus: локальная сеть' -Direction Outbound -Action Allow -RemoteAddress LocalSubnet | Out-Null
+New-NetFirewallRule -Group \$g -DisplayName 'Nexus: DHCP' -Direction Outbound -Action Allow -Protocol UDP -RemotePort 67 | Out-Null
+foreach (\$p in 'UDP','TCP') {
+  New-NetFirewallRule -Group \$g -DisplayName 'Nexus: DNS' -Direction Outbound -Action Allow -Protocol \$p -RemotePort 53 -Program "\$env:SystemRoot\\System32\\svchost.exe" -Service dnscache | Out-Null
+}
+Set-NetFirewallProfile -Profile Domain,Private,Public -DefaultOutboundAction Block
+''', {'NEXUS_CORE': core});
+    if (r.exitCode != 0) {
+      await killSwitchOff();
+      throw Exception(tr('Не удалось включить kill switch: {0}', ['${r.stderr}'.trim().split('\n').first]));
+    }
+  }
+
+  @override
+  Future<void> killSwitchOff() async {
+    final m = ksMarker;
+    if (!m.existsSync()) return;
+    if (!WinAdmin.isAdmin) {
+      // Правила брандмауэра снимает только администратор: запускаем
+      // Nexus с правами администратора ровно для этого (окно UAC).
+      final r = await _ps(
+          r"Start-Process -FilePath $env:NEXUS_EXE -ArgumentList '--killswitch-off' -Verb RunAs -Wait",
+          {'NEXUS_EXE': Platform.resolvedExecutable});
+      if (m.existsSync()) {
+        throw Exception(tr('Блокировка kill switch не снята — нужны права администратора{0}', [r.exitCode == 0 ? '' : ' (отменено)']));
+      }
+      return;
+    }
+    final saved = DesktopOs.readJson(m);
+    final restore = [
+      for (final p in const ['Domain', 'Private', 'Public'])
+        if (RegExp(r'^(Allow|Block|NotConfigured)$').hasMatch('${saved[p] ?? ''}'))
+          "Set-NetFirewallProfile -Profile $p -DefaultOutboundAction ${saved[p]}"
+        else
+          "Set-NetFirewallProfile -Profile $p -DefaultOutboundAction Allow",
+    ].join('\n');
+    final r = await _ps('''
+$restore
+Get-NetFirewallRule -Group '$_ksGroup' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+''');
+    if (r.exitCode == 0) {
+      try {
+        m.deleteSync();
+      } catch (_) {}
+    } else {
+      throw Exception(tr('Не удалось снять блокировку kill switch: {0}', ['${r.stderr}'.trim().split('\n').first]));
+    }
+  }
 }
 
 // ──────────────────────────────── Linux ────────────────────────────────
@@ -513,6 +645,188 @@ class LinuxOs extends DesktopOs {
     return '${r?.stdout ?? ''}'.trim() == '750 $gid';
   }
 
+  // ── kill switch: nftables через помощник root ──
+  // Помощник и правило polkit ставятся один раз (пароль администратора);
+  // дальше включение и снятие блокировки — без пароля. Соединения ядра
+  // помечаются (SO_MARK, право CAP_NET_ADMIN у ядра уже есть) — им сеть
+  // разрешена, остальным программам — только через туннель.
+  static const _ksHelper = '$_tunDir/nexus-killswitch';
+  static const _ksPolicy =
+      '/usr/share/polkit-1/actions/app.nexusvpn.killswitch.policy';
+  static const ksHelperText = r'''#!/bin/sh
+# Nexus kill switch (nftables). Запускается через pkexec без пароля только
+# для активного сеанса (правило polkit app.nexusvpn.killswitch).
+# Принимает лишь IP-адреса — ничего другого в правила не попадает.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+NFT=$(command -v nft) || exit 3
+if [ "${1:-}" = off ]; then
+  $NFT delete table inet nexus_ks 2>/dev/null || true
+  exit 0
+fi
+[ "${1:-}" = on ] || exit 2
+shift
+S4=""; S6=""; D4=""; D6=""
+for a in "$@"; do
+  k=${a%%=*}; v=${a#*=}
+  case "$v" in ""|*[!0-9a-fA-F.:/]*) exit 2;; esac
+  case "$k:$v" in
+    srv:*:*) S6="$S6, $v";;
+    srv:*) S4="$S4, $v";;
+    dns:*:*) D6="$D6, $v";;
+    dns:*) D4="$D4, $v";;
+    *) exit 2;;
+  esac
+done
+{
+  echo 'table inet nexus_ks'
+  echo 'delete table inet nexus_ks'
+  echo 'table inet nexus_ks {'
+  echo ' chain out {'
+  echo '  type filter hook output priority 0; policy drop;'
+  echo '  oifname "lo" accept'
+  echo '  oifname "nexus0" accept'
+  echo '  meta mark 0x4e58 accept'
+  echo '  ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4, 255.255.255.255 } accept'
+  echo '  ip6 daddr { fe80::/10, fc00::/7, ff00::/8 } accept'
+  echo '  udp dport { 67, 68, 546, 547 } accept'
+  if [ -n "$S4" ]; then echo "  ip daddr { ${S4#, } } accept"; fi
+  if [ -n "$S6" ]; then echo "  ip6 daddr { ${S6#, } } accept"; fi
+  if [ -n "$D4" ]; then echo "  ip daddr { ${D4#, } } meta l4proto { tcp, udp } th dport 53 accept"; fi
+  if [ -n "$D6" ]; then echo "  ip6 daddr { ${D6#, } } meta l4proto { tcp, udp } th dport 53 accept"; fi
+  # Отказ сразу, а не молчание: программы не «висят», а видят, что сети нет.
+  echo '  meta l4proto tcp reject with tcp reset'
+  echo '  reject with icmpx type admin-prohibited'
+  echo ' }'
+  echo '}'
+} | $NFT -f -
+''';
+  static const ksPolicyText = r'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <action id="app.nexusvpn.killswitch">
+    <description>Nexus kill switch</description>
+    <message>Nexus blocks traffic outside the VPN</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/nexus/nexus-killswitch</annotate>
+  </action>
+</policyconfig>
+''';
+
+  @override
+  bool get killSwitchSupported =>
+      _which('nft') != null && _which('pkexec') != null;
+
+  @override
+  int? get coreMark => killSwitchWanted ? 0x4E58 : null;
+
+  Future<void> _ensureKsHelper() async {
+    final want = sha256.convert(utf8.encode(ksHelperText)).toString();
+    final pol = sha256.convert(utf8.encode(ksPolicyText)).toString();
+    if (await DesktopOs.shaOk(_ksHelper, want) &&
+        await DesktopOs.shaOk(_ksPolicy, pol)) {
+      return;
+    }
+    // Файлы — во временной папке пользователя; root сверяет их SHA-256
+    // уже после копирования к себе, подменить их по дороге нельзя.
+    final tmp = await Directory.systemTemp.createTemp('nexus-ks');
+    try {
+      final h = File('${tmp.path}/h')..writeAsStringSync(ksHelperText);
+      final p = File('${tmp.path}/p')..writeAsStringSync(ksPolicyText);
+      final script = [
+        'set -e',
+        'umask 022',
+        'mkdir -p $_tunDir',
+        'install -o root -g root -m 0755 "\$1" $_tunDir/.ks',
+        'echo "$want  $_tunDir/.ks" | sha256sum -c --status',
+        'mv -f $_tunDir/.ks $_ksHelper',
+        'install -o root -g root -m 0644 "\$2" $_ksPolicy.new',
+        'echo "$pol  $_ksPolicy.new" | sha256sum -c --status',
+        'mv -f $_ksPolicy.new $_ksPolicy',
+      ].join('\n');
+      final r = await Process.run('pkexec',
+              ['/bin/sh', '-c', script, 'nexus-ks', h.path, p.path])
+          .timeout(const Duration(minutes: 3));
+      if (r.exitCode != 0 || !await DesktopOs.shaOk(_ksHelper, want)) {
+        throw Exception(r.exitCode == 126 || r.exitCode == 127
+            ? tr('Установка kill switch отменена')
+            : tr('Не удалось установить kill switch'));
+      }
+    } finally {
+      try {
+        tmp.deleteSync(recursive: true);
+      } catch (_) {}
+    }
+  }
+
+  static final _ipArg = RegExp(r'^[0-9a-fA-F.:/]+$');
+
+  @override
+  Future<void> killSwitchOn({
+    required String core,
+    required List<String> servers,
+    required List<String> dns,
+  }) async {
+    await _ensureKsHelper();
+    ksMarker.writeAsStringSync('{}');
+    final r = await Process.run('pkexec', [
+      _ksHelper,
+      'on',
+      for (final s in servers)
+        if (_ipArg.hasMatch(s)) 'srv=$s',
+      for (final d in dns)
+        if (_ipArg.hasMatch(d)) 'dns=$d',
+    ]).timeout(const Duration(minutes: 2));
+    if (r.exitCode != 0) {
+      try {
+        ksMarker.deleteSync();
+      } catch (_) {}
+      throw Exception(tr('Не удалось включить kill switch: {0}', ['${r.stderr}'.trim()]));
+    }
+  }
+
+  @override
+  Future<void> killSwitchOff() async {
+    if (!killSwitchActive) return;
+    if (File(_ksHelper).existsSync()) {
+      final r = await Process.run('pkexec', [_ksHelper, 'off'])
+          .timeout(const Duration(minutes: 2));
+      if (r.exitCode != 0) {
+        throw Exception(tr('Не удалось снять блокировку kill switch: {0}', ['${r.stderr}'.trim()]));
+      }
+    }
+    try {
+      ksMarker.deleteSync();
+    } catch (_) {}
+  }
+
+  /// Обычные DNS-серверы системы (не 127.x): к ним ядро обращается,
+  /// чтобы найти адрес VPN-сервера.
+  static Future<List<String>> systemDns() async {
+    final out = <String>{};
+    try {
+      for (final l in File('/etc/resolv.conf').readAsLinesSync()) {
+        final m = RegExp(r'^\s*nameserver\s+(\S+)').firstMatch(l);
+        if (m != null) out.add(m[1]!);
+      }
+    } catch (_) {}
+    final r = await DesktopOs.run('resolvectl', ['dns']);
+    for (final m in RegExp(r'(?<![\w.:])(\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F]*:[0-9a-fA-F:]+)(?![\w.:])')
+        .allMatches('${r?.stdout ?? ''}')) {
+      out.add(m[1]!);
+    }
+    return out
+        .where((a) =>
+            InternetAddress.tryParse(a) != null &&
+            !a.startsWith('127.') &&
+            a != '::1')
+        .toList();
+  }
+
   Future<bool> _hasCaps([String path = _tunCore]) async {
     final getcap = _which('getcap') ?? '/usr/sbin/getcap';
     final r = await DesktopOs.run(getcap, [path]);
@@ -660,6 +974,7 @@ class MacOs extends DesktopOs {
   }
 
   File? _stopFlag;
+  Process? _lastScript;
 
   /// Ядро от root через окно пароля macOS. Конфиг с ключами — во
   /// временном файле, доступном только пользователю (и root); ядро
@@ -710,6 +1025,12 @@ class MacOs extends DesktopOs {
       'XRAY_LOCATION_ASSET=${q(assetDir)} ${q('$root/nexus-core')} run -c ${q('$root/run.json')} >/dev/null 2>&1 &',
       'CORE=\$!',
       'sleep 2; rm -f ${q('$root/run.json')}',
+      // Kill switch: правила pf в якоре com.apple/nexus. Пока ядро работает,
+      // наружу выходят только туннель, ядро (root), локальная сеть, DHCP и
+      // DNS системной службы. Ядро упало или Nexus закрылся — правила
+      // остаются; снимаются по «Отключить» (флаг off) или перезагрузкой.
+      'KSF=${q('$root/ks.token')}',
+      ...macKsScript(killSwitchWanted),
       // Системный DNS — в туннель: иначе запросы к роутеру идут мимо VPN.
       // Прежние значения записываются и возвращаются при отключении
       // (и при следующем включении, если Mac выключили с VPN).
@@ -718,17 +1039,72 @@ class MacOs extends DesktopOs {
       'while kill -0 $pid 2>/dev/null && kill -0 \$CORE 2>/dev/null && [ ! -e ${q(stop.path)} ]; do sleep 1; done',
       'kill \$CORE 2>/dev/null || true',
       'restore_dns || true',
+      'if [ "\$(cat ${q(stop.path)} 2>/dev/null)" = off ]; then ks_off; fi',
     ].join('\n');
     final apple = 'do shell script ${_appleStr(sh)} with administrator privileges '
         'with prompt ${_appleStr(tr('Nexus включает режим TUN: весь трафик Mac пойдёт через VPN.'))}';
     final p = await Process.start('/usr/bin/osascript', ['-e', apple]);
+    _scriptAlive = true;
+    _lastScript = p;
     // Если пароль не ввели, osascript завершится с ошибкой сразу.
     unawaited(p.exitCode.then((_) {
+      if (identical(_lastScript, p)) _scriptAlive = false;
       try {
         if (cfg.existsSync()) cfg.deleteSync();
       } catch (_) {}
     }));
     return p;
+  }
+
+  /// Команды оболочки для kill switch (pf). ks_off — снять правила.
+  static List<String> macKsScript(bool on) => [
+        r'''ks_off() { pfctl -a com.apple/nexus -F all >/dev/null 2>&1 || true; if [ -f "$KSF" ]; then pfctl -X "$(cat "$KSF")" >/dev/null 2>&1 || true; rm -f "$KSF"; fi; return 0; }''',
+        if (on) ...[
+          r'''printf '%s\n' 'pass out quick on lo0 all' 'pass out quick inet from 172.19.0.0/30 to any' 'pass out quick inet6 from fd19:6e78::/126 to any' 'pass out quick proto { tcp, udp } from any to any user root' 'pass out quick proto { tcp, udp } from any to any port 53 user _mdnsresponder' 'pass out quick inet from any to { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4, 255.255.255.255 }' 'pass out quick inet6 from any to { fe80::/10, fc00::/7, ff00::/8 }' 'pass out quick proto udp from any to any port { 67, 68 }' 'block return out quick all' | pfctl -a com.apple/nexus -f - >/dev/null 2>&1 || true''',
+          r'''[ -s "$KSF" ] || pfctl -E 2>&1 | sed -n 's/.*Token : //p' > "$KSF" || true''',
+        ] else
+          'ks_off',
+      ];
+
+  @override
+  bool get killSwitchSupported => true;
+
+  /// Скрипт администратора ещё работает (снимет блокировку по флагу).
+  bool _scriptAlive = false;
+
+  @override
+  Future<void> killSwitchOn({
+    required String core,
+    required List<String> servers,
+    required List<String> dns,
+  }) async {
+    // Правила уже поставил скрипт, запустивший ядро.
+    ksMarker.writeAsStringSync('{}');
+  }
+
+  @override
+  Future<void> killSwitchOff() async {
+    if (!killSwitchActive) return;
+    if (!_scriptAlive) {
+      // Скрипт уже завершился (ядро упало) — правила снимаем отдельно,
+      // это снова просит пароль администратора.
+      const root = '/Library/Application Support/Nexus/core';
+      final sh = [
+        "KSF='$root/ks.token'",
+        macKsScript(false).first,
+        'ks_off',
+      ].join('\n');
+      final apple = 'do shell script ${_appleStr(sh)} with administrator privileges '
+          'with prompt ${_appleStr(tr('Nexus снимает блокировку интернета (kill switch).'))}';
+      final r = await Process.run('/usr/bin/osascript', ['-e', apple])
+          .timeout(const Duration(minutes: 3));
+      if (r.exitCode != 0) {
+        throw Exception(tr('Блокировка не снята — нужен пароль администратора. Перезагрузка Mac тоже её снимает'));
+      }
+    }
+    try {
+      ksMarker.deleteSync();
+    } catch (_) {}
   }
 
   /// Команды оболочки: запомнить DNS всех сетевых служб и поставить [dns].
@@ -745,9 +1121,9 @@ class MacOs extends DesktopOs {
       '"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';
 
   @override
-  Future<void> stopTun() async {
+  Future<void> stopTun({bool keepBlock = false}) async {
     try {
-      await _stopFlag?.writeAsString('1');
+      await _stopFlag?.writeAsString(keepBlock ? 'keep' : 'off');
     } catch (_) {}
     await Future.delayed(const Duration(milliseconds: 1500));
   }

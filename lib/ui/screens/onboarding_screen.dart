@@ -55,7 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(width: 14),
           Expanded(
             child: Text(text,
-                style: const TextStyle(fontSize: 15, height: 1.35)),
+                style: const TextStyle(fontSize: NXFont.title, height: 1.35)),
           ),
         ]),
       );
@@ -75,15 +75,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       color: NX.violet,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 2,
-                      fontSize: 13)),
+                      fontSize: NXFont.body)),
               const SizedBox(height: 10),
               Text(title,
                   style: const TextStyle(
-                      fontSize: 27, fontWeight: FontWeight.w800, height: 1.15)),
+                      fontSize: NXFont.h1, fontWeight: FontWeight.w800, height: 1.15)),
               const SizedBox(height: 10),
               Text(text,
                   style: TextStyle(
-                      color: NX.text2, fontSize: 14.5, height: 1.4)),
+                      color: NX.text2, fontSize: NXFont.title, height: 1.4)),
               const SizedBox(height: 26),
               ...body,
             ],

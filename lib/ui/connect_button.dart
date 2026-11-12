@@ -15,7 +15,15 @@ class ConnectButton extends StatefulWidget {
       required this.onTap,
       this.size = 200,
       this.blocked = false,
+      this.checking = false,
+      this.failed = false,
       this.autofocus = false});
+
+  /// Подключено, трафик ещё проверяется — дуга продолжает бежать.
+  final bool checking;
+
+  /// Подключиться не удалось или сервер молчит — красная обводка.
+  final bool failed;
 
   /// Выбрана сразу после запуска (пульт телевизора).
   final bool autofocus;
@@ -41,7 +49,8 @@ class _ConnectButtonState extends State<ConnectButton>
 
   bool get _busy =>
       widget.state == ConnState.connecting ||
-      widget.state == ConnState.disconnecting;
+      widget.state == ConnState.disconnecting ||
+      widget.checking;
   bool get _on => widget.state == ConnState.connected && !widget.blocked;
 
   @override
@@ -116,7 +125,7 @@ class _ConnectButtonState extends State<ConnectButton>
                       border: Border.all(
                         color: _focused
                             ? NX.violet
-                            : widget.blocked
+                            : widget.blocked || widget.failed
                                 ? NX.red.withValues(alpha: 0.3)
                                 : _on
                                     ? NX.mint.withValues(alpha: 0.25)
@@ -130,7 +139,8 @@ class _ConnectButtonState extends State<ConnectButton>
                       animation: _spin,
                       builder: (_, __) => CustomPaint(
                         size: Size(s, s),
-                        painter: _ArcPainter(_spin.value),
+                        painter: _ArcPainter(_spin.value,
+                            widget.checking ? NX.mint : NX.violet),
                       ),
                     ),
                   // Основной круг.
@@ -143,7 +153,7 @@ class _ConnectButtonState extends State<ConnectButton>
                       shape: BoxShape.circle,
                       color: fill,
                       border: Border.all(
-                        color: widget.blocked
+                        color: widget.blocked || (widget.failed && !_on)
                             ? NX.red.withValues(alpha: 0.6)
                             : _on
                                 ? Colors.transparent
@@ -166,8 +176,9 @@ class _ConnectButtonState extends State<ConnectButton>
 }
 
 class _ArcPainter extends CustomPainter {
-  _ArcPainter(this.t);
+  _ArcPainter(this.t, this.color);
   final double t;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -176,11 +187,12 @@ class _ArcPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round
-      ..color = NX.violet;
+      ..color = color;
     canvas.drawArc(rect.deflate(1.5), t * 2 * math.pi - math.pi / 2,
         math.pi * 0.6, false, p);
   }
 
   @override
-  bool shouldRepaint(covariant _ArcPainter old) => old.t != t;
+  bool shouldRepaint(covariant _ArcPainter old) =>
+      old.t != t || old.color != color;
 }

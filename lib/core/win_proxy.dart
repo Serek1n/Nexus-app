@@ -23,6 +23,21 @@ class WinProxy {
       int Function(int, Pointer<Utf16>, Pointer<Utf16>, int, Pointer<Void>,
           int)>('RegSetKeyValueW');
 
+  static final _regDel = _advapi.lookupFunction<
+      Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>),
+      int Function(int, Pointer<Utf16>, Pointer<Utf16>)>('RegDeleteKeyValueW');
+
+  static void _delete(String name) {
+    final sub = _path.toNativeUtf16();
+    final n = name.toNativeUtf16();
+    try {
+      _regDel(_hkcu, sub, n);
+    } finally {
+      calloc.free(sub);
+      calloc.free(n);
+    }
+  }
+
   static final _inetSet = _wininet.lookupFunction<
       Int32 Function(Pointer<Void>, Uint32, Pointer<Void>, Uint32),
       int Function(
@@ -108,6 +123,9 @@ class WinProxy {
         'enable': _getDword('ProxyEnable') ?? 0,
         'server': _getString('ProxyServer'),
         'override': _getString('ProxyOverride'),
+        // Скрипт автонастройки (PAC) главнее ручного прокси: пока он задан,
+        // браузеры могли бы идти мимо Nexus — на время VPN его убираем.
+        'pac': _getString('AutoConfigURL'),
       };
     } catch (_) {
       return {'enable': 0};
@@ -124,6 +142,8 @@ class WinProxy {
       final ours = server is String && DesktopCore.isOwnProxy(server);
       if (server is String && !ours) _setString('ProxyServer', server);
       if (ovr is String) _setString('ProxyOverride', ovr);
+      final pac = saved['pac'];
+      if (pac is String && pac.isNotEmpty) _setString('AutoConfigURL', pac);
       _setDword('ProxyEnable', saved['enable'] == 1 && !ours ? 1 : 0);
       _notify();
     } catch (_) {
@@ -146,6 +166,7 @@ class WinProxy {
             '<local>',
           ].join(';'));
       _setDword('ProxyEnable', 1);
+      _delete('AutoConfigURL');
       _notify();
     } catch (_) {}
   }

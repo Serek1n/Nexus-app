@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
@@ -178,6 +179,22 @@ bool _isLoopback(String host) {
       h == '::';
 }
 
+/// Текст подписки → серверы; null — в ответе нет ни одной ссылки.
+/// Чистая функция: годится для [Isolate.run].
+List<ServerProfile>? _parseBody(List<int> bytes, String subId) {
+  final body = utf8.decode(bytes, allowMalformed: true);
+  final links = extractLinks(body);
+  if (links.isEmpty) return null;
+  final servers = <ServerProfile>[];
+  for (final l in links.take(1000)) {
+    final p = profileFromLink(l, subscriptionId: subId);
+    // Сервер из подписки не может указывать на сам компьютер/телефон:
+    // так чужая подписка могла бы стучаться в локальные службы устройства.
+    if (p != null && !_isLoopback(p.host)) servers.add(p);
+  }
+  return servers;
+}
+
 class SubscriptionService {
   /// Случайный идентификатор этой установки (задаёт AppState при запуске).
   static String? deviceId;
@@ -319,19 +336,16 @@ class SubscriptionService {
     } finally {
       client.close();
     }
-    final body = utf8.decode(bytes, allowMalformed: true);
-    final links = extractLinks(body);
-    if (links.isEmpty) {
+    // Большую подписку (сотни серверов, base64, JSON-конфиги) разбираем в
+    // отдельном изоляте, чтобы не подвисал интерфейс.
+    final subId = sub.id;
+    final parsed = bytes.length > 64 * 1024
+        ? await Isolate.run(() => _parseBody(bytes, subId))
+        : _parseBody(bytes, subId);
+    if (parsed == null) {
       throw Exception(tr('В подписке не найдено ни одного сервера'));
     }
-
-    final servers = <ServerProfile>[];
-    for (final l in links.take(1000)) {
-      final p = profileFromLink(l, subscriptionId: sub.id);
-      // Сервер из подписки не может указывать на сам компьютер/телефон:
-      // так чужая подписка могла бы стучаться в локальные службы устройства.
-      if (p != null && !_isLoopback(p.host)) servers.add(p);
-    }
+    final servers = parsed;
     if (servers.isEmpty) {
       throw Exception(tr('Не удалось разобрать ссылки из подписки'));
     }

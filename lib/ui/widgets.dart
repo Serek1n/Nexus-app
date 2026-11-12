@@ -209,7 +209,7 @@ class PingBadge extends StatelessWidget {
         Text(txt,
             style: TextStyle(
                 color: p == null ? NX.text3 : c,
-                fontSize: 12.5,
+                fontSize: NXFont.sub,
                 height: 1,
                 fontWeight: FontWeight.w600,
                 fontFeatures: const [FontFeature.tabularFigures()])),
@@ -314,7 +314,7 @@ class Tag extends StatelessWidget {
                 // На светлом фоне яркие оттенки (бирюзовый, мятный) почти
                 // сливаются с подложкой — текст метки делаем темнее.
                 color: NX.ink(color),
-                fontSize: 10.5,
+                fontSize: NXFont.micro,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.4)),
       );
@@ -386,7 +386,7 @@ class NeonButton extends StatelessWidget {
                 if (loading || icon != null) const SizedBox(width: 8),
                 Text(label,
                     style: TextStyle(
-                        color: fg, fontWeight: FontWeight.w700, fontSize: 14)),
+                        color: fg, fontWeight: FontWeight.w700, fontSize: NXFont.title)),
               ],
             ),
           ),
@@ -411,7 +411,7 @@ class SectionTitle extends StatelessWidget {
             Text(text,
                 style: TextStyle(
                   color: NX.text2,
-                  fontSize: 13,
+                  fontSize: NXFont.body,
                   fontWeight: FontWeight.w700,
                 )),
             const Spacer(),
@@ -442,13 +442,13 @@ class PageHeader extends StatelessWidget {
                   Text(title,
                       style: const TextStyle(
                           fontWeight: FontWeight.w800,
-                          fontSize: 26,
+                          fontSize: NXFont.h1,
                           letterSpacing: -0.4,
                           height: 1.15)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 4),
                     Text(subtitle!,
-                        style: TextStyle(color: NX.text2, fontSize: 13.5)),
+                        style: TextStyle(color: NX.text2, fontSize: NXFont.body)),
                   ],
                 ],
               ),
@@ -538,7 +538,7 @@ class EmptyState extends StatelessWidget {
               Text(title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 17)),
+                      fontWeight: FontWeight.w800, fontSize: NXFont.h3)),
               const SizedBox(height: 6),
               Text(text,
                   textAlign: TextAlign.center,

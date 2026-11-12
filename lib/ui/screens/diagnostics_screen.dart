@@ -90,7 +90,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
               Expanded(
                 child: Text(tr('Проверка связи'),
                     style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 20)),
+                        fontWeight: FontWeight.w800, fontSize: NXFont.h2)),
               ),
               IconButton(
                 tooltip: tr('Скопировать'),
@@ -158,7 +158,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                   Text(
                     tr('Результат проверки попадает в «Отчёт для поддержки».'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: NX.text3, fontSize: 12.5),
+                    style: TextStyle(color: NX.text3, fontSize: NXFont.sub),
                   ),
                 ],
               ),
@@ -205,11 +205,11 @@ class _Row extends StatelessWidget {
               children: [
                 Text(item.title,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                 if (item.detail.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(item.detail,
-                      style: TextStyle(color: NX.text2, fontSize: 12.5)),
+                      style: TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                 ],
               ],
             ),

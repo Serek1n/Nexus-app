@@ -397,6 +397,8 @@ class AppSettings {
     this.ruAppsDirect = true,
     this.autoUpdateApp = true,
     this.windowsKillSwitch = true,
+    this.iosKillSwitch = false,
+    this.bootConnect = false,
     this.windowsTun = false,
     this.clearClipboard = true,
     this.autoFailover = true,
@@ -462,6 +464,13 @@ class AppSettings {
 
   /// Windows: при падении VPN не выпускать трафик мимо него.
   bool windowsKillSwitch;
+
+  /// iPhone: весь трафик только через туннель (includeAllNetworks). Выключен
+  /// по умолчанию: у Apple с ним бывают сбои AirDrop и CarPlay.
+  bool iosKillSwitch;
+
+  /// Android: подключаться после перезагрузки телефона (без открытия Nexus).
+  bool bootConnect;
 
   /// Windows: режим TUN — через Nexus идут все программы (нужны права администратора).
   bool windowsTun;
@@ -565,6 +574,8 @@ class AppSettings {
         'ruAppsDirect': ruAppsDirect,
         'autoUpdateApp': autoUpdateApp,
         'windowsKillSwitch': windowsKillSwitch,
+        'iosKillSwitch': iosKillSwitch,
+        'bootConnect': bootConnect,
         'windowsTun': windowsTun,
         'clearClipboard': clearClipboard,
         'autoFailover': autoFailover,
@@ -615,6 +626,8 @@ class AppSettings {
         ruAppsDirect: j['ruAppsDirect'] as bool? ?? true,
         autoUpdateApp: j['autoUpdateApp'] as bool? ?? true,
         windowsKillSwitch: j['windowsKillSwitch'] as bool? ?? true,
+        iosKillSwitch: j['iosKillSwitch'] as bool? ?? false,
+        bootConnect: j['bootConnect'] as bool? ?? false,
         windowsTun: j['windowsTun'] as bool? ?? false,
         clearClipboard: j['clearClipboard'] as bool? ?? true,
         autoFailover: j['autoFailover'] as bool? ?? true,

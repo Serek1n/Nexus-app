@@ -147,7 +147,7 @@ class _LockScreenState extends State<_LockScreen> {
                 ? Icon(icon, color: NX.text2, size: 24)
                 : Text(label,
                     style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w700)),
+                        fontSize: NXFont.h1, fontWeight: FontWeight.w700)),
           ),
         ),
       ),
@@ -180,7 +180,7 @@ class _LockScreenState extends State<_LockScreen> {
                   Text(msg,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 17,
+                          fontSize: NXFont.h3,
                           fontWeight: FontWeight.w700,
                           color: (_wrong || wait > 0) ? NX.red : NX.text)),
                   const SizedBox(height: 18),
@@ -250,7 +250,7 @@ class _LockScreenState extends State<_LockScreen> {
                         Text(
                           tr('PIN-код не восстановить. Можно стереть все подписки, серверы и настройки — потом добавьте подписку заново (ссылка есть у вашего VPN-сервиса).'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: NX.text2, fontSize: 13),
+                          style: TextStyle(color: NX.text2, fontSize: NXFont.body),
                         ),
                         const SizedBox(height: 10),
                         Row(mainAxisAlignment: MainAxisAlignment.center, children: [

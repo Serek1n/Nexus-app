@@ -209,6 +209,12 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "bootConnect" -> {
+                        val m = call.arguments as? Map<*, *>
+                        NexusTile.setBoot(this, m?.get("on") as? Boolean ?: false)
+                        result.success(null)
+                    }
+
                     "tileLabels" -> {
                         val m = call.arguments as? Map<*, *>
                         NexusTile.saveLabels(this, m?.get("onLabel") as? String, m?.get("offLabel") as? String)

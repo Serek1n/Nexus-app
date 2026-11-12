@@ -137,7 +137,7 @@ ThemeData buildTheme() {
     snackBarTheme: SnackBarThemeData(
       backgroundColor: NX.surface2,
       contentTextStyle:
-          TextStyle(color: NX.text, fontFamily: NX.body, fontSize: 14),
+          TextStyle(color: NX.text, fontFamily: NX.body, fontSize: NXFont.title),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
@@ -196,7 +196,7 @@ ThemeData buildTheme() {
           color: NX.text,
           fontFamily: NX.body,
           fontWeight: FontWeight.w600,
-          fontSize: 13.5),
+          fontSize: NXFont.body),
       side: WidgetStateBorderSide.resolveWith((s) => BorderSide(
           color: s.contains(WidgetState.selected)
               ? NX.violet.withValues(alpha: 0.6)
@@ -214,7 +214,7 @@ ThemeData buildTheme() {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: NX.stroke),
       ),
-      textStyle: TextStyle(color: NX.text, fontSize: 12),
+      textStyle: TextStyle(color: NX.text, fontSize: NXFont.caption),
     ),
   );
 }
@@ -247,4 +247,34 @@ String plural(int n, String one, String few, String many) {
   if (m10 == 1 && m100 != 11) return one;
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
   return many;
+}
+
+/// Шкала размеров шрифта: все размеры текста в интерфейсе берутся отсюда.
+abstract final class NXFont {
+  /// Подписи на значках, чипах.
+  static const double micro = 11;
+
+  /// Мелкий поясняющий текст.
+  static const double caption = 12;
+
+  /// Подзаголовок строки настройки, описание.
+  static const double sub = 12.5;
+
+  /// Основной текст.
+  static const double body = 13;
+
+  /// Заголовок строки, карточки.
+  static const double title = 14.5;
+
+  /// Заголовок блока.
+  static const double h3 = 17;
+
+  /// Заголовок экрана.
+  static const double h2 = 20;
+
+  /// Крупный заголовок (первый запуск).
+  static const double h1 = 26;
+
+  /// Крупные цифры (таймер, скорость).
+  static const double display = 28;
 }

@@ -39,7 +39,10 @@ class SubscriptionsScreen extends StatelessWidget {
                 ? null
                 : tr('Обновляются автоматически при запуске'),
             actions: [
-              if (app.subscriptions.isNotEmpty) ...[
+              // На телефоне общее обновление — жестом «потянуть вниз»;
+              // кнопка нужна только мыши.
+              if (app.subscriptions.isNotEmpty &&
+                  (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) ...[
                 NxIconButton(
                   icon: Icons.sync_rounded,
                   tooltip: tr('Обновить все'),
@@ -72,9 +75,26 @@ class SubscriptionsScreen extends StatelessWidget {
               ),
             )
           else
-            for (final sub in app.subscriptions) ...[
-              _SubCard(sub: sub),
-              const SizedBox(height: 12),
+            ...[
+              for (final sub in app.subscriptions) ...[
+                _SubCard(sub: sub),
+                const SizedBox(height: 12),
+              ],
+              // Под списком — понятное действие вместо пустоты.
+              TextButton.icon(
+                onPressed: () => showAddSheet(context),
+                icon: const Icon(Icons.add_rounded, color: NX.violet),
+                label: Text(tr('Добавить подписку'),
+                    style: const TextStyle(
+                        color: NX.violet, fontWeight: FontWeight.w700)),
+              ),
+              if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(tr('Потяните список вниз, чтобы обновить все'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: NX.text3, fontSize: NXFont.caption)),
+                ),
             ],
         ],
       ),
@@ -138,12 +158,12 @@ class _SubCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 15.5)),
+                            fontWeight: FontWeight.w800, fontSize: NXFont.h3)),
                     const SizedBox(height: 2),
                     Text(
                         '${count} ${plural(count, tr('сервер'), tr('сервера'), tr('серверов'))} · ${_ago(sub.updatedAt)}',
                         style:
-                            TextStyle(color: NX.text2, fontSize: 12.5)),
+                            TextStyle(color: NX.text2, fontSize: NXFont.sub)),
                     if (sub.error != null) ...[
                       const SizedBox(height: 6),
                       Tooltip(
@@ -227,18 +247,18 @@ class _SubCard extends StatelessWidget {
                   children: [
                     Text(fmtBytes(sub.used),
                         style: const TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 15)),
+                            fontWeight: FontWeight.w800, fontSize: NXFont.title)),
                     Text(
                         unlimited ? tr('  · безлимит') : tr('  из {0}', [fmtBytes(sub.total)]),
                         style:
-                            TextStyle(color: NX.text2, fontSize: 13)),
+                            TextStyle(color: NX.text2, fontSize: NXFont.body)),
                     const Spacer(),
                     if (frac != null)
                       Text('${(frac * 100).round()}%',
                           style: TextStyle(
                               color: NX.text2,
                               fontWeight: FontWeight.w700,
-                              fontSize: 12.5)),
+                              fontSize: NXFont.sub)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -252,7 +272,7 @@ class _SubCard extends StatelessWidget {
                       sub.expire == null
                           ? tr('Бессрочно')
                           : tr('До {0}', [_date(sub.expire!)]),
-                      style: TextStyle(color: NX.text2, fontSize: 12.5),
+                      style: TextStyle(color: NX.text2, fontSize: NXFont.sub),
                     ),
                     const SizedBox(width: 8),
                     if (days != null)
@@ -281,7 +301,7 @@ class _SubCard extends StatelessWidget {
                     ),
                     child: Text(sub.announce!,
                         style:
-                            TextStyle(fontSize: 12.5, color: NX.text)),
+                            TextStyle(fontSize: NXFont.sub, color: NX.text)),
                   ),
                 ],
                 // Продлить и ссылки от панели: поддержка, личный кабинет.
@@ -300,7 +320,7 @@ class _SubCard extends StatelessWidget {
                           size: 17, color: NX.violet),
                       label: Text(tr('Продлить'),
                           style: TextStyle(
-                              color: NX.text, fontWeight: FontWeight.w700, fontSize: 13)),
+                              color: NX.text, fontWeight: FontWeight.w700, fontSize: NXFont.body)),
                     ),
                     for (final (url, icon, label) in [
                       (sub.supportUrl, Icons.support_agent_rounded, tr('Поддержка')),
@@ -314,7 +334,7 @@ class _SubCard extends StatelessWidget {
                           onPressed: () => openWebLink(url),
                           icon: Icon(icon, size: 17, color: NX.violet),
                           label: Text(label,
-                              style: TextStyle(color: NX.text2, fontSize: 13)),
+                              style: TextStyle(color: NX.text2, fontSize: NXFont.body)),
                         ),
                   ]),
                 ],
@@ -356,7 +376,7 @@ class _SubCard extends StatelessWidget {
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(
               tr('Если основной адрес подписки заблокируют, Nexus обновит её с запасного. По одному https-адресу в строке — их даёт ваш VPN-сервис.'),
-              style: TextStyle(color: NX.text2, fontSize: 13)),
+              style: TextStyle(color: NX.text2, fontSize: NXFont.body)),
           const SizedBox(height: 12),
           TextField(
             controller: ctrl,

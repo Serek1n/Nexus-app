@@ -68,7 +68,7 @@ Future<String?> _askPassword(BuildContext context, {required bool confirm}) {
                 padding: EdgeInsets.only(bottom: 12),
                 child: Text(
                     tr('В копии — ваши подписки и ключи серверов. Придумайте пароль не короче 8 символов.'),
-                    style: TextStyle(color: NX.text2, fontSize: 13)),
+                    style: TextStyle(color: NX.text2, fontSize: NXFont.body)),
               ),
             TextField(
               controller: a,
@@ -88,7 +88,7 @@ Future<String?> _askPassword(BuildContext context, {required bool confirm}) {
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Text(err!,
-                    style: const TextStyle(color: NX.red, fontSize: 13)),
+                    style: const TextStyle(color: NX.red, fontSize: NXFont.body)),
               ),
           ],
         ),

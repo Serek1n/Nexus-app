@@ -31,7 +31,13 @@ class HomeScreen extends StatelessWidget {
     final hero = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _StatusPill(state: app.state, blocked: app.blocked),
+        _StatusPill(
+          state: app.state,
+          blocked: app.blocked,
+          checking: app.checking,
+          noTraffic: app.noTraffic,
+          failed: app.failed,
+        ),
         // Что происходит с трафиком — видно без похода в настройки.
         SizedBox(
           height: 30,
@@ -44,7 +50,7 @@ class HomeScreen extends StatelessWidget {
               },
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: NX.text3, fontSize: 12),
+              style: TextStyle(color: NX.text3, fontSize: NXFont.caption),
             ),
           ),
         ),
@@ -52,6 +58,8 @@ class HomeScreen extends StatelessWidget {
           autofocus: app.isTv,
           state: app.state,
           blocked: app.blocked,
+          checking: app.checking,
+          failed: app.failed || app.noTraffic,
           size: wide ? 220 : 196,
           onTap: () {
             if (sel == null) {
@@ -72,7 +80,16 @@ class HomeScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (app.lastError != null) ...[
-          _ErrorBanner(text: app.lastError!, onClose: app.clearError),
+          _ErrorBanner(
+            text: app.lastError!,
+            onClose: app.clearError,
+            onRetry: sel != null && app.state == ConnState.disconnected
+                ? () {
+                    app.clearError();
+                    app.toggle();
+                  }
+                : null,
+          ),
           const SizedBox(height: 10),
         ],
         if (app.reconnectNote != null) ...[
@@ -146,7 +163,7 @@ class HomeScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         tr('VPN оборвался — интернет заблокирован, чтобы ничего не ушло мимо'),
-                        style: TextStyle(fontSize: 13, height: 1.4),
+                        style: TextStyle(fontSize: NXFont.body, height: 1.4),
                       ),
                     ),
                   ],
@@ -201,10 +218,10 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       Text(tr('Добавьте подписку'),
                           style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15)),
+                              fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                       SizedBox(height: 2),
                       Text(tr('Вставьте ссылку из бота NEXUS'),
-                          style: TextStyle(color: NX.text2, fontSize: 13)),
+                          style: TextStyle(color: NX.text2, fontSize: NXFont.body)),
                     ],
                   ),
                 ),
@@ -362,14 +379,14 @@ class _UpdateCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 15)),
+                              fontWeight: FontWeight.w800, fontSize: NXFont.title)),
                       const SizedBox(height: 2),
                       Text(status,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: ready ? NX.mint : NX.text2,
-                              fontSize: 12.5)),
+                              fontSize: NXFont.sub)),
                     ],
                   ),
                 ),
@@ -384,7 +401,7 @@ class _UpdateCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                       textStyle: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 13),
+                          fontWeight: FontWeight.w700, fontSize: NXFont.body),
                     ),
                     onPressed: app.installAppUpdate,
                     child: Text(tr('Установить')),
@@ -426,7 +443,7 @@ class _UpdateCard extends StatelessWidget {
               children: [
                 Text(tr('Что нового в {0}', [title]),
                     style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w800)),
+                        fontSize: NXFont.h3, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
                 ChangeList(notes),
               ],
@@ -465,7 +482,7 @@ class _Notice extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,
-                  style: TextStyle(color: NX.text, fontSize: 13)),
+                  style: TextStyle(color: NX.text, fontSize: NXFont.body)),
             ),
             if (onTap != null)
               Icon(Icons.chevron_right_rounded,
@@ -478,14 +495,35 @@ class _Notice extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.state, this.blocked = false});
+  const _StatusPill({
+    required this.state,
+    this.blocked = false,
+    this.checking = false,
+    this.noTraffic = false,
+    this.failed = false,
+  });
   final ConnState state;
   final bool blocked;
+
+  /// Подключено, трафик ещё проверяется.
+  final bool checking;
+
+  /// Подключено, но сервер не ответил.
+  final bool noTraffic;
+
+  /// Подключиться не удалось.
+  final bool failed;
 
   @override
   Widget build(BuildContext context) {
     final (text, color) = blocked
         ? (tr('Нет соединения'), NX.red)
+        : checking
+        ? (tr('Проверка…'), NX.violet)
+        : noTraffic
+        ? (tr('Сервер не отвечает'), NX.warn)
+        : failed
+        ? (tr('Ошибка'), NX.red)
         : switch (state) {
       ConnState.connected => (tr('Подключено'), NX.mint),
       ConnState.connecting => (tr('Подключение…'), NX.violet),
@@ -510,8 +548,10 @@ class _StatusPill extends StatelessWidget {
           const SizedBox(width: 8),
           Text(text,
               style: TextStyle(
-                  color: state == ConnState.disconnected ? NX.text2 : NX.ink(color),
-                  fontSize: 13,
+                  color: state == ConnState.disconnected && !failed
+                      ? NX.text2
+                      : NX.ink(color),
+                  fontSize: NXFont.body,
                   fontWeight: FontWeight.w700)),
         ],
       ),
@@ -572,7 +612,7 @@ class _TimerLineState extends State<_TimerLine> {
           Text(
             fmtDuration(DateTime.now().difference(widget.since!)),
             style: const TextStyle(
-              fontSize: 28,
+              fontSize: NXFont.display,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
               fontFeatures: [FontFeature.tabularFigures()],
@@ -586,7 +626,7 @@ class _TimerLineState extends State<_TimerLine> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               child: lat == null
                   ? Text(tr('Проверяю задержку…'),
-                      style: TextStyle(color: NX.text3, fontSize: 12.5))
+                      style: TextStyle(color: NX.text3, fontSize: NXFont.sub))
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -610,14 +650,14 @@ class _TimerLineState extends State<_TimerLine> {
         children: [
           Text(
             idle ? tr('Нажмите, чтобы подключиться') : '',
-            style: TextStyle(color: NX.text3, fontSize: 13.5),
+            style: TextStyle(color: NX.text3, fontSize: NXFont.body),
           ),
           if (idle && last != null) ...[
             const SizedBox(height: 3),
             Text(tr('Прошлая сессия: {0}', [last]),
                 style: TextStyle(
                     color: NX.text3,
-                    fontSize: 11.5,
+                    fontSize: NXFont.caption,
                     fontFeatures: [FontFeature.tabularFigures()])),
           ],
         ],
@@ -641,7 +681,7 @@ class _StatsRow extends StatelessWidget {
                   Icon(icon, size: 14, color: NX.text3),
                   const SizedBox(width: 4),
                   Text(label,
-                      style: TextStyle(color: NX.text3, fontSize: 12)),
+                      style: TextStyle(color: NX.text3, fontSize: NXFont.caption)),
                 ],
               ),
               const SizedBox(height: 4),
@@ -650,7 +690,7 @@ class _StatsRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontSize: NXFont.title,
                       fontFeatures: [FontFeature.tabularFigures()])),
             ],
           ),
@@ -683,7 +723,7 @@ class _StatsRow extends StatelessWidget {
                 Text(tr('Скорость'),
                     style: TextStyle(
                         color: app.speedTesting ? NX.mint : NX.text3,
-                        fontSize: 12)),
+                        fontSize: NXFont.caption)),
               ],
             ),
             const SizedBox(height: 4),
@@ -699,7 +739,7 @@ class _StatsRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontSize: NXFont.title,
                     color: app.speedTesting
                         ? NX.mint
                         : app.speedMbps != null
@@ -762,11 +802,11 @@ class _ServerRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15)),
+                        fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                 const SizedBox(height: 4),
                 Row(children: [
                   Text(s.protocol,
-                      style: TextStyle(color: NX.text3, fontSize: 12.5)),
+                      style: TextStyle(color: NX.text3, fontSize: NXFont.sub)),
                   const SizedBox(width: 10),
                   PingBadge(
                       ping: app.state == ConnState.connected &&
@@ -843,8 +883,15 @@ class _MapCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: SizedBox(
-            height: 150,
+          // Телефон, подключено: карта — узкой полосой, чтобы срок и
+          // остаток подписки были видны без прокрутки.
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            height: on && MediaQuery.sizeOf(context).height < 1000 &&
+                    MediaQuery.sizeOf(context).width < 700
+                ? 96
+                : 150,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -881,14 +928,14 @@ class _MapCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(L10n.lang == 'ru' ? city.$3 : city.$4,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              fontWeight: FontWeight.w700, fontSize: NXFont.sub)),
                       if ((current.ping ?? -1) > 0) ...[
-                        Text('  ·  ', style: TextStyle(color: NX.text3, fontSize: 12)),
+                        Text('  ·  ', style: TextStyle(color: NX.text3, fontSize: NXFont.caption)),
                         Text(tr('{0} мс', [current.ping]),
                             style: TextStyle(
                                 color: NX.pingColor(current.ping),
                                 fontWeight: FontWeight.w700,
-                                fontSize: 12.5)),
+                                fontSize: NXFont.sub)),
                       ],
                     ]),
                   ),
@@ -910,7 +957,7 @@ class _FavoritesStrip extends StatelessWidget {
     final name = Text(x.cleanName,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13));
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: NXFont.body));
     return Material(
       color: NX.surface,
       shape: RoundedRectangleBorder(
@@ -942,7 +989,7 @@ class _FavoritesStrip extends StatelessWidget {
                   style: TextStyle(
                       color: NX.pingColor(x.ping),
                       fontWeight: FontWeight.w700,
-                      fontSize: 12.5)),
+                      fontSize: NXFont.sub)),
             ],
           ]),
         ),
@@ -1028,7 +1075,7 @@ class _AutoRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(tr('Авто'),
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                 const SizedBox(height: 4),
                 // Статистика ядра (и с ней результаты проверки серверов)
                 // обновляется отдельно от остального интерфейса.
@@ -1051,7 +1098,7 @@ class _AutoRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              color: NX.text3, fontSize: 12.5),
+                              color: NX.text3, fontSize: NXFont.sub),
                         ),
                       ),
                       if (live && (cur != null || app.liveLatency != null)) ...[
@@ -1092,7 +1139,7 @@ class _SubscriptionStrip extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 13.5)),
+                        fontWeight: FontWeight.w700, fontSize: NXFont.body)),
               ),
               if (days != null)
                 Text(
@@ -1100,7 +1147,7 @@ class _SubscriptionStrip extends StatelessWidget {
                       ? tr('Истекла')
                       : tr('ещё {0} {1}', [days, plural(days, tr('день'), tr('дня'), tr('дней'))]),
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: NXFont.sub,
                     fontWeight: FontWeight.w700,
                     color: days < 0
                         ? NX.red
@@ -1120,7 +1167,7 @@ class _SubscriptionStrip extends StatelessWidget {
                 : tr('{0} из {1}', [fmtBytes(sub.used), fmtBytes(sub.total)]),
             style: TextStyle(
                 color: NX.text3,
-                fontSize: 12,
+                fontSize: NXFont.caption,
                 fontFeatures: [FontFeature.tabularFigures()]),
           ),
         ],
@@ -1175,9 +1222,13 @@ class TrafficBar extends StatelessWidget {
 }
 
 class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.text, required this.onClose});
+  const _ErrorBanner(
+      {required this.text, required this.onClose, this.onRetry});
   final String text;
   final VoidCallback onClose;
+
+  /// «Повторить» — снова подключиться (null — кнопки нет).
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1193,8 +1244,15 @@ class _ErrorBanner extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,
-                  style: TextStyle(color: NX.text, fontSize: 13)),
+                  style: TextStyle(color: NX.text, fontSize: NXFont.body)),
             ),
+            if (onRetry != null)
+              TextButton(
+                onPressed: onRetry,
+                child: Text(tr('Повторить'),
+                    style: const TextStyle(
+                        color: NX.red, fontWeight: FontWeight.w700)),
+              ),
             IconButton(
               onPressed: onClose,
               icon: Icon(Icons.close_rounded, size: 18, color: NX.text2),
