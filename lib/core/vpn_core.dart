@@ -93,6 +93,13 @@ abstract class VpnCore {
   /// Kill switch сработал: VPN упал, интернет заблокирован до отключения.
   bool get blocked => false;
 
+  /// Компьютер: сейчас работает режим TUN (весь трафик системы — в ядро).
+  bool get tunActive => false;
+
+  /// connect() при активном соединении меняет ядро, не снимая защиту
+  /// (системный прокси остаётся на Nexus) — отдельный disconnect не нужен.
+  bool get swapsInPlace => false;
+
   /// Окно видно пользователю (на Windows без окна статистику не опрашиваем).
   void setForeground(bool visible) {}
 

@@ -50,4 +50,6 @@ Filename: "{app}\nexus.exe"; Description: "Запустить Nexus"; Flags: now
 Filename: "{app}\nexus.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
+; Вернуть системный прокси пользователя, если Nexus удаляют подключённым
+Filename: "{app}\nexus.exe"; Parameters: "--restore-proxy"; Flags: runhidden waituntilterminated; RunOnceId: "RestoreProxy"
 Filename: "taskkill"; Parameters: "/F /IM nexus-core.exe"; Flags: runhidden; RunOnceId: "KillCore"

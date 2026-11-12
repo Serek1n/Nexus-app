@@ -193,9 +193,11 @@ String buildXrayConfig(
 
   // Свои правила пользователя — важнее всех остальных.
   void custom(List<String> items, String tag) {
-    final ips = items.where((e) => RegExp(r'^\d').hasMatch(e)).toList();
+    // IP — только настоящий адрес или подсеть: «2ip.ru» и «4pda.to» —
+    // сайты, а не адреса (иначе ядро отвергает весь конфиг).
+    final ips = items.where(isIpRule).toList();
     final doms = items
-        .where((e) => !RegExp(r'^\d').hasMatch(e))
+        .where((e) => !isIpRule(e))
         .map((e) => 'domain:$e')
         .toList();
     if (doms.isNotEmpty) {

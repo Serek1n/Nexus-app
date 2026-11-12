@@ -228,6 +228,13 @@ class AppUpdater {
         orElse: () => '');
     final sha = line.trim().split(RegExp(r'\s+')).first.toLowerCase();
     if (sha.length != 64) throw Exception(tr('Нет контрольной суммы для {0}', [fileName]));
+    // Номер сборки из подписанного списка должен совпасть с объявленным:
+    // иначе старый подписанный релиз можно выдать за новый.
+    final signedBuild =
+        RegExp(r'^build (\d+)\s*$', multiLine: true).firstMatch(sums)?.group(1);
+    if (signedBuild != null && int.parse(signedBuild) != build) {
+      throw Exception(tr('Подпись релиза неверна — обновление отклонено'));
+    }
 
     return AppUpdate(
       build: build,
@@ -269,12 +276,23 @@ class AppUpdater {
     return out;
   }
 
+  /// Проверенные суммы скачанных файлов (путь → SHA-256).
+  static final _expected = <String, String>{};
+
   static Future<Directory> _dir() async {
+    // Linux: не общая /tmp (её видят другие пользователи компьютера),
+    // а личная папка с правами только для владельца.
+    final home = Platform.environment['HOME'];
     final base = Platform.isAndroid
         ? (await AndroidSystem.appInfo())['cacheDir'].toString()
-        : '${Directory.systemTemp.path}${Platform.pathSeparator}NexusUpdate';
+        : Platform.isLinux && home != null && home.isNotEmpty
+            ? '$home/.cache/nexus/update'
+            : '${Directory.systemTemp.path}${Platform.pathSeparator}NexusUpdate';
     final dir = Directory(Platform.isAndroid ? '$base/updates' : base);
     if (!dir.existsSync()) dir.createSync(recursive: true);
+    if (Platform.isLinux) {
+      await Process.run('chmod', ['700', dir.path]);
+    }
     return dir;
   }
 
@@ -285,6 +303,7 @@ class AppUpdater {
     final dir = await _dir();
     final file = File(
         '${dir.path}${Platform.pathSeparator}b${u.build}-${u.fileName}');
+    _expected[file.path] = u.sha256;
     if (file.existsSync() &&
         sha256.convert(await file.readAsBytes()).toString() == u.sha256) {
       return file;
@@ -335,6 +354,16 @@ class AppUpdater {
 
   /// Запускает установку. На Windows после вызова приложение нужно закрыть.
   static Future<void> install(File file) async {
+    // Между скачиванием и установкой могло пройти время — сверяем файл
+    // ещё раз, прямо перед запуском.
+    final want = _expected[file.path];
+    if (want != null &&
+        sha256.convert(await file.readAsBytes()).toString() != want) {
+      try {
+        file.deleteSync();
+      } catch (_) {}
+      throw Exception(tr('Файл обновления изменился после проверки — установка отменена. Скачайте обновление ещё раз'));
+    }
     if (Platform.isAndroid) {
       if (!await AndroidSystem.canInstallApk()) {
         await AndroidSystem.openInstallSettings();

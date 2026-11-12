@@ -602,19 +602,36 @@ jobs:
           Description: Nexus — VPN-клиент NEXUS_VPN (Xray)
            Подписки, режим «Авто», умный режим, системный прокси и режим TUN.
           CT
-          # Режим TUN без пароля: ядро в /opt/nexus принадлежит root, и
-          # установщик даёт ему только право управлять сетью.
+          # Режим TUN без пароля: отдельная копия ядра принадлежит root, и
+          # установщик даёт ей только право управлять сетью. Запускать её
+          # может лишь группа «nexus» (в неё попадает тот, кто ставил пакет),
+          # а не любой пользователь компьютера.
           cat > $D/DEBIAN/postinst <<'PI'
           #!/bin/sh
           set -e
           if command -v setcap >/dev/null 2>&1; then
-            setcap cap_net_admin,cap_net_raw+ep /opt/nexus/nexus-core || true
+            # Право от прошлых версий с общего ядра снимаем.
+            setcap -r /opt/nexus/nexus-core 2>/dev/null || true
+            getent group nexus >/dev/null 2>&1 || groupadd --system nexus || true
+            mkdir -p /opt/nexus/tun
+            cp -f /opt/nexus/nexus-core /opt/nexus/tun/nexus-core
+            chown root:nexus /opt/nexus/tun/nexus-core 2>/dev/null || chown root:root /opt/nexus/tun/nexus-core
+            chmod 750 /opt/nexus/tun/nexus-core
+            setcap cap_net_admin,cap_net_raw+ep /opt/nexus/tun/nexus-core || true
+            for U in "${SUDO_USER:-}" "$(id -un "${PKEXEC_UID:-x}" 2>/dev/null || true)"; do
+              if [ -n "$U" ] && [ "$U" != root ]; then usermod -aG nexus "$U" 2>/dev/null || true; fi
+            done
           fi
           command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q || true
           command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q /usr/share/icons/hicolor || true
           exit 0
           PI
-          chmod 755 $D/DEBIAN/postinst
+          cat > $D/DEBIAN/postrm <<'PR'
+          #!/bin/sh
+          rm -rf /opt/nexus/tun
+          exit 0
+          PR
+          chmod 755 $D/DEBIAN/postinst $D/DEBIAN/postrm
           dpkg-deb --root-owner-group --build $D dist/Nexus-Linux-x64.deb
           dpkg-deb --info dist/Nexus-Linux-x64.deb | head -12
 
@@ -955,6 +972,9 @@ jobs:
           rm -f xray-android.txt
           rm -f SHA256SUMS-android.txt
           sha256sum * > SHA256SUMS.txt
+          # Номер сборки — внутри подписанного списка: старый релиз нельзя
+          # выдать за новый, поменяв описание.
+          echo "build $BUILD" >> SHA256SUMS.txt
           cd ..
           NAME="Nexus $VER"
           if [ "$CORE" = "${XRAY#v}" ]; then NAME="$NAME · Xray ${XRAY#v}"; else CORE=""; fi

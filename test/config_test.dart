@@ -35,6 +35,17 @@ Map<String, dynamic> _out(Map<String, dynamic> c, String tag) =>
         .firstWhere((o) => o['tag'] == tag);
 
 void main() {
+  test('Свои правила: сайт с цифры идёт в домены, а не в IP', () {
+    final c = jsonDecode(buildXrayConfig(_vless,
+        routing: RoutingMode.smart,
+        desktop: true,
+        customDirect: ['2ip.ru', '10.0.0.0/8'])) as Map<String, dynamic>;
+    final rules = (c['routing']['rules'] as List).cast<Map>();
+    expect(rules.any((r) => (r['domain'] as List?)?.contains('domain:2ip.ru') == true), isTrue);
+    expect(rules.any((r) => (r['ip'] as List?)?.contains('2ip.ru') == true), isFalse);
+    expect(rules.any((r) => (r['ip'] as List?)?.contains('10.0.0.0/8') == true), isTrue);
+  });
+
   test('DNS: сначала зашифрованный (DoH), выбранный сервис', () {
     final dns = _cfg(_vless)['dns'] as Map;
     expect((dns['servers'] as List).first, 'https://1.1.1.1/dns-query');

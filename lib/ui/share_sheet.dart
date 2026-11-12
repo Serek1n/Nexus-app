@@ -116,7 +116,7 @@ class _ShareBody extends StatelessWidget {
                 style: TextStyle(color: NX.text2)),
           const SizedBox(height: 16),
           Row(children: [
-            const Icon(Icons.info_outline_rounded, color: NX.amber, size: 18),
+            Icon(Icons.info_outline_rounded, color: NX.warn, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(warning,

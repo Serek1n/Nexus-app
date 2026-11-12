@@ -118,7 +118,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                                 : Icons.lightbulb_rounded,
                             color: advice == tr('Всё работает.')
                                 ? NX.mint
-                                : NX.amber),
+                                : NX.warn),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(advice,

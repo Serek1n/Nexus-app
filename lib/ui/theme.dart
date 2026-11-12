@@ -30,7 +30,32 @@ class NX {
 
   static Color get text => light ? const Color(0xFF16161D) : const Color(0xFFECECF1);
   static Color get text2 => light ? const Color(0xFF5A5A6A) : const Color(0xFF9C9CAD);
-  static Color get text3 => light ? const Color(0xFF8E8E9C) : const Color(0xFF62626F);
+  // Третичный текст (подсказки, неактивные вкладки): контраст с фоном
+  // не ниже 4,5:1 в обеих темах.
+  static Color get text3 => light ? const Color(0xFF666675) : const Color(0xFF8A8A99);
+
+  /// Заливка основной кнопки: белый текст на ней читается (4,8:1).
+  static const action = Color(0xFF6E5CE6);
+
+  /// Цвет для текста и значков: на светлом фоне яркие оттенки (мятный,
+  /// жёлтый, бирюзовый) затемняются до контраста 4,5:1, на тёмном — как есть.
+  static Color ink(Color c) {
+    if (!light) return c;
+    return _ink[c.toARGB32()] ??= () {
+      var h = HSLColor.fromColor(c);
+      while (h.lightness > 0.1 && _contrastOnWhite(h.toColor()) < 4.9) {
+        h = h.withLightness(h.lightness - 0.02);
+      }
+      return h.toColor();
+    }();
+  }
+
+  static final _ink = <int, Color>{};
+  static double _contrastOnWhite(Color c) => 1.05 / (c.computeLuminance() + 0.05);
+
+  /// Предупреждение и «всё хорошо» — для текста и значков.
+  static Color get warn => ink(amber);
+  static Color get ok => ink(mint);
 
   static const neon = LinearGradient(
     colors: [violet, indigo],
@@ -58,11 +83,11 @@ class NX {
 
   static Color pingColor(int? ping) {
     if (ping == null) return text3;
-    return switch (pingLevel(ping)) {
+    return ink(switch (pingLevel(ping)) {
       3 => mint,
       2 => amber,
       _ => red,
-    };
+    });
   }
 
   static List<BoxShadow> glow(Color c, {double strength = 1}) => [

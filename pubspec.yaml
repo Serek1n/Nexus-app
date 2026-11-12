@@ -1,7 +1,7 @@
 name: nexus
 description: "Nexus — клиент для подписок Xray/V2Ray (VLESS, VMess, Trojan, Shadowsocks)."
 publish_to: 'none'
-version: 2.5.0+43
+version: 2.5.1+44
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

@@ -32,7 +32,22 @@ class HomeScreen extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _StatusPill(state: app.state, blocked: app.blocked),
-        const SizedBox(height: 28),
+        // Что происходит с трафиком — видно без похода в настройки.
+        SizedBox(
+          height: 30,
+          child: Center(
+            child: Text(
+              switch (app.settings.routing) {
+                RoutingMode.smart => tr('Умный режим · российские сайты напрямую'),
+                RoutingMode.blocked => tr('Через VPN — только заблокированное'),
+                RoutingMode.global => tr('Весь трафик через VPN'),
+              },
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: NX.text3, fontSize: 12),
+            ),
+          ),
+        ),
         ConnectButton(
           autofocus: app.isTv,
           state: app.state,
@@ -75,7 +90,7 @@ class HomeScreen extends StatelessWidget {
                 duration: const Duration(seconds: 8),
                 content: Row(children: [
                   Icon(Icons.battery_alert_rounded,
-                      color: NX.amber, size: 20),
+                      color: NX.warn, size: 20),
                   SizedBox(width: 10),
                   Expanded(
                       child: Text(
@@ -446,7 +461,7 @@ class _Notice extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(
           children: [
-            Icon(icon, color: NX.amber, size: 18),
+            Icon(icon, color: NX.warn, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(text,
@@ -495,7 +510,7 @@ class _StatusPill extends StatelessWidget {
           const SizedBox(width: 8),
           Text(text,
               style: TextStyle(
-                  color: state == ConnState.disconnected ? NX.text2 : color,
+                  color: state == ConnState.disconnected ? NX.text2 : NX.ink(color),
                   fontSize: 13,
                   fontWeight: FontWeight.w700)),
         ],
@@ -1090,7 +1105,7 @@ class _SubscriptionStrip extends StatelessWidget {
                     color: days < 0
                         ? NX.red
                         : days <= 3
-                            ? NX.amber
+                            ? NX.warn
                             : NX.text2,
                   ),
                 ),
@@ -1127,7 +1142,7 @@ class TrafficBar extends StatelessWidget {
         : f > 0.9
             ? NX.red
             : f > 0.75
-                ? NX.amber
+                ? NX.warn
                 : NX.violet;
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),

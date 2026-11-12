@@ -84,6 +84,15 @@ void main() {
               'host.net:8080 мусор'),
           ['site.com', 'ya.ru', '1.2.3.4', '10.0.0.0/8', 'host.net']);
     });
+    test('сайт с цифры — это сайт, а неверный адрес отбрасывается', () {
+      // «2ip.ru» в поле ip ядро не принимает и не запускается вовсе.
+      expect(parseRuleList('2ip.ru\n4pda.to\n999.1.1.1\n10.0.0.0/99\n1.2.3.4'),
+          ['2ip.ru', '4pda.to', '1.2.3.4']);
+      expect(isIpRule('2ip.ru'), isFalse);
+      expect(isIpRule('10.0.0.0/8'), isTrue);
+      expect(isIpRule('1.2.3.4'), isTrue);
+      expect(isIpRule('1.2.3.4/33'), isFalse);
+    });
   });
 
   group('Страна по названию', () {
@@ -131,6 +140,14 @@ void main() {
       final body = base64Url.encode(utf8.encode('$a\r\n$b\n$a\n')).replaceAll('=', '');
       expect(extractLinks(body), [a, b]);
       expect(extractLinks('мусор $a ещё'), [a]);
+    });
+    test('пробелы в названии сервера не обрезают его', () {
+      const a = 'vless://u@1.1.1.1:443?security=reality#DE Frankfurt 1';
+      const b = 'trojan://p@2.2.2.2:443#NL';
+      expect(extractLinks('$a\n$b'), [a, b]);
+      // Две ссылки в одной строке — по-прежнему две ссылки.
+      const c = 'trojan://p@3.3.3.3:443#SE';
+      expect(extractLinks('$b $c'), [b, c]);
     });
     test('subscription-userinfo: дробные числа, бессрочно, мусор', () {
       final s = Subscription(id: '1', url: 'https://x', title: 't');

@@ -19,6 +19,10 @@ class KeyringBox {
 
   static List<int>? _key;
 
+  /// Хранилище ключей недоступно — данные сохранены без шифрования
+  /// (настройки показывают предупреждение).
+  static bool plainFallback = false;
+
   /// Хранилище не ответило за минуту (служба зависла, окно разблокировки
   /// никто не видит) — до перезапуска больше не ждём его при каждом сохранении.
   static bool _stuck = false;
@@ -106,6 +110,7 @@ class KeyringBox {
   /// Шифрует; хранилище недоступно — возвращает текст как есть.
   static Future<String> protect(String plain) async {
     final k = await _loadKey(create: true);
+    plainFallback = k == null;
     if (k == null) return plain;
     try {
       final box = await _aes.encrypt(utf8.encode(plain),

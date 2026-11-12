@@ -19,8 +19,14 @@ class NetProbe {
     ..userAgent = 'Nexus';
 
   /// IP выхода по cdn-cgi/trace Cloudflare. null — не удалось.
-  static Future<ExitInfo?> exitInfo(String proxy) async {
-    final c = _client(proxy);
+  /// [proxy] == null — обычным путём системы (в режиме TUN так видно,
+  /// действительно ли трафик компьютера уходит в туннель).
+  static Future<ExitInfo?> exitInfo(String? proxy) async {
+    final c = proxy == null
+        ? (HttpClient()
+          ..connectionTimeout = const Duration(seconds: 8)
+          ..userAgent = 'Nexus')
+        : _client(proxy);
     try {
       final req = await c
           .getUrl(Uri.parse('https://www.cloudflare.com/cdn-cgi/trace'))

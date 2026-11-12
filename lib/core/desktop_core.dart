@@ -154,6 +154,24 @@ class DesktopCore extends VpnCore {
     if (_logs.length > 400) _logs.removeRange(0, _logs.length - 400);
   }
 
+  /// Запуск «nexus.exe --restore-proxy» (удаление программы): вернуть
+  /// системный прокси пользователя, если Nexus оставил свой.
+  static Future<void> restoreProxyOnly() async {
+    try {
+      final os = DesktopOs.current;
+      final marker =
+          File('${os.dataDir}${Platform.pathSeparator}proxy.lock');
+      if (!marker.existsSync()) return;
+      Map<String, dynamic>? saved;
+      try {
+        final j = jsonDecode(marker.readAsStringSync());
+        if (j is Map<String, dynamic>) saved = j;
+      } catch (_) {}
+      await os.proxyRestore(saved);
+      marker.deleteSync();
+    } catch (_) {}
+  }
+
   @override
   Future<void> init() async {
     await os.harden();
@@ -245,7 +263,61 @@ class DesktopCore extends VpnCore {
       _serial(() =>
           _connect(remark: remark, config: config, settings: settings));
 
+  @override
+  bool get swapsInPlace => true;
+
+  @override
+  bool get tunActive => _tun && _proc != null;
+
+  /// Возвращает системный прокси пользователя (если Nexus его менял).
+  Future<void> _dropProxy() async {
+    if (!_proxySet) return;
+    final marker = File('$_dataDir${_sep}proxy.lock');
+    await os.proxyRestore(_savedProxy ?? _readSaved(marker));
+    _savedProxy = null;
+    _proxySet = false;
+    if (marker.existsSync()) marker.deleteSync();
+  }
+
   Future<void> _connect({
+    required String remark,
+    required String config,
+    required AppSettings settings,
+  }) async {
+    try {
+      await _connectInner(remark: remark, config: config, settings: settings);
+      return;
+    } catch (_) {
+      if (!(_tun && (os.tunDnsToGateway || os.tunIpv6))) {
+        await _afterFailedConnect();
+        rethrow;
+      }
+    }
+    // Linux и macOS: ядро не поднялось с IPv6 или системным DNS в туннеле —
+    // пробуем ещё раз по-старому, только с IPv4.
+    os.tunPlain = true;
+    try {
+      await _connectInner(remark: remark, config: config, settings: settings);
+      _log(tr('Системный DNS не удалось направить в туннель — подключаюсь без этого'));
+    } catch (_) {
+      // Дело было не в них — в следующий раз пробуем с защитой снова.
+      os.tunPlain = false;
+      await _afterFailedConnect();
+      rethrow;
+    }
+  }
+
+  /// Смена сервера «на месте» не удалась: прокси от прошлого соединения
+  /// указывал бы в никуда при статусе «Не подключено». При перезапуске
+  /// после сбоя прокси не трогаем — это решает kill switch.
+  Future<void> _afterFailedConnect() async {
+    if (_restarting) return;
+    try {
+      await _dropProxy();
+    } catch (_) {}
+  }
+
+  Future<void> _connectInner({
     required String remark,
     required String config,
     required AppSettings settings,
@@ -396,6 +468,9 @@ class DesktopCore extends VpnCore {
         _log(_modeWarning!);
       }
       _proxySet = true;
+    } else {
+      // Перешли на TUN или выключили системный прокси — возвращаем прежний.
+      await _dropProxy();
     }
 
     _lastUp = 0;
@@ -563,8 +638,14 @@ class DesktopCore extends VpnCore {
       'settings': {
         'name': os.tunName,
         ...os.tunExtra(),
-        'mtu': 1500,
-        'gateway': ['172.19.0.1/30'],
+        // 1400: с запасом на заголовки туннеля, без дробления пакетов.
+        'mtu': 1400,
+        // Windows: IPv6 целиком закрыт фильтрами ядра (misconfigtun).
+        // Linux и macOS: IPv6 заводим в туннель, иначе он шёл бы мимо VPN.
+        'gateway': [
+          '172.19.0.1/30',
+          if (os.tunIpv6) 'fd19:6e78::1/126',
+        ],
         // DNS для программ — обычный адрес выбранного сервиса.
         'dns': [
           ((cfg['dns'] as Map?)?['servers'] as List?)
@@ -573,7 +654,10 @@ class DesktopCore extends VpnCore {
                   .firstOrNull ??
               '1.1.1.1'
         ],
-        'autoSystemRoutingTable': ['0.0.0.0/0'],
+        'autoSystemRoutingTable': [
+          '0.0.0.0/0',
+          if (os.tunIpv6) '::/0',
+        ],
       },
       'sniffing': {
         'enabled': true,
@@ -720,13 +804,7 @@ class DesktopCore extends VpnCore {
       _lastConfig = null;
       _lastSettings = null;
     }
-    if (_proxySet) {
-      final marker = File('$_dataDir${_sep}proxy.lock');
-      await os.proxyRestore(_savedProxy ?? _readSaved(marker));
-      _savedProxy = null;
-      _proxySet = false;
-      if (marker.existsSync()) marker.deleteSync();
-    }
+    await _dropProxy();
     await _stopProcess();
     _stats.add(const ConnStats());
     _states.add(ConnState.disconnected);

@@ -120,7 +120,7 @@ class _AppsScreenState extends State<AppsScreen> {
                   padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
                   child: Text(
                     tr('Сейчас включён режим «Весь трафик»: российские приложения идут через VPN. Отмеченные вручную — всегда напрямую.'),
-                    style: TextStyle(color: NX.amber, fontSize: 12.5),
+                    style: TextStyle(color: NX.warn, fontSize: 12.5),
                   ),
                 ),
               Padding(

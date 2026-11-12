@@ -144,7 +144,7 @@ class IosCore extends VpnCore {
       'port': 0,
       'settings': {
         'name': 'utun',
-        'mtu': 1500,
+        'mtu': 1400,
         'gateway': ['172.19.0.1/30'],
         'dns': [dns],
       },

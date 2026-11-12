@@ -151,8 +151,8 @@ const kEn = <String, String>{
       'No earlier versions yet',
   'Больше {0} приложений: банки, Госуслуги, VK, Яндекс, маркетплейсы. Список обновляется сам':
       'Over {0} apps: banks, Gosuslugi, VK, Yandex, marketplaces. The list updates itself',
-  'Браузеры и программы {0} автоматически пойдут через Nexus':
-      'Browsers and {0} apps will automatically go through Nexus',
+  'Браузеры и программы {0} автоматически пойдут через Nexus. Программы, которые не смотрят на системный прокси (игры, часть мессенджеров, звонки), идут напрямую — для них включите TUN':
+      'Browsers and {0} apps go through Nexus automatically. Apps that ignore the system proxy (games, some messengers, calls) connect directly — turn on TUN for those',
   'Будет добавлен сервер {0}.':
       'Server {0} will be added.',
   'Будут удалены все подписки, серверы и настройки.':
@@ -175,6 +175,8 @@ const kEn = <String, String>{
       'In VPN settings, choose Nexus and turn on “Always-on VPN” and “Block connections without VPN”',
   'В подписке не найдено ни одного сервера':
       'No servers found in the subscription',
+  'В режиме TUN не действует: если ядро остановится, трафик пойдёт напрямую. Работает только с системным прокси':
+      'Has no effect in TUN mode: if the core stops, traffic goes out directly. Works only with the system proxy',
   'В режиме TUN системный прокси не нужен — HTTP-прокси закрыт паролем, им пользуется только Nexus':
       'In TUN mode the system proxy isn\'t needed — the HTTP proxy is password-protected and used only by Nexus',
   'В релизе {0} нет сборки для этой системы':
@@ -201,6 +203,8 @@ const kEn = <String, String>{
       'All iPhone traffic goes through Nexus',
   'Весь трафик телефона идёт через Nexus':
       'All phone traffic goes through Nexus',
+  'Весь трафик через VPN':
+      'All traffic through the VPN',
   'Включён, но Nexus запущен без прав администратора — работает системный прокси':
       'On, but Nexus is running without administrator rights — the system proxy is used',
   'Внимание: трафик идёт мимо VPN':
@@ -311,10 +315,8 @@ const kEn = <String, String>{
       '{0} available',
   'Доступно обновление':
       'Update available',
-  'Другие программы на компьютере не смогут незаметно пользоваться вашим VPN. Telegram получит пароль кнопкой ниже':
-      'Other programs on this computer can\'t quietly use your VPN. Telegram gets the password with the button below',
-  'Если VPN оборвётся, интернет блокируется, а не идёт напрямую':
-      'If the VPN drops, internet is blocked instead of going direct',
+  'Если VPN оборвётся, браузеры и программы, которые ходят через системный прокси, останутся без интернета, а не пойдут напрямую. Остальные программы защищает только режим TUN':
+      'If the VPN drops, browsers and apps that use the system proxy lose internet instead of connecting directly. Other apps are covered only by TUN mode',
   'Если основной адрес подписки заблокируют, Nexus обновит её с запасного. По одному https-адресу в строке — их даёт ваш VPN-сервис.':
       'If the main subscription address gets blocked, Nexus updates it from a backup one. One https address per line — your VPN service provides them.',
   'Если провайдер блокирует подключение к серверу: Nexus режет первый пакет на части, и его сложнее распознать. Подключение чуть медленнее':
@@ -485,6 +487,8 @@ const kEn = <String, String>{
       'Couldn\'t parse the links in the subscription',
   'Не удалось распаковать обновление: {0}':
       'Couldn\'t unpack the update: {0}',
+  'Не удалось расшифровать сохранённые подписки — они не загружены. Перезапустите устройство; если не поможет — «Сбросить всё» в настройках и добавьте подписку заново':
+      'Couldn\'t decrypt the saved subscriptions, so they weren\'t loaded. Restart the device; if that doesn\'t help, use "Reset everything" in Settings and add the subscription again',
   'Не удалось узнать последнюю версию (код {0})':
       'Couldn\'t get the latest version (code {0})',
   'Не удалось установить защищённое соединение с сервером подписки — похоже, адрес блокирует провайдер. Подключитесь к VPN и повторите':
@@ -597,6 +601,8 @@ const kEn = <String, String>{
       'Password',
   'Пароль для копии':
       'Backup password',
+  'Пароль на SOCKS-вход Nexus; Telegram получит его кнопкой ниже. HTTP-вход для системного прокси остаётся без пароля':
+      'A password on the Nexus SOCKS port; Telegram gets it with the button below. The HTTP port for the system proxy stays without a password',
   'Пароль от копии':
       'Backup password',
   'Пароль — не короче 8 символов':
@@ -745,6 +751,8 @@ const kEn = <String, String>{
       'Check daily and offer the update',
   'Раз в сутки проверять и ставить новую версию':
       'Check daily and install the new version',
+  'Развернуть':
+      'Maximize',
   'Разрешите Nexus устанавливать приложения и нажмите «Установить» ещё раз':
       'Allow Nexus to install apps and tap “Install” again',
   'Разрешить':
@@ -757,6 +765,8 @@ const kEn = <String, String>{
       'TUN mode',
   'Режим TUN доступен только в сборке Nexus из релиза':
       'TUN mode is only available in release builds of Nexus',
+  'Режим TUN не перехватывает трафик: программы выходят в сеть с российским IP. Нажмите, чтобы переподключиться':
+      'TUN mode isn\'t capturing traffic: apps reach the internet from a Russian IP. Tap to reconnect',
   'Режим TUN работает только с правами администратора — пока Nexus работает через системный прокси. Включите TUN в настройках ещё раз, чтобы перезапустить Nexus от администратора':
       'TUN mode needs administrator rights — for now Nexus uses the system proxy. Turn TUN on in settings again to restart Nexus as administrator',
   'Режим TUN создаёт виртуальную сетевую карту, и для этого Windows просит права администратора. Nexus перезапустится — подтвердите запрос Windows. Подписки и настройки сохранятся.':
@@ -819,6 +829,8 @@ const kEn = <String, String>{
       'Reset statistics?',
   'Свежий Xray приходит обновлением Nexus':
       'Fresh Xray arrives with Nexus updates',
+  'Свернуть':
+      'Minimize',
   'Светлая':
       'Light',
   'Свои правила':
@@ -843,6 +855,8 @@ const kEn = <String, String>{
       'Server “{0}”',
   'Сервер не отвечает — выберите другой сервер или включите «Маскировку соединения» (Настройки → «Про»).':
       'The server doesn\'t respond — pick another server or turn on "Connection masking" (Settings → Pro).',
+  'Сервер не отвечает — трафик не идёт. Выберите другой сервер':
+      'The server isn\'t responding — no traffic is passing. Pick another server',
   'Сервер ответил кодом {0}':
       'Server responded with code {0}',
   'Сервер подписки':
@@ -865,6 +879,10 @@ const kEn = <String, String>{
       'Network changed — reconnecting…',
   'Система может остановить VPN':
       'The system may stop the VPN',
+  'Системная связка ключей недоступна — подписки и ключи хранятся без шифрования (файл закрыт от других пользователей). Установите и разблокируйте GNOME Keyring или KWallet':
+      'The system keyring is unavailable — subscriptions and keys are stored unencrypted (the file is closed to other users). Install and unlock GNOME Keyring or KWallet',
+  'Системный DNS не удалось направить в туннель — подключаюсь без этого':
+      'Couldn\'t route system DNS into the tunnel — connecting without it',
   'Системный прокси':
       'System proxy',
   'Сканер QR недоступен на этом устройстве':
@@ -989,6 +1007,8 @@ const kEn = <String, String>{
       'Smart mode',
   'Умный режим (РФ напрямую)':
       'Smart mode (Russia direct)',
+  'Умный режим · российские сайты напрямую':
+      'Smart mode · Russian sites direct',
   'Устанавливаю, Nexus перезапустится…':
       'Installing, Nexus will restart…',
   'Установить':
@@ -1003,12 +1023,16 @@ const kEn = <String, String>{
       'The latest version is installed',
   'Файл {0} изменён после установки — запуск с правами администратора отменён. Переустановите Nexus':
       'File {0} was changed after installation — running with administrator rights was cancelled. Reinstall Nexus',
+  'Файл обновления изменился после проверки — установка отменена. Скачайте обновление ещё раз':
+      'The update file changed after verification — installation cancelled. Download the update again',
   'Часть сайтов не открывается через этот сервер — попробуйте другой.':
       'Some sites don\'t open through this server — try another one.',
   'Через Nexus идут все программы: Telegram, игры, всё, что не смотрит на прокси':
       'All programs go through Nexus: Telegram, games, everything that ignores the proxy',
   'Через Nexus — YouTube, Instagram, Discord, Telegram, ИИ-сервисы и другие недоступные сайты; всё остальное — напрямую. Меньше нагрузки, банки и маркетплейсы не замечают VPN':
       'YouTube, Instagram, Discord, Telegram, AI services and other unavailable sites go through Nexus; everything else goes directly. Less load, banks and marketplaces don\'t notice the VPN',
+  'Через VPN — только заблокированное':
+      'Only blocked sites through the VPN',
   'Через VPN: {0} · напрямую: {1}':
       'Via VPN: {0} · direct: {1}',
   'Через «{0}» трафик не проходит — сервер не ответил':

@@ -126,6 +126,7 @@ Future<AppState> _state({bool fresh = false, bool desktop = false}) async {
   AppState.debugDesktop = desktop;
   // Без системной связки ключей (на сервере сборки её нет).
   KeyringBox.debugKey = List<int>.filled(32, 1);
+  debugResetShellTab();
   final app = AppState.withCore(FakeCore());
   await app.init();
   if (!fresh) {

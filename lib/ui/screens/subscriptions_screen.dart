@@ -157,7 +157,7 @@ class _SubCard extends StatelessWidget {
                       Tooltip(
                         message:
                             tr('Подписка загружается без шифрования: её могут подменить или подсмотреть ключи. Попросите https-ссылку.'),
-                        child: Tag(tr('HTTP · без шифрования'), color: NX.amber),
+                        child: Tag(tr('HTTP · без шифрования'), color: NX.warn),
                       ),
                     ],
                   ],
@@ -263,7 +263,7 @@ class _SubCard extends StatelessWidget {
                         color: days < 0
                             ? NX.red
                             : days <= 3
-                                ? NX.amber
+                                ? NX.warn
                                 : NX.mint,
                       ),
                   ],

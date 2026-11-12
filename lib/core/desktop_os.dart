@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n.dart';
 import '../platform/win_admin.dart';
@@ -61,6 +62,16 @@ abstract class DesktopOs {
 
   /// Особые поля настроек TUN-входа для этой системы.
   Map<String, dynamic> tunExtra() => const {};
+
+  /// Linux: системный DNS направляется в туннель (systemd-resolved).
+  bool tunDnsToGateway = false;
+
+  /// Linux и macOS: IPv6 заведён в туннель (иначе он шёл бы мимо VPN).
+  /// Только там, где IPv6 в системе включён: иначе ядро не поднимет TUN.
+  bool tunIpv6 = false;
+
+  /// Ядро не запустилось с этими добавками — до перезапуска Nexus без них.
+  bool tunPlain = false;
 
   /// Запуск ядра в режиме TUN с конфигом [config]. null — запускать как
   /// обычно (через stdin).
@@ -133,10 +144,26 @@ class WindowsOs extends DesktopOs {
   @override
   Future<Map<String, dynamic>> proxySnapshot() async => WinProxy.snapshot();
   @override
-  Future<void> proxyEnable(String hostPort) async => WinProxy.enable(hostPort);
+  Future<void> proxyEnable(String hostPort) async {
+    WinProxy.enable(hostPort);
+    await _owned(true);
+  }
+
   @override
-  Future<void> proxyRestore(Map<String, dynamic>? saved) async =>
-      WinProxy.restore(saved);
+  Future<void> proxyRestore(Map<String, dynamic>? saved) async {
+    WinProxy.restore(saved);
+    await _owned(false);
+  }
+
+  /// Сообщаем окну, что системный прокси сейчас «наш»: при выключении
+  /// Windows оно выключит его само (см. WM_ENDSESSION в раннере).
+  static Future<void> _owned(bool v) async {
+    try {
+      await const MethodChannel('nexus/hotkey')
+          .invokeMethod('proxyOwned', v)
+          .timeout(const Duration(seconds: 1));
+    } catch (_) {}
+  }
 
   // TUN на Windows — внутри DesktopCore (права администратора на всё
   // приложение, защищённая копия ядра, wintun.dll).
@@ -165,6 +192,7 @@ class WindowsOs extends DesktopOs {
 class LinuxOs extends DesktopOs {
   static const _tunDir = '/usr/local/lib/nexus';
   static const _tunCore = '$_tunDir/nexus-core';
+  static bool _dirLocked = false;
 
   @override
   String get dataDir {
@@ -173,7 +201,11 @@ class LinuxOs extends DesktopOs {
     final d = Directory('$base/nexus');
     if (!d.existsSync()) d.createSync(recursive: true);
     // Только владелец: здесь отметка о прокси и обновлённое ядро.
-    DesktopOs.run('chmod', ['700', d.path]);
+    // Один раз за запуск, а не при каждом обращении к папке.
+    if (!_dirLocked) {
+      _dirLocked = true;
+      DesktopOs.run('chmod', ['700', d.path]);
+    }
     return d.path;
   }
 
@@ -359,6 +391,35 @@ class LinuxOs extends DesktopOs {
   @override
   String get tunName => 'nexus0';
 
+  /// IPv6 в системе не выключен (sysctl или параметр ядра).
+  static bool _ipv6On() {
+    try {
+      return File('/proc/sys/net/ipv6/conf/all/disable_ipv6')
+              .readAsStringSync()
+              .trim() ==
+          '0';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Системный DNS ведёт systemd-resolved — тогда ядро само направит его
+  /// в туннель (иначе запросы к роутеру шли бы мимо VPN).
+  Future<bool> _resolvedActive() async {
+    if (_which('resolvectl') == null) return false;
+    final r = await DesktopOs.run('systemctl', ['is-active', 'systemd-resolved']);
+    if ('${r?.stdout ?? ''}'.trim() != 'active') return false;
+    try {
+      return File('/etc/resolv.conf').readAsStringSync().contains('127.0.0.53');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Map<String, dynamic> tunExtra() =>
+      {if (tunDnsToGateway) 'autoSystemDnsToGateway': true};
+
   @override
   Future<String?> tunBlocker() async {
     if (DesktopOs.coreSha.isEmpty) {
@@ -382,13 +443,20 @@ class LinuxOs extends DesktopOs {
   /// к сетевой карте). Полных прав root ядро не получает.
   @override
   Future<String> prepareTun(String bundledCore) async {
+    tunDnsToGateway = !tunPlain && await _resolvedActive();
+    tunIpv6 = !tunPlain && _ipv6On();
     final want = DesktopOs.coreSha;
     // Пакет .deb: ядро в /opt/nexus принадлежит root, право на управление
     // сетью ему выдал установщик — пароль не нужен.
+    // Запускать его может только группа «nexus»: нового пользователя
+    // установщик добавляет в неё, но группа действует после входа в
+    // систему заново — до тех пор работает копия ниже (с паролем).
+    const debCore = '/opt/nexus/tun/nexus-core';
     if (bundledCore.startsWith('/opt/nexus/') &&
-        await DesktopOs.shaOk(bundledCore, want) &&
-        await _hasCaps(bundledCore)) {
-      return bundledCore;
+        await DesktopOs.shaOk(debCore, want) &&
+        await _hasCaps(debCore) &&
+        (await DesktopOs.run('test', ['-x', debCore]))?.exitCode == 0) {
+      return debCore;
     }
     final gid = await _gid();
     if (await DesktopOs.shaOk(_tunCore, want) &&
@@ -584,6 +652,7 @@ class MacOs extends DesktopOs {
 
   @override
   Future<String> prepareTun(String bundledCore) async {
+    tunIpv6 = !tunPlain;
     if (!await DesktopOs.shaOk(bundledCore, DesktopOs.coreSha)) {
       throw Exception(tr('Файл {0} изменён после установки — запуск с правами администратора отменён. Переустановите Nexus', [kCoreExe]));
     }
@@ -615,6 +684,16 @@ class MacOs extends DesktopOs {
     // между записью и запуском (и заставить ядро от root писать в чужие
     // файлы) посторонняя программа не может.
     final cfgSha = sha256.convert(utf8.encode(config)).toString();
+    // Адрес DNS из конфига туннеля (только IP — он попадает в команду root).
+    var dns = '1.1.1.1';
+    try {
+      for (final ib in (jsonDecode(config)['inbounds'] as List)) {
+        if (ib is Map && ib['tag'] == 'tun-in') {
+          final d = '${((ib['settings'] as Map)['dns'] as List).first}';
+          if (InternetAddress.tryParse(d) != null) dns = d;
+        }
+      }
+    } catch (_) {}
     String q(String s) => "'${s.replaceAll("'", "'\\''")}'";
     const root = '/Library/Application Support/Nexus/core';
     final sh = [
@@ -631,8 +710,14 @@ class MacOs extends DesktopOs {
       'XRAY_LOCATION_ASSET=${q(assetDir)} ${q('$root/nexus-core')} run -c ${q('$root/run.json')} >/dev/null 2>&1 &',
       'CORE=\$!',
       'sleep 2; rm -f ${q('$root/run.json')}',
+      // Системный DNS — в туннель: иначе запросы к роутеру идут мимо VPN.
+      // Прежние значения записываются и возвращаются при отключении
+      // (и при следующем включении, если Mac выключили с VPN).
+      'DNSF=${q('$root/dns.saved')}',
+      ...macDnsScript(dns),
       'while kill -0 $pid 2>/dev/null && kill -0 \$CORE 2>/dev/null && [ ! -e ${q(stop.path)} ]; do sleep 1; done',
       'kill \$CORE 2>/dev/null || true',
+      'restore_dns || true',
     ].join('\n');
     final apple = 'do shell script ${_appleStr(sh)} with administrator privileges '
         'with prompt ${_appleStr(tr('Nexus включает режим TUN: весь трафик Mac пойдёт через VPN.'))}';
@@ -645,6 +730,16 @@ class MacOs extends DesktopOs {
     }));
     return p;
   }
+
+  /// Команды оболочки: запомнить DNS всех сетевых служб и поставить [dns].
+  /// В файл попадают только цифры, точки и двоеточия (или «Empty»).
+  static List<String> macDnsScript(String dns) => [
+        r'''restore_dns() { [ -f "$DNSF" ] || return 0; while IFS='|' read -r S D; do [ -n "$S" ] && networksetup -setdnsservers "$S" $D >/dev/null 2>&1; done < "$DNSF"; rm -f "$DNSF"; return 0; }''',
+        'restore_dns || true',
+        r'''networksetup -listallnetworkservices 2>/dev/null | tail -n +2 | grep -v '^\*' | while IFS= read -r S; do D=$(networksetup -getdnsservers "$S" 2>/dev/null | tr '\n' ' '); case "$D" in *[!0-9a-fA-F.:\ ]*) D=Empty;; esac; [ -n "${D# }" ] || D=Empty; printf '%s|%s\n' "$S" "$D" >> "$DNSF"; networksetup -setdnsservers "$S" '''
+            '$dns'
+            r''' >/dev/null 2>&1 || true; done || true''',
+      ];
 
   static String _appleStr(String s) =>
       '"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';

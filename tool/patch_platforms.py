@@ -313,7 +313,9 @@ def windows():
         ("  std::unique_ptr<flutter::FlutterViewController> flutter_controller_;\n",
          "  std::unique_ptr<flutter::FlutterViewController> flutter_controller_;\n\n"
          "  // Канал горячей клавиши Nexus (Ctrl+Alt+N).\n"
-         "  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> hotkey_channel_;\n"),
+         "  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> hotkey_channel_;\n"
+         "  // Nexus включил свой системный прокси (см. WM_ENDSESSION).\n"
+         "  bool proxy_owned_ = false;\n"),
     ])
     patch("windows/runner/flutter_window.cpp", [
         ("  RegisterPlugins(flutter_controller_->engine());\n",
@@ -332,11 +334,32 @@ def windows():
          "        } else if (call.method_name() == \"unregister\") {\n"
          "          UnregisterHotKey(GetHandle(), 0x4E58);\n"
          "          result->Success();\n"
+         "        } else if (call.method_name() == \"proxyOwned\") {\n"
+         "          const auto* v = std::get_if<bool>(call.arguments());\n"
+         "          proxy_owned_ = v != nullptr && *v;\n"
+         "          result->Success();\n"
          "        } else {\n"
          "          result->NotImplemented();\n"
          "        }\n"
          "      });\n"),
         ("    case WM_FONTCHANGE:\n",
+         # Выключение или выход из Windows при подключённом VPN: выключаем
+         # системный прокси, иначе после загрузки браузеры остались бы без
+         # интернета до запуска Nexus. Прежний прокси пользователя Nexus
+         # вернёт при следующем запуске (отметка proxy.lock).
+         "    case WM_ENDSESSION:\n"
+         "      if (wparam && proxy_owned_) {\n"
+         "        HKEY key;\n"
+         "        if (RegOpenKeyExW(HKEY_CURRENT_USER,\n"
+         "                L\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Internet Settings\",\n"
+         "                0, KEY_SET_VALUE, &key) == ERROR_SUCCESS) {\n"
+         "          DWORD off = 0;\n"
+         "          RegSetValueExW(key, L\"ProxyEnable\", 0, REG_DWORD,\n"
+         "                         reinterpret_cast<const BYTE*>(&off), sizeof(off));\n"
+         "          RegCloseKey(key);\n"
+         "        }\n"
+         "      }\n"
+         "      break;\n"
          "    case WM_HOTKEY:\n"
          "      if (wparam == 0x4E58 && hotkey_channel_) {\n"
          "        hotkey_channel_->InvokeMethod(\"hotkey\", nullptr);\n"

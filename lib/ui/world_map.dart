@@ -225,7 +225,10 @@ class _WorldMapState extends State<WorldMap>
 
   void _sync() {
     // Волны только при подключении — в покое карта не тратит батарею.
-    if (widget.active && !_pulse.isAnimating) {
+    // «Уменьшить движение» в системе — точка без бегущих волн.
+    final still = WidgetsBinding
+        .instance.platformDispatcher.accessibilityFeatures.disableAnimations;
+    if (widget.active && !still && !_pulse.isAnimating) {
       _pulse.repeat();
     } else if (!widget.active && _pulse.isAnimating) {
       _pulse.stop();

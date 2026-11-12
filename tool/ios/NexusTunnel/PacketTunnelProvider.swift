@@ -47,7 +47,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let d = NEDNSSettings(servers: [dns])
     d.matchDomains = [""]
     s.dnsSettings = d
-    s.mtu = 1500
+    s.mtu = 1400
 
     setTunnelNetworkSettings(s) { [weak self] error in
       guard let self = self else { return }

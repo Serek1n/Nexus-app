@@ -1,4 +1,5 @@
 import 'changelog.dart';
+import 'core/desktop_core.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -34,6 +35,11 @@ Future<void> main(List<String> args) async {
   final link = args.where((a) => a.toLowerCase().startsWith('nexus:')).firstOrNull;
 
   final desktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  if (desktop && args.contains('--restore-proxy')) {
+    // Удаление программы: возвращаем системный прокси и выходим без окна.
+    await DesktopCore.restoreProxyOnly();
+    exit(0);
+  }
   if (desktop) {
     // Второй запуск просто показывает уже открытое окно (и передаёт ссылку).
     var claimed = await WindowsHost.claimSingleInstance(link);
@@ -168,6 +174,10 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
+/// Тесты и снимки экранов: каждый прогон начинается с главной вкладки.
+@visibleForTesting
+void debugResetShellTab() => _ShellState._savedTab = 0;
+
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
   // Вкладка переживает пересборку интерфейса при смене языка.
   static int _savedTab = 0;
@@ -201,7 +211,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   /// (батарея). На Windows видимость окна отслеживает WindowsHost.
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid && !Platform.isIOS) return;
     AppScope.read(context).setWindowVisible(s == AppLifecycleState.resumed);
   }
 
@@ -259,7 +269,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               const SizedBox(height: 12),
               Text(
                 tr('Ссылка без шифрования: её могут подменить по дороге. Добавляйте, только если доверяете источнику.'),
-                style: const TextStyle(color: NX.amber, fontSize: 13),
+                style: TextStyle(color: NX.warn, fontSize: 13),
               ),
             ],
           ],
@@ -427,7 +437,14 @@ class _BottomBar extends StatelessWidget {
             children: [
               for (var i = 0; i < items.length; i++)
                 Expanded(
-                  child: InkWell(
+                  // Экранный диктор: «Серверы, вкладка, выбрано».
+                  child: Semantics(
+                    button: true,
+                    selected: current == i,
+                    label: items[i].$2,
+                    excludeSemantics: true,
+                    onTap: () => onTap(i),
+                    child: InkWell(
                     onTap: () => onTap(i),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -460,6 +477,7 @@ class _BottomBar extends StatelessWidget {
                             )),
                       ],
                     ),
+                  ),
                   ),
                 ),
             ],
@@ -629,16 +647,28 @@ class _TitleButtonState extends State<_TitleButton> {
   Widget build(BuildContext context) => MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Container(
-            width: 46,
-            height: 38,
-            color: _hover
-                ? (widget.close ? NX.red : Colors.white.withValues(alpha: 0.08))
-                : Colors.transparent,
-            child: Icon(widget.icon,
-                size: 16, color: _hover ? Colors.white : NX.text2),
+        child: Semantics(
+          button: true,
+          label: widget.close
+              ? tr('Закрыть')
+              : widget.icon == Icons.crop_square_rounded
+                  ? tr('Развернуть')
+                  : tr('Свернуть'),
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: Container(
+              width: 46,
+              height: 38,
+              // Подсветка из палитры темы: в светлой теме белая не видна.
+              color: _hover
+                  ? (widget.close ? NX.red : NX.strokeStrong)
+                  : Colors.transparent,
+              child: Icon(widget.icon,
+                  size: 16,
+                  color: _hover
+                      ? (widget.close ? Colors.white : NX.text)
+                      : NX.text2),
+            ),
           ),
         ),
       );

@@ -358,6 +358,8 @@ class AppState extends ChangeNotifier {
       }
     } catch (e) {
       updateStatus = _msg(e);
+      // Файл не прошёл повторную проверку и удалён — скачаем заново.
+      if (!f.existsSync()) updateFile = null;
     }
     notifyListeners();
   }
@@ -381,7 +383,9 @@ class AppState extends ChangeNotifier {
     final raw = _prefs.getString(key);
     if (raw == null) return '[]';
     if (raw.startsWith(_aks)) {
-      return await AndroidSystem.unprotect(raw.substring(_aks.length)) ?? '[]';
+      final v = await AndroidSystem.unprotect(raw.substring(_aks.length));
+      if (v == null) return _lockSecrets();
+      return v;
     }
     if (KeyringBox.isProtected(raw)) {
       final v = await KeyringBox.unprotect(raw);
@@ -392,7 +396,15 @@ class AppState extends ChangeNotifier {
       }
       return v;
     }
-    return WinDpapi.unprotect(raw) ?? '[]';
+    return WinDpapi.unprotect(raw) ?? _lockSecrets();
+  }
+
+  /// Расшифровать не удалось: зашифрованные данные не трогаем (следующее
+  /// сохранение иначе затёрло бы их пустым списком).
+  String _lockSecrets() {
+    _secretsLocked = true;
+    lastError = tr('Не удалось расшифровать сохранённые подписки — они не загружены. Перезапустите устройство; если не поможет — «Сбросить всё» в настройках и добавьте подписку заново');
+    return '[]';
   }
 
   Future<void> _writeSecret(String key, String value) async {
@@ -511,6 +523,14 @@ class AppState extends ChangeNotifier {
       exitWarning = r.country == 'RU' && serverCc != 'RU'
           ? tr('Сайты видят ваш российский IP — трафик идёт мимо VPN. Нажмите, чтобы переподключиться')
           : null;
+      // Режим TUN: проверяем ещё и обычный путь системы, а не только вход
+      // ядра — туннель мог не перехватить трафик компьютера.
+      if (exitWarning == null && core.tunActive && serverCc != 'RU') {
+        final sys = await NetProbe.exitInfo(null);
+        if (state == ConnState.connected && sys != null && sys.country == 'RU') {
+          exitWarning = tr('Режим TUN не перехватывает трафик: программы выходят в сеть с российским IP. Нажмите, чтобы переподключиться');
+        }
+      }
       if (exitWarning != null) core.note(tr('Внимание: трафик идёт мимо VPN'));
     }
     notifyListeners();
@@ -618,9 +638,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     selectedId = next.id;
     _save();
-    await core.disconnect();
-    await Future.delayed(const Duration(milliseconds: 400));
-    await connect(keepFailover: true);
+    await _restartCore(keepFailover: true);
+  }
+
+  /// Перезапуск соединения при смене сервера или настроек. На компьютере
+  /// ядро меняется «на месте»: системный прокси всё это время указывает
+  /// на Nexus, и программы не успевают выйти в сеть напрямую. На телефоне
+  /// интерфейс VPN приходится пересоздавать.
+  Future<void> _restartCore({bool keepFailover = false}) async {
+    if (!core.swapsInPlace || core.blocked) {
+      await core.disconnect();
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+    await connect(keepFailover: keepFailover, force: !keepFailover);
   }
 
   // ───────────── стабильность: автопереподключение и проверка канала ─────────────
@@ -766,8 +796,10 @@ class AppState extends ChangeNotifier {
     _healthTimer?.cancel();
     _netTimer?.cancel();
     _healthFails = 0;
-    if (!settings.autoReconnect) return;
+    // Канал проверяется всегда: «Подключено» не должно висеть при мёртвом
+    // сервере. Без «Держать соединение» Nexus только сообщает о сбое.
     _scheduleHealth(const Duration(seconds: 45));
+    if (!settings.autoReconnect) return;
     _networkSignature().then((v) => _netSig = v);
     _lastNetTick = DateTime.now();
     var tick = 0;
@@ -850,6 +882,15 @@ class AppState extends ChangeNotifier {
       return;
     }
     _healthFails++;
+    if (!settings.autoReconnect) {
+      if (_healthFails >= 2) {
+        liveLatency = -1;
+        reconnectNote = tr('Сервер не отвечает — трафик не идёт. Выберите другой сервер');
+        notifyListeners();
+      }
+      _scheduleHealth(Duration(seconds: _healthFails >= 2 ? 45 : 10));
+      return;
+    }
     // Только что сменилась сеть, а канал молчит — старые соединения ядра
     // остались на прежней сети. Не ждём повторной проверки, сразу
     // переподключаемся: связь возвращается на ~10 с быстрее.
@@ -1179,11 +1220,7 @@ class AppState extends ChangeNotifier {
     selectedId = s.id;
     _save();
     notifyListeners();
-    if (state == ConnState.connected) {
-      await core.disconnect();
-      await Future.delayed(const Duration(milliseconds: 400));
-      await connect(force: true);
-    }
+    if (state == ConnState.connected) await _restartCore();
     return wasAuto;
   }
 
@@ -1280,18 +1317,12 @@ class AppState extends ChangeNotifier {
       });
 
   /// Полное переподключение (в том числе после срабатывания kill switch).
-  Future<void> reconnect() async {
-    await core.disconnect();
-    await Future.delayed(const Duration(milliseconds: 300));
-    await connect(force: true);
-  }
+  Future<void> reconnect() => _restartCore();
 
   /// Перезапуск соединения после смены настроек маршрутизации.
   Future<void> reconnectIfActive() async {
     if (state != ConnState.connected) return;
-    await core.disconnect();
-    await Future.delayed(const Duration(milliseconds: 400));
-    await connect(force: true);
+    await _restartCore();
   }
 
   // ─────────────────────────────── пинг ───────────────────────────────
@@ -1762,7 +1793,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refresh(Subscription sub, {bool silent = false}) async {
-    refreshing.add(sub.id);
+    // Уже обновляется (таймер, подключение, кнопка) — второй запрос не нужен.
+    if (!refreshing.add(sub.id)) return;
     notifyListeners();
     try {
       final res = await _fetchSub(sub);

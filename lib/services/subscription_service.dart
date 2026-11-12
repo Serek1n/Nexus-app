@@ -66,12 +66,24 @@ List<String> extractLinks(String raw) {
     if (decoded != null && decoded.contains('://')) text = decoded;
   }
   // Повторы (одна ссылка дважды) убираем, порядок сохраняем.
-  return text
-      .split(RegExp(r'[\r\n\s]+'))
-      .map((l) => l.trim())
-      .where(isShareLink)
-      .toSet()
-      .toList();
+  // Строка-ссылка берётся целиком: в названии сервера после «#» бывают
+  // пробелы. Обычный текст со ссылками внутри режется по пробелам.
+  final out = <String>{};
+  for (final raw in text.split(RegExp(r'[\r\n]+'))) {
+    final line = raw.trim();
+    if (line.isEmpty) continue;
+    if (isShareLink(line) && line.contains('#')) {
+      final cut = line.indexOf('#');
+      // До «#» пробелов быть не может — иначе это несколько ссылок в строке.
+      if (!line.substring(0, cut).contains(RegExp(r'\s')) &&
+          !line.substring(cut).contains('://')) {
+        out.add(line);
+        continue;
+      }
+    }
+    out.addAll(line.split(RegExp(r'\s+')).where(isShareLink));
+  }
+  return out.toList();
 }
 
 /// Превращает ссылку в профиль. Возвращает null, если ссылку не удалось разобрать.
@@ -95,7 +107,18 @@ ServerProfile? profileFromLink(String link, {String? subscriptionId}) {
   try {
     final parsed = V2ray.parseFromURL(link);
     // Проверяем, что конфиг вообще собирается.
-    parsed.getFullConfiguration();
+    final built = parsed.getFullConfiguration();
+    // Транспорты, которые ядро Xray больше не поддерживает: с таким
+    // сервером оно не запустится (а в режиме «Авто» — со всеми сразу).
+    try {
+      final ob = ((jsonDecode(built) as Map)['outbounds'] as List).first as Map;
+      final net = '${(ob['streamSettings'] as Map?)?['network'] ?? ''}';
+      if (const {'h2', 'http', 'quic'}.contains(net)) {
+        throw FormatException('unsupported transport $net');
+      }
+    } on FormatException {
+      rethrow;
+    } catch (_) {}
     final scheme = link.substring(0, link.indexOf('://')).toLowerCase();
     var name = parsed.remark.trim();
     if (name.isEmpty) name = '${parsed.address}:${parsed.port}';
@@ -248,7 +271,13 @@ class SubscriptionService {
         if (deviceId != null && current.host == uri.host) {
           req.headers['X-HWID'] = deviceId!;
           req.headers['X-Device-OS'] =
-              Platform.isAndroid ? 'Android' : 'Windows';
+              switch (Platform.operatingSystem) {
+        'android' => 'Android',
+        'ios' => 'iOS',
+        'macos' => 'macOS',
+        'linux' => 'Linux',
+        _ => 'Windows',
+      };
           req.headers['X-Device-Model'] = 'Nexus';
           final ver = Platform.operatingSystemVersion;
           req.headers['X-Ver-OS'] =

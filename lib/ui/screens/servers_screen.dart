@@ -307,7 +307,7 @@ class _Chip extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icon != null) ...[
-                    Icon(icon, size: 15, color: NX.amber),
+                    Icon(icon, size: 15, color: NX.warn),
                     const SizedBox(width: 5),
                   ],
                   ConstrainedBox(
@@ -473,7 +473,7 @@ class _ServerTile extends StatelessWidget {
               children: [
                 Row(children: [
                   if (app.isFavorite(server)) ...[
-                    const Icon(Icons.star_rounded, size: 16, color: NX.amber),
+                    Icon(Icons.star_rounded, size: 16, color: NX.warn),
                     const SizedBox(width: 4),
                   ],
                   // Исключён из режима «Авто».
@@ -502,7 +502,7 @@ class _ServerTile extends StatelessWidget {
                         color: server.mbps! >= 50
                             ? NX.mint
                             : server.mbps! >= 10
-                                ? NX.amber
+                                ? NX.warn
                                 : NX.red),
                   ],
                   if (live) ...[
@@ -611,7 +611,7 @@ class _ServerTile extends StatelessWidget {
                     app.isFavorite(server)
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
-                    color: NX.amber),
+                    color: NX.warn),
                 title: Text(app.isFavorite(server)
                     ? tr('Убрать из избранного')
                     : tr('В избранное')),

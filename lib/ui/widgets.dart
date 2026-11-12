@@ -313,16 +313,11 @@ class Tag extends StatelessWidget {
             style: TextStyle(
                 // На светлом фоне яркие оттенки (бирюзовый, мятный) почти
                 // сливаются с подложкой — текст метки делаем темнее.
-                color: NX.light ? _ink(color) : color,
+                color: NX.ink(color),
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.4)),
       );
-}
-
-Color _ink(Color c) {
-  final h = HSLColor.fromColor(c);
-  return h.lightness > 0.38 ? h.withLightness(0.36).toColor() : c;
 }
 
 /// Основная кнопка: сплошной акцент, без свечения.
@@ -368,7 +363,7 @@ class NeonButton extends StatelessWidget {
             ? NX.red.withValues(alpha: 0.1)
             : secondary
                 ? NX.surface2
-                : NX.violet,
+                : NX.action,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),

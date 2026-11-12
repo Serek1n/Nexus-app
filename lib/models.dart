@@ -198,6 +198,17 @@ const _countryWords = <String, List<String>>{
   'uz': ['узбекистан', 'uzbekistan'],
 };
 
+/// Строка правила — IPv4-адрес или подсеть («1.2.3.4», «10.0.0.0/8»).
+bool isIpRule(String t) {
+  final m = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:/(\d{1,2}))?$')
+      .firstMatch(t);
+  if (m == null) return false;
+  for (var i = 1; i <= 4; i++) {
+    if (int.parse(m[i]!) > 255) return false;
+  }
+  return m[5] == null || int.parse(m[5]!) <= 32;
+}
+
 /// Разбор своих правил: по одному сайту или IP в строке. Принимает
 /// «https://site.com/path», «*.site.com», «site.com», «1.2.3.4», «10.0.0.0/8».
 List<String> parseRuleList(String text) {
@@ -211,8 +222,9 @@ List<String> parseRuleList(String text) {
       t = t.split('/').first;
     }
     t = t.replaceFirst(RegExp(r'^\*?\.'), '');
-    if (RegExp(r'^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$').hasMatch(t) ||
-        RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$').hasMatch(t)) {
+    // Похоже на адрес, но не адрес («999.1.1.1», «10.0.0.0/99») — пропускаем.
+    final ipLike = RegExp(r'^[\d.]+(/\d+)?$').hasMatch(t);
+    if (ipLike ? isIpRule(t) : RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$').hasMatch(t)) {
       out.add(t);
     } else if (RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+:\d+$').hasMatch(t)) {
       out.add(t.split(':').first);

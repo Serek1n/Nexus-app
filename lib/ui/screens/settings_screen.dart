@@ -23,6 +23,7 @@ import '../rollback_sheet.dart';
 import 'apps_screen.dart';
 import '../../l10n.dart';
 import '../../platform/secure_clipboard.dart';
+import '../../platform/keyring_box.dart';
 
 
 class SettingsScreen extends StatelessWidget {
@@ -470,7 +471,7 @@ class SettingsScreen extends StatelessWidget {
                   switchRow(
                     Icons.lan_rounded,
                     tr('Системный прокси'),
-                    tr('Браузеры и программы {0} автоматически пойдут через Nexus', [platformName()]),
+                    tr('Браузеры и программы {0} автоматически пойдут через Nexus. Программы, которые не смотрят на системный прокси (игры, часть мессенджеров, звонки), идут напрямую — для них включите TUN', [platformName()]),
                     st.windowsSystemProxy,
                     (v) async {
                       app.updateSettings((s) => s.windowsSystemProxy = v);
@@ -499,7 +500,7 @@ class SettingsScreen extends StatelessWidget {
                   switchRow(
                     Icons.password_rounded,
                     tr('SOCKS-прокси с паролем'),
-                    tr('Другие программы на компьютере не смогут незаметно пользоваться вашим VPN. Telegram получит пароль кнопкой ниже'),
+                    tr('Пароль на SOCKS-вход Nexus; Telegram получит его кнопкой ниже. HTTP-вход для системного прокси остаётся без пароля'),
                     st.socksAuth,
                     (v) => app.setSocksAuth(v),
                   ),                  const Divider(height: 14),
@@ -745,8 +746,16 @@ class SettingsScreen extends StatelessWidget {
                   )
                 : const _AndroidBackground(),
           ),
-          if (pro && app.isDesktop) ...[
+          if (app.isDesktop) ...[
             SectionTitle(tr('Защита')),
+            if (KeyringBox.supported && KeyringBox.plainFallback)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+                child: Text(
+                  tr('Системная связка ключей недоступна — подписки и ключи хранятся без шифрования (файл закрыт от других пользователей). Установите и разблокируйте GNOME Keyring или KWallet'),
+                  style: TextStyle(color: NX.warn, fontSize: 12.5, height: 1.35),
+                ),
+              ),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
               child: Column(
@@ -754,7 +763,9 @@ class SettingsScreen extends StatelessWidget {
                   switchRow(
                     Icons.shield_rounded,
                     'Kill switch',
-                    tr('Если VPN оборвётся, интернет блокируется, а не идёт напрямую'),
+                    st.windowsTun
+                        ? tr('В режиме TUN не действует: если ядро остановится, трафик пойдёт напрямую. Работает только с системным прокси')
+                        : tr('Если VPN оборвётся, браузеры и программы, которые ходят через системный прокси, останутся без интернета, а не пойдут напрямую. Остальные программы защищает только режим TUN'),
                     st.windowsKillSwitch,
                     (v) => app.updateSettings((s) => s.windowsKillSwitch = v),
                   ),
@@ -770,7 +781,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ],
-          if (pro && !app.isDesktop) ...[
+          if (!app.isDesktop) ...[
             SectionTitle(tr('Защита')),
             NeonCard(
               padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
@@ -1462,7 +1473,7 @@ class _AndroidBackgroundState extends State<_AndroidBackground>
       child: Row(
         children: [
           Icon(ok ? Icons.battery_full_rounded : Icons.battery_alert_rounded,
-              color: ok ? NX.mint : NX.amber, size: 21),
+              color: ok ? NX.mint : NX.warn, size: 21),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
