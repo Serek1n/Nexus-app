@@ -301,13 +301,13 @@ class _ServersScreenState extends State<ServersScreen> {
     );
     // Большое окно: список слева, сведения о выбранном сервере справа.
     return LayoutBuilder(
-      builder: (_, c) => c.maxWidth < 980
+      builder: (_, c) => c.maxWidth < 880
           ? listView
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: listView),
-                const SizedBox(width: 340, child: _ServerDetails()),
+                const SizedBox(width: 320, child: _ServerDetails()),
               ],
             ),
     );

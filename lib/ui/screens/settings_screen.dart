@@ -306,7 +306,7 @@ class SettingsScreen extends StatelessWidget {
     }
 
     // Настройки внутри окна до 1060 точек; колонка разделов — от 900.
-    final wideNav = MediaQuery.sizeOf(context).width >= 1200;
+    final wideNav = MediaQuery.sizeOf(context).width >= 1100;
     final list = SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Column(
@@ -1281,9 +1281,11 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
 
+    // SizedBox.expand: родитель (AnimatedSwitcher) даёт свободные
+    // ограничения, и короткий список иначе встал бы по центру экрана.
     return SafeArea(
       bottom: false,
-      child: !wideNav
+      child: SizedBox.expand(child: !wideNav
           ? list
           // Большое окно: разделы слева, содержимое справа.
           : Row(
@@ -1313,7 +1315,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 Expanded(child: list),
               ],
-            ),
+            )),
     );
   }
 
