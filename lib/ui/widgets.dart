@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -18,6 +19,9 @@ class NeonBackground extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         ColoredBox(color: NX.bg),
+        // Сезон: закатное небо, солнце, горизонт и пальмы — за интерфейсом.
+        if (NX.season)
+          const RepaintBoundary(child: CustomPaint(painter: _SunsetPainter())),
         AnimatedContainer(
           duration: const Duration(milliseconds: 700),
           decoration: BoxDecoration(
@@ -35,6 +39,128 @@ class NeonBackground extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Фон сезонного оформления «Неоновый закат». Рисуется один раз, без
+/// анимации: интерфейс поверх него остаётся читаемым (всё приглушено).
+class _SunsetPainter extends CustomPainter {
+  const _SunsetPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final horizon = h * 0.74;
+
+    // Небо: ночь сверху, малиновое зарево к горизонту.
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF130A20),
+            Color(0xFF1E0C30),
+            Color(0xFF3A1240),
+            Color(0xFF1A0B26),
+          ],
+          stops: [0, 0.45, 0.74, 1],
+        ).createShader(Offset.zero & size),
+    );
+
+    // Солнце с прорезями — ретро-закат.
+    final r = (w < h ? w : h * 0.8) * 0.3;
+    final sun = Rect.fromCircle(center: Offset(w / 2, horizon), radius: r);
+    canvas.saveLayer(sun.inflate(2), Paint());
+    canvas.drawCircle(
+      sun.center,
+      r,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x66FFD25E), Color(0x66FF7A3D), Color(0x55FF3E8E)],
+        ).createShader(sun),
+    );
+    final cut = Paint()..blendMode = BlendMode.clear;
+    for (var i = 0; i < 6; i++) {
+      final y = horizon - r * 0.55 + i * r * 0.11;
+      canvas.drawRect(
+          Rect.fromLTWH(sun.left, y, sun.width, 2.0 + i * 1.6), cut);
+    }
+    canvas.restore();
+
+    // Ночное море: ниже горизонта темнее, с отблеском.
+    canvas.drawRect(
+      Rect.fromLTWH(0, horizon, w, h - horizon),
+      Paint()..color = const Color(0xE6120820),
+    );
+    for (var i = 0; i < 7; i++) {
+      final y = horizon + 8 + i * i * 2.6;
+      final half = r * (0.9 - i * 0.1);
+      canvas.drawLine(
+        Offset(w / 2 - half, y),
+        Offset(w / 2 + half, y),
+        Paint()
+          ..color = Color.fromARGB(70 - i * 8, 0xFF, 0x6A, 0x9E)
+          ..strokeWidth = 1.4,
+      );
+    }
+
+    // Неоновая линия горизонта.
+    final line = Paint()
+      ..color = const Color(0x99FF5FA2)
+      ..strokeWidth = 1.2;
+    canvas.drawLine(Offset(0, horizon), Offset(w, horizon), line);
+    canvas.drawLine(
+      Offset(0, horizon),
+      Offset(w, horizon),
+      Paint()
+        ..color = const Color(0x40FF5FA2)
+        ..strokeWidth = 8
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+
+    // Пальмы по краям — силуэты.
+    final s = (h * 0.42).clamp(160.0, 420.0);
+    _palm(canvas, Offset(w * 0.06, h), s, 0.18);
+    _palm(canvas, Offset(w * 0.94, h), s * 0.86, -0.22);
+    if (w > 700) _palm(canvas, Offset(w * 0.16, h), s * 0.62, 0.05);
+  }
+
+  /// Пальма: изогнутый ствол и веер листьев из основания [base].
+  void _palm(Canvas c, Offset base, double size, double lean) {
+    final dark = Paint()
+      ..color = const Color(0xFF0A0512)
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final top = base + Offset(size * lean * 1.4, -size);
+    final trunk = Path()
+      ..moveTo(base.dx, base.dy)
+      ..quadraticBezierTo(base.dx + size * lean * 0.2, base.dy - size * 0.55,
+          top.dx, top.dy);
+    c.drawPath(trunk, dark..strokeWidth = size * 0.045);
+    final leaf = Paint()..color = const Color(0xFF0A0512);
+    for (final a in [-2.7, -2.25, -1.8, -1.35, -0.9, -0.45, -0.05]) {
+      final len = size * (0.42 + 0.06 * (a.abs() % 1));
+      final tip = top + Offset(len * _cos(a), len * _sin(a) + len * 0.35);
+      final mid = top + Offset(len * 0.55 * _cos(a), len * 0.55 * _sin(a) - len * 0.08);
+      final n = Offset(-_sin(a), _cos(a)) * (size * 0.035);
+      c.drawPath(
+        Path()
+          ..moveTo(top.dx, top.dy)
+          ..quadraticBezierTo(mid.dx + n.dx, mid.dy + n.dy, tip.dx, tip.dy)
+          ..quadraticBezierTo(mid.dx - n.dx, mid.dy - n.dy, top.dx, top.dy),
+        leaf,
+      );
+    }
+  }
+
+  static double _cos(double a) => math.cos(a);
+  static double _sin(double a) => math.sin(a);
+
+  @override
+  bool shouldRepaint(covariant _SunsetPainter old) => false;
 }
 
 /// Карточка: сплошная поверхность и тонкая граница.
@@ -86,16 +212,17 @@ class NeonCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.active = false,
-    this.accent = NX.violet,
+    Color? accent,
     this.radius = 16,
-  });
+  }) : _accent = accent;
 
   final Widget child;
   final EdgeInsets padding;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final bool active;
-  final Color accent;
+  final Color? _accent;
+  Color get accent => _accent ?? NX.violet;
   final double radius;
 
   @override
@@ -132,10 +259,12 @@ class NeonCard extends StatelessWidget {
 /// Текст с градиентной заливкой (используется точечно).
 class GradientText extends StatelessWidget {
   const GradientText(this.text,
-      {super.key, required this.style, this.gradient = NX.neon});
+      {super.key, required this.style, Gradient? gradient})
+      : _gradient = gradient;
   final String text;
   final TextStyle style;
-  final Gradient gradient;
+  final Gradient? _gradient;
+  Gradient get gradient => _gradient ?? NX.neon;
 
   @override
   Widget build(BuildContext context) => ShaderMask(

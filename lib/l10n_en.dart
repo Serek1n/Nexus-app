@@ -535,6 +535,8 @@ const kEn = <String, String>{
       'Wrong PIN',
   'Неверный пароль':
       'Wrong password',
+  'Неоновый закат':
+      'Neon Sunset',
   'Нет интернета даже без VPN — проверьте Wi-Fi или мобильные данные.':
       'No internet even without the VPN — check Wi-Fi or mobile data.',
   'Нет контрольной суммы для {0}':
@@ -759,6 +761,8 @@ const kEn = <String, String>{
       'Pull the list down to refresh all',
   'Права администратора: ядро запускается из защищённой папки':
       'Administrator rights: the core runs from a protected folder',
+  'Праздничное оформление до 30 ноября: закатное небо, неон и пальмы. Только в тёмной теме':
+      'Special look until November 30: sunset sky, neon and palm trees. Dark theme only',
   'При запуске, подключении и переподключении VPN':
       'On launch, connect and reconnect',
   'Приложения без VPN':

@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../changelog.dart' show appVersion, appVersionLabel;
 import '../core/vpn_core.dart';
-import '../ui/theme.dart' show NX;
+import '../ui/theme.dart' show NX, Season;
 import '../services/pin.dart';
 import '../services/deep_links.dart';
 import '../services/app_updater.dart';
@@ -1270,7 +1270,8 @@ class AppState extends ChangeNotifier {
   final language = ValueNotifier<String>(L10n.lang);
 
   /// Светлая тема сейчас (интерфейс перестраивается при смене).
-  final themeLight = ValueNotifier<bool>(false);
+  /// Оформление: 'dark', 'light' или 'season' — смена пересобирает интерфейс.
+  final themeLook = ValueNotifier<String>('dark');
 
   /// Применяет оформление из настроек (и системную тему для «Как в системе»).
   void applyTheme() {
@@ -1281,7 +1282,8 @@ class AppState extends ChangeNotifier {
       _ => false,
     };
     NX.light = light;
-    themeLight.value = light;
+    NX.season = !light && !settings.seasonOff && Season.running;
+    themeLook.value = light ? 'light' : NX.season ? 'season' : 'dark';
     if (!isDesktop) {
       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
         statusBarColor: const Color(0x00000000),
@@ -1295,6 +1297,12 @@ class AppState extends ChangeNotifier {
 
   void setTheme(String v) {
     updateSettings((s) => s.theme = v);
+    applyTheme();
+  }
+
+  /// Включает или выключает сезонное оформление.
+  void setSeason(bool on) {
+    updateSettings((s) => s.seasonOff = !on);
     applyTheme();
   }
 

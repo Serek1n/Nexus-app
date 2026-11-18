@@ -357,7 +357,7 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => _editRules(context),
             child: Row(
               children: [
-                const Icon(Icons.rule_rounded, color: NX.violet, size: 21),
+                Icon(Icons.rule_rounded, color: NX.violet, size: 21),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -402,7 +402,7 @@ class SettingsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  const Icon(Icons.dns_rounded, color: NX.violet, size: 21),
+                  Icon(Icons.dns_rounded, color: NX.violet, size: 21),
                   const SizedBox(width: 14),
                   Text(tr('DNS'),
                       style: const TextStyle(
@@ -439,7 +439,7 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => _editApps(context),
               child: Row(
                 children: [
-                  const Icon(Icons.apps_rounded, color: NX.violet, size: 21),
+                  Icon(Icons.apps_rounded, color: NX.violet, size: 21),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -470,7 +470,7 @@ class SettingsScreen extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const AppsScreen())),
               child: Row(
                 children: [
-                  const Icon(Icons.apps_rounded, color: NX.violet, size: 21),
+                  Icon(Icons.apps_rounded, color: NX.violet, size: 21),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -546,7 +546,7 @@ class SettingsScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.settings_ethernet_rounded,
+                        Icon(Icons.settings_ethernet_rounded,
                             color: NX.violet, size: 21),
                         const SizedBox(width: 14),
                         Expanded(
@@ -627,7 +627,7 @@ class SettingsScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(children: [
-                      const Icon(Icons.vpn_lock_rounded,
+                      Icon(Icons.vpn_lock_rounded,
                           color: NX.violet, size: 21),
                       const SizedBox(width: 14),
                       Expanded(
@@ -952,7 +952,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.memory_rounded,
+                    Icon(Icons.memory_rounded,
                         color: NX.violet, size: 21),
                     const SizedBox(width: 14),
                     Expanded(
@@ -1010,7 +1010,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.system_update_rounded,
+                    Icon(Icons.system_update_rounded,
                         color: NX.violet, size: 21),
                     const SizedBox(width: 14),
                     Expanded(
@@ -1143,7 +1143,7 @@ class SettingsScreen extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(children: [
-                        const Icon(Icons.password_rounded, color: NX.violet, size: 21),
+                        Icon(Icons.password_rounded, color: NX.violet, size: 21),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(tr('Сменить PIN-код'),
@@ -1208,6 +1208,18 @@ class SettingsScreen extends StatelessWidget {
                     selected: st.theme == v,
                     showCheckmark: false,
                     onSelected: (_) => app.setTheme(v),
+                  ),
+                // Сезонное оформление — пока идёт сезон.
+                if (Season.running)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: switchRow(
+                      Icons.wb_twilight_rounded,
+                      tr('Неоновый закат'),
+                      tr('Праздничное оформление до 30 ноября: закатное небо, неон и пальмы. Только в тёмной теме'),
+                      !st.seasonOff,
+                      app.setSeason,
+                    ),
                   ),
               ],
             ),

@@ -83,9 +83,9 @@ class SubscriptionsScreen extends StatelessWidget {
               // Под списком — понятное действие вместо пустоты.
               TextButton.icon(
                 onPressed: () => showAddSheet(context),
-                icon: const Icon(Icons.add_rounded, color: NX.violet),
+                icon: Icon(Icons.add_rounded, color: NX.violet),
                 label: Text(tr('Добавить подписку'),
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: NX.violet, fontWeight: FontWeight.w700)),
               ),
               if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS))
@@ -146,7 +146,7 @@ class _SubCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   color: NX.violet.withValues(alpha: 0.14),
                 ),
-                child: const Icon(Icons.workspace_premium_rounded,
+                child: Icon(Icons.workspace_premium_rounded,
                     color: NX.violet, size: 21),
               ),
               const SizedBox(width: 12),
@@ -316,7 +316,7 @@ class _SubCard extends StatelessWidget {
                           visualDensity: VisualDensity.compact),
                       onPressed: () => openWebLink(
                           renewUrlFor(sub.webPageUrl, sub.supportUrl)!),
-                      icon: const Icon(Icons.autorenew_rounded,
+                      icon: Icon(Icons.autorenew_rounded,
                           size: 17, color: NX.violet),
                       label: Text(tr('Продлить'),
                           style: TextStyle(

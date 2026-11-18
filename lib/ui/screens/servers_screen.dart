@@ -799,7 +799,7 @@ class _ServerTile extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.speed_rounded, color: NX.cyan),
+                leading: Icon(Icons.speed_rounded, color: NX.cyan),
                 title: Text(tr('Проверить задержку')),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -807,7 +807,7 @@ class _ServerTile extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.qr_code_2_rounded, color: NX.violet),
+                leading: Icon(Icons.qr_code_2_rounded, color: NX.violet),
                 title: Text(tr('Поделиться (QR)')),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -820,7 +820,7 @@ class _ServerTile extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.copy_rounded, color: NX.violet),
+                leading: Icon(Icons.copy_rounded, color: NX.violet),
                 title: Text(tr('Скопировать ключ')),
                 onTap: () {
                   copySecret(server.link);

@@ -140,15 +140,15 @@ class NexusApp extends StatelessWidget {
     // (пинг, прогресс) перестраивало бы всё приложение.
     return AppScope(
       state: state,
-      child: ValueListenableBuilder<bool>(
-        valueListenable: state.themeLight,
-        builder: (_, light, __) => ValueListenableBuilder<String>(
+      child: ValueListenableBuilder<String>(
+        valueListenable: state.themeLook,
+        builder: (_, look, __) => ValueListenableBuilder<String>(
         valueListenable: state.language,
         builder: (_, lang, __) => MaterialApp(
-        key: ValueKey(_lookChanged('$lang|$light')),
+        key: ValueKey(_lookChanged('$lang|$look')),
         title: 'Nexus',
         debugShowCheckedModeBanner: false,
-        theme: _themes[light] ??= buildTheme(),
+        theme: _themes[look] ??= buildTheme(),
         locale: Locale(lang),
         supportedLocales: const [Locale('ru'), Locale('en')],
         localizationsDelegates: const [
@@ -191,7 +191,7 @@ String _lookChanged(String look) {
 }
 
 /// Темы создаются по одному разу (тёмная и светлая).
-final _themes = <bool, ThemeData>{};
+final _themes = <String, ThemeData>{};
 
 class Shell extends StatefulWidget {
   const Shell({super.key});

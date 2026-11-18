@@ -6,36 +6,89 @@ class NX {
   /// Светлая тема включена (меняется только при перестройке интерфейса).
   static bool light = false;
 
-  // Нейтральные цвета — свои для тёмной и светлой темы.
-  static Color get bg => light ? const Color(0xFFF4F4F8) : const Color(0xFF0B0B10);
-  static Color get bg2 => light ? const Color(0xFFEDEDF3) : const Color(0xFF0F0F15);
-  static Color get surface => light ? const Color(0xFFFFFFFF) : const Color(0xFF15151C);
-  static Color get surface2 => light ? const Color(0xFFF0F0F5) : const Color(0xFF1D1D26);
-  /// Выбранный чип: фиолетовый оттенок поверх фона.
-  static Color get chipSelected =>
-      light ? const Color(0xFFE6E1FF) : const Color(0xFF2A2547);
+  /// Сезонное оформление «Неоновый закат» (только в тёмной теме, до
+  /// [Season.until]). Меняется только при перестройке интерфейса.
+  static bool season = false;
+
+  // Нейтральные цвета — свои для тёмной, светлой и сезонной темы.
+  static Color get bg => light
+      ? const Color(0xFFF4F4F8)
+      : season
+          ? const Color(0xFF130A20)
+          : const Color(0xFF0B0B10);
+  static Color get bg2 => light
+      ? const Color(0xFFEDEDF3)
+      : season
+          ? const Color(0xFF180D28)
+          : const Color(0xFF0F0F15);
+  static Color get surface => light
+      ? const Color(0xFFFFFFFF)
+      : season
+          ? const Color(0xEE1F1231)
+          : const Color(0xFF15151C);
+  static Color get surface2 => light
+      ? const Color(0xFFF0F0F5)
+      : season
+          ? const Color(0xFF2C1A43)
+          : const Color(0xFF1D1D26);
+  /// Выбранный чип: оттенок акцента поверх фона.
+  static Color get chipSelected => light
+      ? const Color(0xFFE6E1FF)
+      : season
+          ? const Color(0xFF4C1D4F)
+          : const Color(0xFF2A2547);
 
   /// Лёгкая подсветка при наведении/нажатии (белая на тёмном, чёрная на светлом).
   static Color get hover => light ? const Color(0x0A000000) : const Color(0x08FFFFFF);
-  static Color get stroke => light ? const Color(0x14000000) : const Color(0x12FFFFFF);
-  static Color get strokeStrong => light ? const Color(0x24000000) : const Color(0x22FFFFFF);
+  static Color get stroke => light
+      ? const Color(0x14000000)
+      : season
+          ? const Color(0x22FF7AB8)
+          : const Color(0x12FFFFFF);
+  static Color get strokeStrong => light
+      ? const Color(0x24000000)
+      : season
+          ? const Color(0x40FF7AB8)
+          : const Color(0x22FFFFFF);
 
-  static const violet = Color(0xFF8B7CF6);
-  static const indigo = Color(0xFF6E68F0);
-  static const cyan = Color(0xFF4FC9E3);
+  /// Главный акцент (в сезон — закатный розовый).
+  static Color get violet =>
+      season ? const Color(0xFFFF5FA2) : const Color(0xFF8B7CF6);
+
+  /// Второй цвет градиента (в сезон — оранжевый закат).
+  static Color get indigo =>
+      season ? const Color(0xFFFF8A3D) : const Color(0xFF6E68F0);
+
+  /// Бирюзовый (в сезон — морская волна).
+  static Color get cyan =>
+      season ? const Color(0xFF2DE2E6) : const Color(0xFF4FC9E3);
   static const mint = Color(0xFF3DDC97);
-  static const pink = Color(0xFFF07AAE);
+  static Color get pink =>
+      season ? const Color(0xFFFFA24C) : const Color(0xFFF07AAE);
   static const amber = Color(0xFFF2B544);
   static const red = Color(0xFFF0566E);
 
-  static Color get text => light ? const Color(0xFF16161D) : const Color(0xFFECECF1);
-  static Color get text2 => light ? const Color(0xFF5A5A6A) : const Color(0xFF9C9CAD);
+  static Color get text => light
+      ? const Color(0xFF16161D)
+      : season
+          ? const Color(0xFFF7EEF8)
+          : const Color(0xFFECECF1);
+  static Color get text2 => light
+      ? const Color(0xFF5A5A6A)
+      : season
+          ? const Color(0xFFC0ADCF)
+          : const Color(0xFF9C9CAD);
   // Третичный текст (подсказки, неактивные вкладки): контраст с фоном
-  // не ниже 4,5:1 в обеих темах.
-  static Color get text3 => light ? const Color(0xFF666675) : const Color(0xFF8A8A99);
+  // не ниже 4,5:1 во всех темах.
+  static Color get text3 => light
+      ? const Color(0xFF666675)
+      : season
+          ? const Color(0xFFA08EB4)
+          : const Color(0xFF8A8A99);
 
-  /// Заливка основной кнопки: белый текст на ней читается (4,8:1).
-  static const action = Color(0xFF6E5CE6);
+  /// Заливка основной кнопки: белый текст на ней читается (от 4,5:1).
+  static Color get action =>
+      season ? const Color(0xFFC8246E) : const Color(0xFF6E5CE6);
 
   /// Цвет для текста и значков: на светлом фоне яркие оттенки (мятный,
   /// жёлтый, бирюзовый) затемняются до контраста 4,5:1, на тёмном — как есть.
@@ -57,12 +110,12 @@ class NX {
   static Color get warn => ink(amber);
   static Color get ok => ink(mint);
 
-  static const neon = LinearGradient(
+  static LinearGradient get neon => LinearGradient(
     colors: [violet, indigo],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  static const live = LinearGradient(
+  static LinearGradient get live => LinearGradient(
     colors: [mint, cyan],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -159,7 +212,7 @@ ThemeData buildTheme() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: NX.violet, width: 1.4),
+        borderSide: BorderSide(color: NX.violet, width: 1.4),
       ),
     ),
     switchTheme: SwitchThemeData(
@@ -207,7 +260,7 @@ ThemeData buildTheme() {
       showCheckmark: true,
     ),
     progressIndicatorTheme:
-        const ProgressIndicatorThemeData(color: NX.violet),
+        ProgressIndicatorThemeData(color: NX.violet),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: NX.surface2,
@@ -277,4 +330,13 @@ abstract final class NXFont {
 
   /// Крупные цифры (таймер, скорость).
   static const double display = 28;
+}
+
+/// Сезонное оформление «Неоновый закат»: тропическая ночь, закатное небо,
+/// неон. Работает до конца [until] по местному времени устройства.
+abstract final class Season {
+  /// Последний день оформления — 30 ноября 2026 включительно.
+  static final until = DateTime(2026, 12, 1);
+
+  static bool get running => DateTime.now().isBefore(until);
 }

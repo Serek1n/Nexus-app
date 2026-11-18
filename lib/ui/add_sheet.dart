@@ -216,7 +216,7 @@ class _AddFormState extends State<_AddForm> {
               shape: BoxShape.circle,
             ),
             child: Text(n,
-                style: const TextStyle(
+                style: TextStyle(
                     color: NX.violet, fontWeight: FontWeight.w800, fontSize: NXFont.sub)),
           ),
           const SizedBox(width: 10),

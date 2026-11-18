@@ -71,7 +71,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               if (top != null) ...[top, const SizedBox(height: 28)],
               Text(n,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: NX.violet,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 2,

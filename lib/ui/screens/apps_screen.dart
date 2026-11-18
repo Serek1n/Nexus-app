@@ -86,7 +86,7 @@ class _AppsScreenState extends State<AppsScreen> {
                   padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.flag_rounded, color: NX.violet, size: 20),
+                      Icon(Icons.flag_rounded, color: NX.violet, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(

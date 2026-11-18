@@ -399,6 +399,7 @@ class AppSettings {
     this.windowsKillSwitch = true,
     this.iosKillSwitch = false,
     this.bootConnect = false,
+    this.seasonOff = false,
     this.windowsTun = false,
     this.clearClipboard = true,
     this.autoFailover = true,
@@ -471,6 +472,9 @@ class AppSettings {
 
   /// Android: подключаться после перезагрузки телефона (без открытия Nexus).
   bool bootConnect;
+
+  /// Пользователь выключил сезонное оформление «Неоновый закат».
+  bool seasonOff;
 
   /// Windows: режим TUN — через Nexus идут все программы (нужны права администратора).
   bool windowsTun;
@@ -576,6 +580,7 @@ class AppSettings {
         'windowsKillSwitch': windowsKillSwitch,
         'iosKillSwitch': iosKillSwitch,
         'bootConnect': bootConnect,
+        'seasonOff': seasonOff,
         'windowsTun': windowsTun,
         'clearClipboard': clearClipboard,
         'autoFailover': autoFailover,
@@ -628,6 +633,7 @@ class AppSettings {
         windowsKillSwitch: j['windowsKillSwitch'] as bool? ?? true,
         iosKillSwitch: j['iosKillSwitch'] as bool? ?? false,
         bootConnect: j['bootConnect'] as bool? ?? false,
+        seasonOff: j['seasonOff'] as bool? ?? false,
         windowsTun: j['windowsTun'] as bool? ?? false,
         clearClipboard: j['clearClipboard'] as bool? ?? true,
         autoFailover: j['autoFailover'] as bool? ?? true,

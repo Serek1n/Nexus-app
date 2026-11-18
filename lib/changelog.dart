@@ -437,7 +437,7 @@ class ChangeList extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(top: 7, right: 10),
                     child: CircleAvatar(radius: 2.5, backgroundColor: NX.violet),
                   ),

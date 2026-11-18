@@ -136,7 +136,7 @@ class _TrafficScreenState extends State<TrafficScreen> {
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700, fontSize: NXFont.title)),
                           const Spacer(),
-                          const _Dot(NX.violet),
+                          _Dot(NX.violet),
                           Text(' ↓ ${fmtBytes(pdn)}',
                               style: TextStyle(
                                   color: NX.text2, fontSize: NXFont.body)),
