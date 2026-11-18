@@ -5,7 +5,7 @@ import 'l10n.dart';
 import 'ui/theme.dart';
 
 /// Текущая версия приложения (передаётся сборкой).
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.5.1');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '2.5.2');
 
 /// Сборка из ветки beta (передаётся сборкой).
 const isBetaBuild = String.fromEnvironment('APP_CHANNEL') == 'beta';
@@ -18,6 +18,9 @@ const appVersionLabel = isBetaBuild
 /// Список изменений. Новая версия — сверху, пункты — коротко.
 /// Отсюда же CI берёт текст для описания релиза на GitHub.
 const changelog = <(String, List<String>)>[
+  ('2.5.2', [
+    'Праздничное оформление «Неоновый закат» до 30 ноября: закатное небо, неон и пальмы. Выключается в настройках, раздел «Оформление»',
+  ]),
   ('2.5.1', [
     'Компьютер: смена сервера и переподключение без выхода в сеть напрямую — системный прокси всё время остаётся на Nexus',
     'Свои правила: сайты вроде 2ip.ru и 4pda.to больше не ломают подключение',
